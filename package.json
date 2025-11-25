@@ -1,0 +1,14 @@
+{
+  "name": "tandem2",
+  "version": "2.0.0",
+  "private": true,
+
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+
+  "scripts": {
+    "dev": "npm --workspace apps/chatbot run dev"
+  }
+}
