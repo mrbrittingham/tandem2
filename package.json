@@ -9,6 +9,8 @@
   ],
 
   "scripts": {
-    "dev": "npm --workspace apps/chatbot run dev"
+    "dev": "npm --workspace apps/chatbot run dev",
+    "lint": "npm --workspace apps/chatbot run lint",
+    "typecheck": "npm exec tsc --noEmit -p packages/shared/tsconfig.json && npm exec tsc --noEmit -p packages/ui-kit/tsconfig.json && npm --workspace apps/chatbot exec tsc --noEmit"
   }
 }
