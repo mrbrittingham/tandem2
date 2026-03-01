@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { FAQItem, PolicyItem } from "@tandem/shared";
+import { useMemo, useState } from "react";
+import type { BusinessProfile, FAQItem, PolicyItem } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
@@ -30,33 +30,6 @@ const formatTimestamp = (value: string) =>
 export default function KnowledgePage() {
   const business = useActiveBusiness();
   const { openCreateBusiness } = useConsoleDialogs();
-  const [faqs, setFaqs] = useState<FAQItem[]>([]);
-  const [policies, setPolicies] = useState<PolicyItem[]>([]);
-  const [initialSnapshot, setInitialSnapshot] = useState("");
-  const [faqForm, setFaqForm] = useState(defaultFaq);
-  const [policyForm, setPolicyForm] = useState(defaultPolicy);
-  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
-  const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!business) {
-      return;
-    }
-    setFaqs(business.faqs.map((entry) => ({ ...entry })));
-    setPolicies(business.policies.map((entry) => ({ ...entry })));
-    setInitialSnapshot(
-      JSON.stringify({ faqs: business.faqs, policies: business.policies })
-    );
-    setFaqForm(defaultFaq);
-    setPolicyForm(defaultPolicy);
-    setEditingFaqId(null);
-    setEditingPolicyId(null);
-  }, [business]);
-
-  const isDirty = useMemo(() => {
-    return JSON.stringify({ faqs, policies }) !== initialSnapshot;
-  }, [faqs, policies, initialSnapshot]);
 
   if (!business) {
     return (
@@ -68,6 +41,25 @@ export default function KnowledgePage() {
       />
     );
   }
+
+  return <KnowledgeEditor key={business.id} business={business} />;
+}
+
+function KnowledgeEditor({ business }: { business: BusinessProfile }) {
+  const [faqs, setFaqs] = useState<FAQItem[]>(() => business.faqs.map((entry) => ({ ...entry })));
+  const [policies, setPolicies] = useState<PolicyItem[]>(() => business.policies.map((entry) => ({ ...entry })));
+  const [initialSnapshot, setInitialSnapshot] = useState(() =>
+    JSON.stringify({ faqs: business.faqs, policies: business.policies }),
+  );
+  const [faqForm, setFaqForm] = useState(defaultFaq);
+  const [policyForm, setPolicyForm] = useState(defaultPolicy);
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
+  const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const isDirty = useMemo(() => {
+    return JSON.stringify({ faqs, policies }) !== initialSnapshot;
+  }, [faqs, policies, initialSnapshot]);
 
   const startFaqEdit = (faq: FAQItem) => {
     setFaqForm({

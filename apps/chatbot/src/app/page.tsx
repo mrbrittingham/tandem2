@@ -1,6 +1,9 @@
 import { ChatWidget } from "@tandem/ui-kit";
+import { getActiveBusiness, getMockState } from "@tandem/shared";
 
 export default function Home() {
+  const snapshot = getMockState();
+  const businessId = getActiveBusiness(snapshot)?.slug ?? "default";
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 p-6 text-slate-900">
       <section className="mx-auto max-w-3xl space-y-6 rounded-3xl border border-white/60 bg-white/80 p-10 shadow-2xl backdrop-blur-sm">
@@ -33,7 +36,7 @@ export default function Home() {
         </div>
       </section>
 
-      <ChatWidget />
+      <ChatWidget businessId={businessId} />
     </div>
   );
 }

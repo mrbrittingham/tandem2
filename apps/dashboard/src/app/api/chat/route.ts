@@ -1,0 +1,11 @@
+import { handleChatGet, handleChatPost } from "@tandem/shared/server";
+
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  return handleChatGet(request);
+}
+
+export async function POST(request: Request) {
+  return handleChatPost(request);
+}

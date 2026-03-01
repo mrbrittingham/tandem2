@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from "react";
-import type { ContactMethod, HandoffConfig } from "@tandem/shared";
+import { useState } from "react";
+import type { BusinessProfile, ContactMethod, HandoffConfig } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
@@ -12,15 +12,8 @@ import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
 export default function HandoffPage() {
   const business = useActiveBusiness();
   const { openCreateBusiness } = useConsoleDialogs();
-  const [handoff, setHandoff] = useState<HandoffConfig | null>(null);
 
-  useEffect(() => {
-    if (business) {
-      setHandoff(JSON.parse(JSON.stringify(business.handoff)) as HandoffConfig);
-    }
-  }, [business]);
-
-  if (!business || !handoff) {
+  if (!business) {
     return (
       <EmptyState
         title="No business selected"
@@ -30,6 +23,14 @@ export default function HandoffPage() {
       />
     );
   }
+
+  return <HandoffEditor key={business.id} business={business} />;
+}
+
+function HandoffEditor({ business }: { business: BusinessProfile }) {
+  const [handoff, setHandoff] = useState<HandoffConfig>(
+    () => JSON.parse(JSON.stringify(business.handoff)) as HandoffConfig,
+  );
 
   const updateField = <Key extends keyof HandoffConfig>(key: Key, value: HandoffConfig[Key]) => {
     setHandoff((prev) => (prev ? { ...prev, [key]: value } : prev));

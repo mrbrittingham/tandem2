@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChatWidget } from "@tandem/ui-kit";
 import { ConsoleDialogProvider } from "@/components/ConsoleDialogContext";
 import { CreateBusinessWizard } from "@/components/CreateBusinessWizard";
@@ -11,11 +11,13 @@ import { businessToWidgetConfig, useActiveBusiness } from "@/lib/store-hooks";
 
 const navItems = [
   { label: "Home", href: "/overview" },
+  { label: "Conversations", href: "/conversations" },
   { label: "Assistant", href: "/intents" },
   { label: "FAQs & Policies", href: "/knowledge" },
   { label: "Talk to a person", href: "/handoff" },
   { label: "Widget", href: "/widget" },
   { label: "Integrations", href: "/integrations" },
+  { label: "LLM status", href: "/llm" },
   { label: "Reports", href: "/reports" },
   { label: "Settings", href: "/branding" },
 ];
@@ -25,12 +27,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
   const activeBusiness = useActiveBusiness();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-
-  useEffect(() => {
-    if (!activeBusiness) {
-      setPreviewOpen(false);
-    }
-  }, [activeBusiness]);
+  const isPreviewOpen = Boolean(activeBusiness) && previewOpen;
 
   const widgetConfig = useMemo(
     () => (activeBusiness ? businessToWidgetConfig(activeBusiness) : undefined),
@@ -147,7 +144,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
 
         <div
           className={`fixed inset-y-0 right-0 z-50 w-full max-w-md transform border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out ${
-            previewOpen ? 'translate-x-0' : 'translate-x-full'
+            isPreviewOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
@@ -178,7 +175,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
             )}
           </div>
         </div>
-        {previewOpen ? (
+        {isPreviewOpen ? (
           <button
             type="button"
             aria-hidden="true"

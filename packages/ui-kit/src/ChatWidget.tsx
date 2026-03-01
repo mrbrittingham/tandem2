@@ -122,6 +122,8 @@ export type ChatWidgetProps = {
   initialMessages?: MessageDescriptor[];
   config?: WidgetContentConfig;
   initiallyOpen?: boolean;
+  businessId?: string;
+  apiBaseUrl?: string;
 };
 
 const defaultTheme: ThemeTokens = {
@@ -322,7 +324,14 @@ const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-input-height": tokens.inputHeight,
 });
 
-export function ChatWidget({ theme, initialMessages, config, initiallyOpen = false }: ChatWidgetProps) {
+export function ChatWidget({
+  theme,
+  initialMessages,
+  config,
+  initiallyOpen = false,
+  businessId,
+  apiBaseUrl,
+}: ChatWidgetProps) {
   const mergedTheme = useMemo(
     () => ({ ...defaultTheme, ...theme, brandName: config?.businessName ?? defaultTheme.brandName }),
     [theme, config]
@@ -331,6 +340,15 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
     () => themeToCSSVariables(mergedTheme),
     [mergedTheme]
   );
+  const resolvedBusinessId = businessId ?? "default";
+  const normalizedApiBaseUrl = useMemo(() => {
+    const trimmed = apiBaseUrl?.trim() ?? "";
+    if (!trimmed) {
+      return "";
+    }
+    return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+  }, [apiBaseUrl]);
+  const chatApiUrl = `${normalizedApiBaseUrl}/api/chat`;
   const contentConfig = useMemo(() => {
     return {
       ...defaultContentConfig,
@@ -350,14 +368,73 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
   const [view, setView] = useState<ViewState>("chat");
   const [helpSearch, setHelpSearch] = useState("");
   const [showAllFaqs, setShowAllFaqs] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(() =>
-    hydrateMessages(initialMessages)
-  );
+  const [messages, setMessages] = useState<Message[]>(() => hydrateMessages(initialMessages));
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isHydratingHistory, setIsHydratingHistory] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  const pendingReplyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    setMessages(hydrateMessages(initialMessages));
+    setHistoryLoaded(false);
+  }, [initialMessages, resolvedBusinessId]);
+
+  useEffect(() => {
+    if (historyLoaded) {
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadHistory = async () => {
+      setIsHydratingHistory(true);
+      try {
+        const params = new URLSearchParams({ businessId: resolvedBusinessId });
+        const response = await fetch(`${chatApiUrl}?${params.toString()}`, {
+          method: "GET",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error("Failed to load conversation history");
+        }
+        const data = await response.json();
+        if (cancelled) {
+          return;
+        }
+        if (Array.isArray(data.messages) && data.messages.length) {
+          setMessages(
+            data.messages.map((message: { role: MessageRole; content: string }) => ({
+              id: createId(),
+              role: message.role,
+              text: message.content,
+            })),
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to hydrate chat history", error);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydratingHistory(false);
+          setHistoryLoaded(true);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [chatApiUrl, historyLoaded, resolvedBusinessId]);
 
   const handleViewChange = useCallback((next: ViewState) => {
     setView(next);
@@ -396,11 +473,17 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
 
   useEffect(() => {
     return () => {
-      if (pendingReplyRef.current) {
-        clearTimeout(pendingReplyRef.current);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -450,44 +533,141 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
     }
   }, [messages, isOpen, view]);
 
-  const sendMessage = useCallback(() => {
+  const startAssistantResponse = useCallback(
+    async (history: Message[], assistantMessageId: string) => {
+      setErrorMessage(null);
+      setIsStreaming(true);
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      try {
+        const latestUserMessage = [...history].reverse().find((message) => message.role === "user");
+        if (!latestUserMessage) {
+          throw new Error("No user message to send");
+        }
+
+        const response = await fetch(chatApiUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            businessId: resolvedBusinessId,
+            messages: [
+              {
+                role: latestUserMessage.role,
+                content: latestUserMessage.text,
+              },
+            ],
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          const errorText = await response.text().catch(() => "");
+          throw new Error(errorText || "Assistant failed to respond.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk) {
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === assistantMessageId
+                  ? { ...message, text: message.text + chunk }
+                  : message,
+              ),
+            );
+          }
+        }
+
+        const finalChunk = decoder.decode();
+        if (finalChunk) {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, text: message.text + finalChunk }
+                : message,
+            ),
+          );
+        }
+      } catch (error) {
+        const isAbort = error instanceof DOMException && error.name === "AbortError";
+        const fallback = isAbort
+          ? "Generation stopped."
+          : error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again.";
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, role: "system", text: fallback }
+              : message,
+          ),
+        );
+
+        if (!isAbort) {
+          setErrorMessage(fallback);
+        }
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        setIsStreaming(false);
+      }
+    },
+    [chatApiUrl, resolvedBusinessId],
+  );
+
+  const stopStreaming = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
+
+  const sendMessage = useCallback(async () => {
     const trimmed = inputValue.trim();
-    if (!trimmed) {
+    if (!trimmed || isStreaming || isHydratingHistory) {
       return;
     }
 
-    const newMessage: Message = {
+    const userMessage: Message = {
       id: createId(),
       role: "user",
       text: trimmed,
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    const assistantMessageId = createId();
+    const assistantPlaceholder: Message = {
+      id: assistantMessageId,
+      role: "assistant",
+      text: "",
+    };
+
+    const conversationSnapshot = [...messages, userMessage];
+    setMessages([...conversationSnapshot, assistantPlaceholder]);
     setInputValue("");
 
-    if (pendingReplyRef.current) {
-      clearTimeout(pendingReplyRef.current);
-    }
-
-    pendingReplyRef.current = setTimeout(() => {
-      const assistantMessage: Message = {
-        id: createId(),
-        role: "assistant",
-        text: `Got it: ${trimmed}`,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    }, 500 + Math.round(Math.random() * 300));
-  }, [inputValue]);
+    await startAssistantResponse(conversationSnapshot, assistantMessageId);
+  }, [inputValue, isHydratingHistory, isStreaming, messages, startAssistantResponse]);
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      sendMessage();
+      void sendMessage();
     }
   };
 
-  const isSendDisabled = inputValue.trim().length === 0;
+  const isSendDisabled = inputValue.trim().length === 0 || isStreaming || isHydratingHistory;
   const helpQuery = helpSearch.trim().toLowerCase();
   const filteredFaqs = contentConfig.faqs.filter((faq) => {
     if (!helpQuery) {
@@ -617,7 +797,7 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
                   className={styles.inputRow}
                   onSubmit={(event) => {
                     event.preventDefault();
-                    sendMessage();
+                    void sendMessage();
                   }}
                 >
                   <input
@@ -629,6 +809,15 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
                     placeholder={`Ask ${mergedTheme.brandName} anything`}
                     className={styles.inputField}
                   />
+                  {isStreaming ? (
+                    <button
+                      type="button"
+                      className={styles.stopButton}
+                      onClick={stopStreaming}
+                    >
+                      Stop
+                    </button>
+                  ) : null}
                   <button
                     type="submit"
                     className={styles.sendButton}
@@ -637,6 +826,14 @@ export function ChatWidget({ theme, initialMessages, config, initiallyOpen = fal
                     Send
                   </button>
                 </form>
+                {isStreaming || errorMessage ? (
+                  <div className={styles.inputStatusRow} aria-live="polite">
+                    {isStreaming ? (
+                      <p className={styles.typingIndicator}>Assistant is responding...</p>
+                    ) : null}
+                    {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}
+                  </div>
+                ) : null}
               </>
             ) : (
               <div className={styles.helpView} role="region" aria-label="Help center">

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import type { WidgetThemeSettings } from "@tandem/shared";
+import { useMemo, useState } from "react";
+import type { BusinessProfile, WidgetThemeSettings } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
@@ -20,25 +20,7 @@ const colorFields: Array<{ key: keyof WidgetThemeSettings; label: string }> = [
 export default function WidgetPage() {
   const business = useActiveBusiness();
   const { openCreateBusiness } = useConsoleDialogs();
-  const [theme, setTheme] = useState<WidgetThemeSettings | null>(null);
-  const [logoUrl, setLogoUrl] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (business) {
-      setTheme({ ...business.theme });
-      setLogoUrl(business.theme.logoUrl ?? "");
-    }
-  }, [business]);
-
-  const snippet = useMemo(() => {
-    if (!business) {
-      return "";
-    }
-    return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${business.slug}"></script>`;
-  }, [business?.slug]);
-
-  if (!business || !theme) {
+  if (!business) {
     return (
       <EmptyState
         title="No business selected"
@@ -48,6 +30,18 @@ export default function WidgetPage() {
       />
     );
   }
+
+  return <WidgetEditor key={business.id} business={business} />;
+}
+
+function WidgetEditor({ business }: { business: BusinessProfile }) {
+  const [theme, setTheme] = useState<WidgetThemeSettings>(() => ({ ...business.theme }));
+  const [logoUrl, setLogoUrl] = useState(() => business.theme.logoUrl ?? "");
+  const [copied, setCopied] = useState(false);
+
+  const snippet = useMemo(() => {
+    return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${business.slug}"></script>`;
+  }, [business.slug]);
 
   const handleThemeSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

@@ -6,6 +6,7 @@ import {
   type MessageDescriptor,
   type ThemeTokens,
 } from "@tandem/ui-kit";
+import { getMockState } from "@tandem/shared";
 
 const clientTheme: Partial<ThemeTokens> = {
   brandName: "Northwind",
@@ -100,6 +101,7 @@ export default function DemoPage() {
     () => (sampleChoice === "cta" ? ctaMessages : undefined),
     [sampleChoice],
   );
+  const businessId = useMemo(() => getMockState().businesses[0]?.slug ?? "default", []);
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-12 text-zinc-900">
@@ -180,6 +182,7 @@ export default function DemoPage() {
         key={`${themeChoice}-${sampleChoice}`}
         theme={theme}
         initialMessages={initialMessages}
+        businessId={businessId}
       />
     </div>
   );

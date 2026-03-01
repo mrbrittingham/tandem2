@@ -2,17 +2,19 @@
   "name": "tandem2",
   "version": "2.0.0",
   "private": true,
-
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
-
   "scripts": {
     "dev": "npm --workspace apps/chatbot run dev",
     "lint": "npm --workspace apps/chatbot run lint",
     "typecheck": "npx tsc -p packages/shared/tsconfig.json --noEmit && npx tsc -p packages/ui-kit/tsconfig.json --noEmit && npm --workspace apps/chatbot run typecheck",
     "build": "npm --workspace apps/chatbot run build",
     "clean": "node ./scripts/clean.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.37",
+    "ai": "^6.0.105"
   }
 }

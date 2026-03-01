@@ -391,6 +391,48 @@
 	box-shadow: none;
 }
 
+.stopButton {
+	border-radius: var(--tandem-radius-button, 12px);
+	border: 1px solid var(--tandem-border, #e5e5e5);
+	padding: 0 var(--tandem-space-16, 16px);
+	height: var(--tandem-input-height, 52px);
+	font-weight: 600;
+	font-size: 0.9rem;
+	background: var(--tandem-secondary, #f5f5f5);
+	color: var(--tandem-secondary-text, #1a1a1a);
+	cursor: pointer;
+	transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.stopButton:hover {
+	background: var(--tandem-surface-hover, #f1f1f1);
+}
+
+.stopButton:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.inputStatusRow {
+	padding: 0 var(--tandem-space-20, 20px) var(--tandem-space-8, 8px);
+	min-height: 22px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.typingIndicator {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--tandem-text-secondary, #666666);
+}
+
+.errorText {
+	margin: 0;
+	font-size: 0.8rem;
+	color: #b91c1c;
+}
+
 .helpView {
 	flex: 1;
 	display: flex;
