@@ -1,1 +1,2 @@
-export type RestaurantId = string;
+export * from "./types";
+export * from "./mock-store";

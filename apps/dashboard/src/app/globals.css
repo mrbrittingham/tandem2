@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-muted: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --border: #e2e8f0;
+  --radius-large: 24px;
+  --radius-medium: 16px;
+}
+
+@theme inline {
+  --color-dashboard-bg: var(--bg);
+  --color-dashboard-panel: var(--panel);
+  --color-dashboard-text: var(--text);
+  --color-dashboard-muted: var(--muted);
+  --color-dashboard-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
