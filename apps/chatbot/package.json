@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tandem/ui-kit": "0.0.1",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

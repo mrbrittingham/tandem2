@@ -1,18 +1,30 @@
 # Tandem 2.0 Monorepo
 
-This repo hosts the Tandem chatbot surface plus future dashboard, docs, and Supabase infra under one npm workspaces roof. The guiding rule is simple: all backend logic ships as Next.js App Router route handlers—no ad-hoc servers or CORS proxies.
+Tandem 2.0 is the next-generation concierge chatbot experience plus future dashboard tooling, all managed inside a single npm workspaces repo. Every backend interaction must live inside Next.js App Router route handlers under `apps/chatbot/app/api/*`; no Express servers or ad-hoc runtimes are allowed.
 
 ## Structure
-- apps/chatbot – customer-facing widget host (Next.js App Router)
-- apps/dashboard – reserved for future operator tooling
-- packages/shared – cross-cutting types and utilities
-- packages/ui-kit – React components consumed by Tandem surfaces
-- supabase, docs – storage for backend schema + documentation (to come)
+| Path | Purpose |
+| --- | --- |
+| `apps/chatbot` | Customer-facing widget host (Next.js App Router) |
+| `apps/dashboard` | Reserved for upcoming operator UI |
+| `packages/shared` | Cross-cutting TypeScript types/utilities |
+| `packages/ui-kit` | React components consumed by Tandem surfaces |
+| `supabase/` | Backend schema + migrations (future) |
+| `docs/` | Additional architecture notes (future) |
 
-## Development
-1. Install deps: `npm install`
-2. Run the chatbot locally: `npm run dev`
-3. Lint the app: `npm run lint`
-4. Typecheck: `npm run typecheck`
+## Commands
+Run everything from the repo root:
 
-Keep changes incremental, prefer shared packages over duplicate code, and remember that APIs live exclusively in `apps/chatbot/app/api/*`.
+| Command | Description |
+| --- | --- |
+| `npm install` | Install workspace dependencies |
+| `npm run dev` | Start the chatbot dev server |
+| `npm run lint` | Lint chatbot via Next/ESLint |
+| `npm run typecheck` | Type-check shared, UI kit, and chatbot workspaces |
+| `npm --workspace apps/chatbot run build` | Production build of the chatbot |
+
+## Working Agreements
+- Favor shared packages over duplicating logic inside apps.
+- Keep UI primitives in `packages/ui-kit`; keep types in `packages/shared`.
+- Only Next.js route handlers (`apps/chatbot/app/api/*`) may implement backend logic.
+- Avoid destructive refactors; land changes in small, verifiable increments.
