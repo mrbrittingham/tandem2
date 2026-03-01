@@ -12,6 +12,8 @@ import {
 
 import styles from "./ChatWidget.module.css";
 
+type CSSVarStyles = CSSProperties & Record<string, string>;
+
 type MessageRole = "user" | "assistant";
 
 export type MessageCTA = {
@@ -97,7 +99,7 @@ const hydrateMessages = (presets?: MessageDescriptor[]): Message[] => {
   }));
 };
 
-const themeToCSSVariables = (tokens: ThemeTokens): CSSProperties => ({
+const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-primary": tokens.primaryColor,
   "--tandem-primary-text": tokens.primaryTextColor,
   "--tandem-accent": tokens.accentColor,
