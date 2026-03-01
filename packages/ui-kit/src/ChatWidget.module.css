@@ -1,0 +1,193 @@
+.themeScope {
+  position: relative;
+}
+
+.launcher {
+  position: fixed;
+  right: var(--tandem-spacing, 20px);
+  bottom: var(--tandem-spacing, 20px);
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  background-color: var(--tandem-primary, #111827);
+  color: var(--tandem-primary-text, #ffffff);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  box-shadow: var(--tandem-shadow, 0 25px 60px rgba(15, 23, 42, 0.25));
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  z-index: 1000;
+}
+
+.launcher:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--tandem-shadow-hover, 0 30px 60px rgba(15, 23, 42, 0.3));
+}
+
+.launcher:focus-visible {
+  outline: 2px solid var(--tandem-accent, #6366f1);
+  outline-offset: 3px;
+}
+
+.panel {
+  position: fixed;
+  right: var(--tandem-spacing, 20px);
+  bottom: calc(var(--tandem-spacing, 20px) + 64px);
+  width: min(380px, calc(100vw - 32px));
+  max-height: 75vh;
+  background-color: var(--tandem-surface, #ffffff);
+  border: 1px solid var(--tandem-border, #e4e4e7);
+  border-radius: var(--tandem-radius, 20px);
+  box-shadow: var(--tandem-shadow, 0 25px 60px rgba(15, 23, 42, 0.25));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1100;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tandem-border, #e4e4e7);
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brandName {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--tandem-surface-contrast, #0f172a);
+}
+
+.brandSubtitle {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--tandem-muted, #6b7280);
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--tandem-border, #e4e4e7);
+}
+
+.closeButton {
+  border: none;
+  background: transparent;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: var(--tandem-muted, #6b7280);
+  line-height: 1;
+  padding: 4px;
+}
+
+.closeButton:focus-visible,
+.sendButton:focus-visible,
+.inputField:focus-visible,
+.ctaButton:focus-visible {
+  outline: 2px solid var(--tandem-accent, #6366f1);
+  outline-offset: 2px;
+}
+
+.messageList {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  background: var(--tandem-surface-muted, #f4f4f5);
+}
+
+.messageBubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--tandem-bubble-radius, 16px);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.userBubble {
+  align-self: flex-end;
+  background-color: var(--tandem-user-bg, #2563eb);
+  color: var(--tandem-user-text, #ffffff);
+  box-shadow: none;
+}
+
+.assistantBubble {
+  align-self: flex-start;
+  background-color: var(--tandem-assistant-bg, #ffffff);
+  color: var(--tandem-assistant-text, #0f172a);
+}
+
+.ctaButton {
+  align-self: flex-start;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--tandem-cta-bg, #111827);
+  color: var(--tandem-cta-text, #ffffff);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 8px 14px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ctaButton:hover {
+  filter: brightness(1.05);
+}
+
+.inputRow {
+  display: flex;
+  gap: 10px;
+  padding: 16px;
+  border-top: 1px solid var(--tandem-border, #e4e4e7);
+  background: var(--tandem-surface, #ffffff);
+}
+
+.inputField {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid var(--tandem-border, #e4e4e7);
+  padding: 10px 14px;
+  font-size: 0.875rem;
+}
+
+.sendButton {
+  border-radius: 999px;
+  border: none;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  background-color: var(--tandem-primary, #111827);
+  color: var(--tandem-primary-text, #ffffff);
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.sendButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

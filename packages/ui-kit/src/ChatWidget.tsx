@@ -1,48 +1,140 @@
-'use client';
+"use client";
 
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
+import styles from "./ChatWidget.module.css";
+
 type MessageRole = "user" | "assistant";
 
-type Message = {
-  id: string;
+export type MessageCTA = {
+  label: string;
+  href: string;
+};
+
+export type MessageDescriptor = {
   role: MessageRole;
   text: string;
+  cta?: MessageCTA;
 };
 
-const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+type Message = MessageDescriptor & { id: string };
 
-const palette = {
-  slate: "#0f172a",
-  slateDark: "#020617",
-  border: "#e4e4e7",
-  panel: "#ffffff",
-  assistantBg: "#f4f4f5",
-  userBg: "#2563eb",
-  userText: "#ffffff",
-  launcher: "#111827",
+export type ThemeTokens = {
+  brandName: string;
+  logoUrl?: string;
+  primaryColor: string;
+  primaryTextColor: string;
+  accentColor: string;
+  accentTextColor: string;
+  surfaceColor: string;
+  surfaceMutedColor: string;
+  surfaceContrastColor: string;
+  borderColor: string;
+  mutedColor: string;
+  panelShadow: string;
+  panelRadius: string;
+  bubbleRadius: string;
+  userBubbleBg: string;
+  userBubbleText: string;
+  assistantBubbleBg: string;
+  assistantBubbleText: string;
+  ctaBg: string;
+  ctaText: string;
 };
 
-const baseShadow = "0 25px 60px rgba(15, 23, 42, 0.25)";
-const spacing = 20;
+export type ChatWidgetProps = {
+  theme?: Partial<ThemeTokens>;
+  initialMessages?: MessageDescriptor[];
+};
 
-export function ChatWidget() {
+const defaultTheme: ThemeTokens = {
+  brandName: "Tandem",
+  logoUrl: undefined,
+  primaryColor: "#111827",
+  primaryTextColor: "#ffffff",
+  accentColor: "#6366f1",
+  accentTextColor: "#ffffff",
+  surfaceColor: "#ffffff",
+  surfaceMutedColor: "#f4f4f5",
+  surfaceContrastColor: "#0f172a",
+  borderColor: "#e4e4e7",
+  mutedColor: "#6b7280",
+  panelShadow: "0 25px 60px rgba(15, 23, 42, 0.25)",
+  panelRadius: "20px",
+  bubbleRadius: "16px",
+  userBubbleBg: "#2563eb",
+  userBubbleText: "#ffffff",
+  assistantBubbleBg: "#ffffff",
+  assistantBubbleText: "#0f172a",
+  ctaBg: "#0f172a",
+  ctaText: "#ffffff",
+};
+
+const defaultMessages: MessageDescriptor[] = [
+  {
+    role: "assistant",
+    text: "Hi, I'm Tandem. How can I help you today?",
+  },
+];
+
+const createId = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+const hydrateMessages = (presets?: MessageDescriptor[]): Message[] => {
+  const source = presets?.length ? presets : defaultMessages;
+  return source.map((entry) => ({
+    ...entry,
+    id: createId(),
+    cta: entry.role === "assistant" ? entry.cta : undefined,
+  }));
+};
+
+const themeToCSSVariables = (tokens: ThemeTokens): CSSProperties => ({
+  "--tandem-primary": tokens.primaryColor,
+  "--tandem-primary-text": tokens.primaryTextColor,
+  "--tandem-accent": tokens.accentColor,
+  "--tandem-accent-text": tokens.accentTextColor,
+  "--tandem-surface": tokens.surfaceColor,
+  "--tandem-surface-muted": tokens.surfaceMutedColor,
+  "--tandem-surface-contrast": tokens.surfaceContrastColor,
+  "--tandem-border": tokens.borderColor,
+  "--tandem-muted": tokens.mutedColor,
+  "--tandem-shadow": tokens.panelShadow,
+  "--tandem-shadow-hover": tokens.panelShadow,
+  "--tandem-radius": tokens.panelRadius,
+  "--tandem-bubble-radius": tokens.bubbleRadius,
+  "--tandem-user-bg": tokens.userBubbleBg,
+  "--tandem-user-text": tokens.userBubbleText,
+  "--tandem-assistant-bg": tokens.assistantBubbleBg,
+  "--tandem-assistant-text": tokens.assistantBubbleText,
+  "--tandem-cta-bg": tokens.ctaBg,
+  "--tandem-cta-text": tokens.ctaText,
+});
+
+export function ChatWidget({ theme, initialMessages }: ChatWidgetProps) {
+  const mergedTheme = useMemo(
+    () => ({ ...defaultTheme, ...theme }),
+    [theme]
+  );
+  const cssVarStyle = useMemo(
+    () => themeToCSSVariables(mergedTheme),
+    [mergedTheme]
+  );
+
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: createId(),
-      role: "assistant",
-      text: "Hi, I'm Tandem. How can I help you today?",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() =>
+    hydrateMessages(initialMessages)
+  );
+
   const pendingReplyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -131,13 +223,13 @@ export function ChatWidget() {
   const isSendDisabled = inputValue.trim().length === 0;
 
   return (
-    <>
+    <div className={styles.themeScope} style={cssVarStyle}>
       <button
         type="button"
-        aria-label={isOpen ? "Close chat" : "Open Tandem chat"}
+        aria-label={isOpen ? "Close chat" : `Open ${mergedTheme.brandName} chat`}
         aria-haspopup="dialog"
         onClick={() => setIsOpen((prev) => !prev)}
-        style={launcherStyle}
+        className={styles.launcher}
       >
         {isOpen ? "Close" : "Chat"}
       </button>
@@ -146,32 +238,41 @@ export function ChatWidget() {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Tandem chat panel"
-          style={panelStyle}
+          aria-label={`${mergedTheme.brandName} chat panel`}
+          className={styles.panel}
         >
-          <header style={headerStyle}>
-            <div>
-              <p style={headerTitleStyle}>Tandem</p>
-              <p style={headerSubtitleStyle}>Your concierge companion</p>
+          <header className={styles.header}>
+            <div className={styles.brand}>
+              {mergedTheme.logoUrl ? (
+                <img
+                  src={mergedTheme.logoUrl}
+                  alt={`${mergedTheme.brandName} logo`}
+                  className={styles.logo}
+                />
+              ) : null}
+              <div className={styles.brandText}>
+                <p className={styles.brandName}>{mergedTheme.brandName}</p>
+                <p className={styles.brandSubtitle}>Always-on concierge</p>
+              </div>
             </div>
             <button
               type="button"
               onClick={closePanel}
               aria-label="Close chat panel"
-              style={closeButtonStyle}
+              className={styles.closeButton}
             >
               ×
             </button>
           </header>
 
-          <div ref={messagesRef} style={messageListStyle}>
+          <div ref={messagesRef} className={styles.messageList}>
             {messages.map((message) => (
               <MessageBubble key={message.id} message={message} />
             ))}
           </div>
 
           <form
-            style={inputRowStyle}
+            className={styles.inputRow}
             onSubmit={(event) => {
               event.preventDefault();
               sendMessage();
@@ -183,16 +284,12 @@ export function ChatWidget() {
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="Ask Tandem anything"
-              style={inputStyle}
+              placeholder={`Ask ${mergedTheme.brandName} anything`}
+              className={styles.inputField}
             />
             <button
               type="submit"
-              style={{
-                ...sendButtonStyle,
-                opacity: isSendDisabled ? 0.5 : 1,
-                cursor: isSendDisabled ? "not-allowed" : "pointer",
-              }}
+              className={styles.sendButton}
               disabled={isSendDisabled}
             >
               Send
@@ -200,122 +297,29 @@ export function ChatWidget() {
           </form>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
+  const className = `${styles.messageBubble} ${
+    isUser ? styles.userBubble : styles.assistantBubble
+  }`;
 
-  const bubbleStyle: CSSProperties = {
-    alignSelf: isUser ? "flex-end" : "flex-start",
-    backgroundColor: isUser ? palette.userBg : palette.assistantBg,
-    color: isUser ? palette.userText : palette.slate,
-    borderRadius: 14,
-    padding: "8px 14px",
-    maxWidth: "85%",
-    fontSize: 14,
-    lineHeight: 1.4,
-    boxShadow: isUser ? "none" : "0 4px 12px rgba(15, 23, 42, 0.08)",
-  };
-
-  return <div style={bubbleStyle}>{message.text}</div>;
+  return (
+    <div className={className}>
+      <span>{message.text}</span>
+      {!isUser && message.cta ? (
+        <a
+          className={styles.ctaButton}
+          href={message.cta.href}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {message.cta.label}
+        </a>
+      ) : null}
+    </div>
+  );
 }
-
-const launcherStyle: CSSProperties = {
-  position: "fixed",
-  right: spacing,
-  bottom: spacing,
-  borderRadius: "999px",
-  border: "none",
-  padding: "12px 20px",
-  backgroundColor: palette.launcher,
-  color: "#fff",
-  fontWeight: 600,
-  fontSize: 14,
-  cursor: "pointer",
-  boxShadow: baseShadow,
-};
-
-const panelStyle: CSSProperties = {
-  position: "fixed",
-  right: spacing,
-  bottom: spacing,
-  width: "min(360px, calc(100vw - 32px))",
-  maxHeight: "70vh",
-  backgroundColor: palette.panel,
-  borderRadius: 20,
-  boxShadow: baseShadow,
-  border: `1px solid ${palette.border}`,
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-};
-
-const headerStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "16px 20px",
-  borderBottom: `1px solid ${palette.border}`,
-};
-
-const headerTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 16,
-  fontWeight: 600,
-  color: palette.slate,
-};
-
-const headerSubtitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 12,
-  color: "#6b7280",
-};
-
-const closeButtonStyle: CSSProperties = {
-  border: "none",
-  background: "transparent",
-  fontSize: 20,
-  cursor: "pointer",
-  color: palette.slate,
-  lineHeight: 1,
-  padding: 4,
-};
-
-const messageListStyle: CSSProperties = {
-  flex: 1,
-  padding: 20,
-  display: "flex",
-  flexDirection: "column",
-  gap: 10,
-  overflowY: "auto",
-  background: "#fafafa",
-};
-
-const inputRowStyle: CSSProperties = {
-  display: "flex",
-  gap: 10,
-  padding: 16,
-  borderTop: `1px solid ${palette.border}`,
-  backgroundColor: palette.panel,
-};
-
-const inputStyle: CSSProperties = {
-  flex: 1,
-  borderRadius: 999,
-  border: `1px solid ${palette.border}`,
-  padding: "10px 14px",
-  fontSize: 14,
-};
-
-const sendButtonStyle: CSSProperties = {
-  borderRadius: 999,
-  border: "none",
-  padding: "10px 18px",
-  fontWeight: 600,
-  fontSize: 14,
-  backgroundColor: palette.slate,
-  color: "#fff",
-  cursor: "pointer",
-};
