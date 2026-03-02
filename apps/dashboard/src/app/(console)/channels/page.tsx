@@ -36,38 +36,42 @@ export default function ChannelsPage() {
         <p className="mt-2 text-sm text-slate-500">Manage delivery channels across website chat and human handoff routes.</p>
       </header>
 
-      <SectionCard
-        title="Website Widget"
-        description="Install and customize the website chat widget for this location."
-        actions={<span className="text-slate-500">{widgetIntegration?.status === "connected" ? "Live" : "Not configured"}</span>}
-      >
-        <pre className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-900 p-4 text-sm text-slate-100">
-          <code>{snippet}</code>
-        </pre>
-        <div className="flex flex-wrap gap-3">
+      <section id="website-widget">
+        <SectionCard
+          title="Website Widget"
+          description="Install and customize the website chat widget for this location."
+          actions={<span className="text-slate-500">{widgetIntegration?.status === "connected" ? "Live" : "Not configured"}</span>}
+        >
+          <pre className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-900 p-4 text-sm text-slate-100">
+            <code>{snippet}</code>
+          </pre>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/channels#website-widget"
+              className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            >
+              Website widget section
+            </Link>
+          </div>
+        </SectionCard>
+      </section>
+
+      <section id="handoff">
+        <SectionCard
+          title="Handoff (Talk to a person)"
+          description="Control escalation channels for conversations requiring human support."
+          actions={<span className="text-slate-500">{enabledMethods.length ? `${enabledMethods.length} live` : "Not configured"}</span>}
+        >
+          <p className="text-sm text-slate-700">Status: <span className="font-semibold text-slate-900">{business.handoff.status}</span></p>
+          <p className="text-sm text-slate-700">Response time: <span className="font-semibold text-slate-900">{business.handoff.statusDetail || "Not configured"}</span></p>
           <Link
-            href="/widget"
+            href="/channels#handoff"
             className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
           >
-            Open widget settings
+            Handoff section
           </Link>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Handoff (Talk to a person)"
-        description="Control escalation channels for conversations requiring human support."
-        actions={<span className="text-slate-500">{enabledMethods.length ? `${enabledMethods.length} live` : "Not configured"}</span>}
-      >
-        <p className="text-sm text-slate-700">Status: <span className="font-semibold text-slate-900">{business.handoff.status}</span></p>
-        <p className="text-sm text-slate-700">Response time: <span className="font-semibold text-slate-900">{business.handoff.statusDetail || "Not configured"}</span></p>
-        <Link
-          href="/handoff"
-          className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-        >
-          Open handoff settings
-        </Link>
-      </SectionCard>
+        </SectionCard>
+      </section>
 
       <SectionCard
         title="Business hours routing"

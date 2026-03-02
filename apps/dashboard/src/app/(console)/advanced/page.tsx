@@ -11,20 +11,22 @@ export default function AdvancedPage() {
         <p className="mt-2 text-sm text-slate-500">Inspect model configuration, system health, and debug surfaces.</p>
       </header>
 
-      <SectionCard
-        title="Model / LLM status"
-        description="Provider, model, and key checks are available in the LLM status view."
-      >
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Open the LLM status panel to run live connectivity tests.
-        </p>
-        <Link
-          href="/llm"
-          className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+      <section id="llm-status">
+        <SectionCard
+          title="Model / LLM status"
+          description="Provider, model, and key checks are available in this section."
         >
-          Open LLM status
-        </Link>
-      </SectionCard>
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            LLM status is not configured in this consolidated view yet.
+          </p>
+          <Link
+            href="/advanced#llm-status"
+            className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            LLM status anchor
+          </Link>
+        </SectionCard>
+      </section>
 
       <SectionCard
         title="System health"

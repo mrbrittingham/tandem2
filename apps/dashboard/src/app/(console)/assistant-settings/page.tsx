@@ -66,15 +66,39 @@ export default function AssistantSettingsPage() {
         description="Control which assistant actions and quick tasks are available in chat."
       >
         <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Existing quick actions are managed in the legacy assistant editor.
+          Configure and review quick actions in the intent rules section on this page.
         </p>
         <Link
-          href="/intents"
+          href="/assistant-settings#intent-rules"
           className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
         >
-          Open quick actions
+          Jump to intent rules
         </Link>
       </SectionCard>
+
+      <section id="intent-rules">
+        <SectionCard
+          title="Intent rules"
+          description="Review the suggested actions currently available to the assistant."
+          actions={<span className="text-slate-500">{business.intents.length} configured</span>}
+        >
+          {business.intents.length ? (
+            <div className="space-y-3">
+              {business.intents.map((intent) => (
+                <article key={intent.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{intent.route.type}</p>
+                  <h3 className="mt-1 text-base font-semibold text-slate-900">{intent.label}</h3>
+                  <p className="text-sm text-slate-600">{intent.description}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Not configured. No intent rules are set for this location.
+            </p>
+          )}
+        </SectionCard>
+      </section>
     </div>
   );
 }
