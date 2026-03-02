@@ -8,7 +8,7 @@
   --console-primary-light: #EEF2FF;
 
   --console-gradient-primary: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
-  --console-gradient-sidebar: linear-gradient(180deg, #1E1B2E 0%, #0F0D1A 100%);
+  --console-gradient-sidebar: linear-gradient(180deg, #17142B 0%, #0C0A1A 100%);
   --console-gradient-hero: linear-gradient(135deg, #6366F1 0%, #4F46E5 50%, #4338CA 100%);
 
   --console-secondary: #8B5CF6;
@@ -19,18 +19,34 @@
   --console-bg-elevated: #FFFFFF;
   --console-bg-hover: #F1F5F9;
   --console-bg-disabled: #F8FAFC;
+  --console-bg-code: #0F172A;
 
   --console-sidebar-bg: #1E1B2E;
-  --console-sidebar-link: rgba(255, 255, 255, 0.85);
-  --console-sidebar-link-hover: #ffffff;
-  --console-sidebar-link-active: #ffffff;
-  --console-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
-  --console-sidebar-active-bg: rgba(255, 255, 255, 0.16);
+  --console-sidebar-text: color-mix(in srgb, var(--console-text-inverse) 82%, transparent);
+  --console-sidebar-text-muted: color-mix(in srgb, var(--console-text-inverse) 62%, transparent);
+  --console-sidebar-text-active: var(--console-text-inverse);
+  --console-sidebar-icon: var(--console-sidebar-text-muted);
+  --console-sidebar-icon-active: var(--console-sidebar-text-active);
+  --console-sidebar-hover-bg: color-mix(in srgb, var(--console-primary) 22%, transparent);
+  --console-sidebar-active-bg: color-mix(in srgb, var(--console-primary) 36%, transparent);
+  --console-sidebar-active-glow: 0 0 0 1px color-mix(in srgb, var(--console-primary) 46%, transparent), 0 12px 24px -18px color-mix(in srgb, var(--console-primary) 90%, transparent);
+  --console-sidebar-divider: color-mix(in srgb, var(--console-text-inverse) 12%, transparent);
+  --console-sidebar-item-height: 38px;
+  --console-sidebar-item-radius: 10px;
+  --console-sidebar-brand-title: var(--console-text-inverse);
+  --console-sidebar-brand-subtitle: color-mix(in srgb, var(--console-text-inverse) 92%, transparent);
+  --console-sidebar-brand-caption: color-mix(in srgb, var(--console-text-inverse) 68%, transparent);
+  --console-sidebar-brand-divider: color-mix(in srgb, var(--console-text-inverse) 14%, transparent);
+
+  --console-sidebar-link: var(--console-sidebar-text);
+  --console-sidebar-link-hover: var(--console-sidebar-text-active);
+  --console-sidebar-link-active: var(--console-sidebar-text-active);
+  --console-sidebar-active-border: transparent;
+  --console-sidebar-active-shadow: var(--console-sidebar-active-glow);
   --console-sidebar-item: var(--console-sidebar-link);
   --console-sidebar-item-hover: var(--console-sidebar-link-hover);
   --console-sidebar-item-active: var(--console-sidebar-link-active);
   --console-sidebar-item-active-bg: var(--console-sidebar-active-bg);
-  --console-sidebar-divider: rgba(255, 255, 255, 0.08);
 
   --console-border: #E2E8F0;
   --console-border-light: #F1F5F9;
@@ -89,11 +105,21 @@
   --console-leading-normal: 1.5;
   --console-leading-relaxed: 1.75;
 
-  --console-sidebar-width: 260px;
+  --console-sidebar-width: 224px;
   --console-sidebar-collapsed-width: 72px;
-  --console-header-height: 64px;
+  --console-header-height: 62px;
   --console-button-height: 40px;
   --console-input-height: 40px;
+  --console-content-max-width: 1160px;
+  --console-page-pad-x: 24px;
+  --console-page-pad-y: 24px;
+  --console-card-radius: 14px;
+  --console-card-pad: 16px;
+  --console-card-border: var(--console-border);
+  --console-card-shadow: var(--console-shadow-sm);
+  --console-section-gap: 16px;
+  --console-grid-gap: 12px;
+  --console-preview-widget-max-height: 500px;
 }
 
 .theme-wine {
@@ -109,6 +135,7 @@
   --console-secondary-light: #F9E8EF;
 
   --console-sidebar-item-active-bg: rgba(212, 89, 139, 0.15);
-  --console-sidebar-active-bg: rgba(255, 255, 255, 0.16);
-  --console-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --console-sidebar-active-bg: color-mix(in srgb, var(--console-primary) 34%, transparent);
+  --console-sidebar-hover-bg: color-mix(in srgb, var(--console-primary) 20%, transparent);
+  --console-sidebar-active-border: transparent;
 }

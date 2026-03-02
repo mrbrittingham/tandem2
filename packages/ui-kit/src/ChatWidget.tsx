@@ -128,6 +128,7 @@ export type ChatWidgetProps = {
   initialMessages?: MessageDescriptor[];
   config?: WidgetContentConfig;
   initiallyOpen?: boolean;
+  showLauncher?: boolean;
   businessId?: string;
   apiBaseUrl?: string;
 };
@@ -335,6 +336,7 @@ export function ChatWidget({
   initialMessages,
   config,
   initiallyOpen = false,
+  showLauncher = true,
   businessId,
   apiBaseUrl,
 }: ChatWidgetProps) {
@@ -808,15 +810,17 @@ export function ChatWidget({
 
   return (
     <div className={styles.themeScope} style={cssVarStyle}>
-      <button
-        type="button"
-        aria-label={isOpen ? "Close chat" : `Open ${mergedTheme.brandName} chat`}
-        aria-haspopup="dialog"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className={styles.launcher}
-      >
-        <LauncherIcon />
-      </button>
+      {showLauncher && !isOpen ? (
+        <button
+          type="button"
+          aria-label={isOpen ? "Close chat" : `Open ${mergedTheme.brandName} chat`}
+          aria-haspopup="dialog"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className={styles.launcher}
+        >
+          <LauncherIcon />
+        </button>
+      ) : null}
 
       {isOpen && (
         <div
@@ -976,6 +980,10 @@ export function ChatWidget({
                     ) : null}
                   </div>
                 ) : null}
+                <footer className={styles.poweredByRow}>
+                  <span className={styles.poweredByLabel}>Powered by</span>
+                  <span className={styles.poweredByBrand}>{mergedTheme.brandName}</span>
+                </footer>
               </>
             ) : (
               <div className={styles.helpView} role="region" aria-label="Help center">

@@ -32,23 +32,23 @@ export default function ChannelsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-semibold text-slate-900">Channels</h1>
-        <p className="mt-2 text-sm text-slate-500">Manage delivery channels across website chat and human handoff routes.</p>
+        <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Channels</h1>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Manage delivery channels across website chat and human handoff routes.</p>
       </header>
 
       <section id="website-widget">
         <SectionCard
           title="Website Widget"
           description="Install and customize the website chat widget for this location."
-          actions={<span className="text-slate-500">{widgetIntegration?.status === "connected" ? "Live" : "Not configured"}</span>}
+          actions={<span className="text-[var(--console-text-tertiary)]">{widgetIntegration?.status === "connected" ? "Live" : "Not configured"}</span>}
         >
-          <pre className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-900 p-4 text-sm text-slate-100">
+          <pre className="overflow-x-auto rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-code)] p-4 text-sm text-[var(--console-text-inverse)]">
             <code>{snippet}</code>
           </pre>
           <div className="flex flex-wrap gap-3">
             <Link
               href="/channels#website-widget"
-              className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+              className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
             >
               Website widget section
             </Link>
@@ -60,13 +60,13 @@ export default function ChannelsPage() {
         <SectionCard
           title="Handoff (Talk to a person)"
           description="Control escalation channels for conversations requiring human support."
-          actions={<span className="text-slate-500">{enabledMethods.length ? `${enabledMethods.length} live` : "Not configured"}</span>}
+          actions={<span className="text-[var(--console-text-tertiary)]">{enabledMethods.length ? `${enabledMethods.length} live` : "Not configured"}</span>}
         >
-          <p className="text-sm text-slate-700">Status: <span className="font-semibold text-slate-900">{business.handoff.status}</span></p>
-          <p className="text-sm text-slate-700">Response time: <span className="font-semibold text-slate-900">{business.handoff.statusDetail || "Not configured"}</span></p>
+          <p className="text-sm text-[var(--console-text-secondary)]">Status: <span className="font-semibold text-[var(--console-text-primary)]">{business.handoff.status}</span></p>
+          <p className="text-sm text-[var(--console-text-secondary)]">Response time: <span className="font-semibold text-[var(--console-text-primary)]">{business.handoff.statusDetail || "Not configured"}</span></p>
           <Link
             href="/channels#handoff"
-            className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+            className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
           >
             Handoff section
           </Link>
@@ -77,12 +77,12 @@ export default function ChannelsPage() {
         title="Business hours routing"
         description="Route conversations based on location hours and availability windows."
       >
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           {business.hours.length ? "Configured from location hours." : "Not configured. Add business hours to enable schedule-aware routing."}
         </p>
         <Link
           href="/businesses"
-          className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
         >
           Manage locations
         </Link>

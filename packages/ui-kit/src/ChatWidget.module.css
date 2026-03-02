@@ -1,7 +1,7 @@
 .themeScope {
 	position: fixed;
-	bottom: 32px;
-	right: 32px;
+	bottom: var(--widget-offset-y);
+	right: var(--widget-offset-x);
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
@@ -52,11 +52,11 @@
 
 .panel {
 	position: absolute;
-	bottom: calc(100% + var(--tandem-space-12, 12px));
+	bottom: 0;
 	right: 0;
-	width: min(var(--widget-width-desktop), calc(100vw - 64px));
-	height: min(var(--widget-max-height), calc(100vh - 160px));
-	max-height: min(var(--widget-max-height), calc(100vh - 160px));
+	width: min(var(--widget-width-desktop), calc(100vw - (var(--widget-offset-x) * 2)));
+	height: min(var(--tandem-panel-max-height, var(--widget-max-height)), calc(100vh - (var(--widget-panel-viewport-offset) * 2)));
+	max-height: min(var(--tandem-panel-max-height, var(--widget-max-height)), calc(100vh - (var(--widget-panel-viewport-offset) * 2)));
 	background: var(--widget-bg-card);
 	border-radius: var(--widget-radius-lg);
 	border: 1px solid var(--widget-border);
@@ -140,7 +140,7 @@
 	padding: 4px;
 	border-radius: var(--widget-radius-lg);
 	border: 1px solid var(--widget-border-light);
-	background: var(--widget-bg-elevated);
+	background: var(--widget-bg-frosted);
 }
 
 .viewSwitchButton {
@@ -316,7 +316,7 @@
 	max-width: 85%;
 	font-size: 0.95rem;
 	line-height: 1.4;
-	box-shadow: var(--tandem-shadow-soft, 0 6px 14px rgba(15, 23, 42, 0.08));
+	box-shadow: var(--tandem-shadow-soft, var(--widget-shadow-md));
 }
 
 .assistantBubble {
@@ -370,7 +370,7 @@
 	font-size: 0.95rem;
 	background: var(--widget-bg-elevated);
 	color: var(--tandem-text-primary);
-	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+	box-shadow: var(--widget-shadow-inset);
 }
 
 .sendButton {
@@ -383,7 +383,7 @@
 	background-color: var(--tandem-primary);
 	color: var(--tandem-text-on-primary);
 	cursor: pointer;
-	box-shadow: var(--tandem-shadow-medium, 0 4px 6px rgba(15, 23, 42, 0.2));
+	box-shadow: var(--tandem-shadow-medium, var(--widget-shadow-lg));
 	transition: background-color 150ms ease, transform 100ms ease, opacity 150ms ease;
 }
 
@@ -431,6 +431,30 @@
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+}
+
+.poweredByRow {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: var(--widget-space-1);
+	padding: var(--widget-space-1) var(--widget-panel-padding-x) var(--widget-space-2);
+	border-top: 1px solid var(--widget-border-light);
+	background: var(--widget-bg-card);
+	font-size: var(--widget-text-sm);
+	line-height: var(--widget-leading-normal);
+}
+
+.poweredByLabel {
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--widget-text-tertiary);
+	font-weight: var(--widget-weight-semibold);
+}
+
+.poweredByBrand {
+	color: var(--widget-primary);
+	font-weight: var(--widget-weight-bold);
 }
 
 .typingIndicator {
@@ -612,9 +636,9 @@
 
 @media (max-width: 640px) {
 	.themeScope {
-		left: 16px;
-		right: 16px;
-		bottom: 16px;
+		left: var(--widget-mobile-inset);
+		right: var(--widget-mobile-inset);
+		bottom: var(--widget-mobile-inset);
 	}
 
 	.panel {
@@ -622,7 +646,9 @@
 		bottom: auto;
 		right: auto;
 		width: 100%;
-		max-height: calc(100vh - 120px);
+		height: min(var(--tandem-panel-max-height, var(--widget-max-height)), calc(100vh - (var(--widget-mobile-inset) * 2)));
+		max-height: min(var(--tandem-panel-max-height, var(--widget-max-height)), calc(100vh - (var(--widget-mobile-inset) * 2)));
+		border-radius: var(--widget-radius-xl);
 	}
 
 	.messageBubble {

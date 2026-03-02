@@ -24,15 +24,15 @@ export default function AssistantSettingsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-semibold text-slate-900">Assistant Settings</h1>
-        <p className="mt-2 text-sm text-slate-500">Configure assistant personality, safety boundaries, and escalation behavior.</p>
+        <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Assistant Settings</h1>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Configure assistant personality, safety boundaries, and escalation behavior.</p>
       </header>
 
       <SectionCard
         title="Tone & personality"
         description="Define how the assistant should sound when responding to guests."
       >
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           Not configured. Tone presets are coming soon.
         </p>
       </SectionCard>
@@ -41,7 +41,7 @@ export default function AssistantSettingsPage() {
         title="Guardrails"
         description="Set boundaries for what the assistant should refuse or defer."
       >
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           Not configured. Guardrail policies are coming soon.
         </p>
       </SectionCard>
@@ -50,12 +50,12 @@ export default function AssistantSettingsPage() {
         title="Escalation behavior"
         description="Choose when the assistant should route to a human team member."
       >
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           Not configured. Configure live handoff behavior from Channels.
         </p>
         <Link
           href="/channels"
-          className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
         >
           Open Channels
         </Link>
@@ -65,12 +65,12 @@ export default function AssistantSettingsPage() {
         title="Allowed actions"
         description="Control which assistant actions and quick tasks are available in chat."
       >
-        <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           Configure and review quick actions in the intent rules section on this page.
         </p>
         <Link
           href="/assistant-settings#intent-rules"
-          className="inline-flex rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
         >
           Jump to intent rules
         </Link>
@@ -80,20 +80,20 @@ export default function AssistantSettingsPage() {
         <SectionCard
           title="Intent rules"
           description="Review the suggested actions currently available to the assistant."
-          actions={<span className="text-slate-500">{business.intents.length} configured</span>}
+          actions={<span className="text-[var(--console-text-tertiary)]">{business.intents.length} configured</span>}
         >
           {business.intents.length ? (
             <div className="space-y-3">
               {business.intents.map((intent) => (
-                <article key={intent.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{intent.route.type}</p>
-                  <h3 className="mt-1 text-base font-semibold text-slate-900">{intent.label}</h3>
-                  <p className="text-sm text-slate-600">{intent.description}</p>
+                <article key={intent.id} className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">{intent.route.type}</p>
+                  <h3 className="mt-1 text-base font-semibold text-[var(--console-text-primary)]">{intent.label}</h3>
+                  <p className="text-sm text-[var(--console-text-secondary)]">{intent.description}</p>
                 </article>
               ))}
             </div>
           ) : (
-            <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
               Not configured. No intent rules are set for this location.
             </p>
           )}

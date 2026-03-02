@@ -111,7 +111,7 @@ export default function IntentsPage() {
       <SectionCard
         title="Assistant playbook"
         description="Choose what your assistant can help with. These quick actions appear above the chat composer."
-        actions={<span className="text-slate-500">{business.intents.length} suggestions</span>}
+        actions={<span className="text-[var(--console-text-tertiary)]">{business.intents.length} suggestions</span>}
       >
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveIntent}>
           <TextInput
@@ -135,8 +135,8 @@ export default function IntentsPage() {
             placeholder="Act as the Tandem concierge..."
             helperText="We’ll inject this when guests tap the suggestion."
           />
-          <label className="flex flex-col gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Response type</span>
+          <label className="flex flex-col gap-2 text-sm text-[var(--console-text-secondary)]">
+            <span className="font-semibold text-[var(--console-text-primary)]">Response type</span>
             <select
               value={intentForm.routeType}
               onChange={(event) =>
@@ -145,15 +145,15 @@ export default function IntentsPage() {
                   routeType: event.target.value as IntentFormState["routeType"],
                 }))
               }
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+              className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3 text-[var(--console-text-primary)]"
             >
               {routeOptions.map((option) => (
-                <option key={option.value} value={option.value} className="text-slate-900">
+                <option key={option.value} value={option.value} className="text-[var(--console-text-primary)]">
                   {option.label}
                 </option>
               ))}
             </select>
-            <span className="text-xs text-slate-400">Choose whether the assistant answers, links out, or escalates.</span>
+            <span className="text-xs text-[var(--console-text-tertiary)]">Choose whether the assistant answers, links out, or escalates.</span>
           </label>
           {(intentForm.routeType === 'link' || intentForm.routeType === 'handoff') && (
             <TextInput
@@ -171,14 +171,14 @@ export default function IntentsPage() {
                   setEditingIntentId(null);
                   setIntentForm(defaultIntent);
                 }}
-                className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300"
+                className="rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-medium text-[var(--console-text-secondary)] hover:border-[var(--console-border-dark)]"
               >
                 Cancel edit
               </button>
             ) : null}
             <button
               type="submit"
-              className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+              className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]"
             >
               {editingIntentId ? "Save suggested action" : "Add to assistant"}
             </button>
@@ -191,26 +191,26 @@ export default function IntentsPage() {
         description="Reorder suggestions to prioritize the most common tasks."
       >
         {business.intents.length === 0 ? (
-          <p className="text-sm text-slate-500">No quick actions yet. Add your first assistant task above.</p>
+          <p className="text-sm text-[var(--console-text-tertiary)]">No quick actions yet. Add your first assistant task above.</p>
         ) : (
           <div className="space-y-4">
             {business.intents.map((intent, index) => (
               <article
                 key={intent.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5"
+                className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4 shadow-[var(--console-shadow-sm)]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{intent.route.type}</p>
-                    <h3 className="text-lg font-semibold text-slate-900">{intent.label}</h3>
-                    <p className="text-sm text-slate-600">{intent.description}</p>
-                    <p className="mt-2 text-xs text-slate-500">Prompt: {intent.prompt}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">{intent.route.type}</p>
+                    <h3 className="text-lg font-semibold text-[var(--console-text-primary)]">{intent.label}</h3>
+                    <p className="text-sm text-[var(--console-text-secondary)]">{intent.description}</p>
+                    <p className="mt-2 text-xs text-[var(--console-text-tertiary)]">Prompt: {intent.prompt}</p>
                   </div>
                   <div className="flex flex-col gap-2 text-sm">
                     <button
                       type="button"
                       onClick={() => moveIntent(index, -1)}
-                      className="rounded-2xl border border-slate-200 px-3 py-1 text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-2xl border border-[var(--console-border)] px-3 py-1 text-[var(--console-text-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={index === 0}
                     >
                       Move up
@@ -218,7 +218,7 @@ export default function IntentsPage() {
                     <button
                       type="button"
                       onClick={() => moveIntent(index, 1)}
-                      className="rounded-2xl border border-slate-200 px-3 py-1 text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-2xl border border-[var(--console-border)] px-3 py-1 text-[var(--console-text-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={index === business.intents.length - 1}
                     >
                       Move down
@@ -229,14 +229,14 @@ export default function IntentsPage() {
                   <button
                     type="button"
                     onClick={() => startEdit(intent)}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-slate-700 hover:border-slate-300"
+                    className="rounded-2xl border border-[var(--console-border)] px-4 py-2 text-[var(--console-text-secondary)] hover:border-[var(--console-border-dark)]"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
                     onClick={() => removeIntent(intent.id)}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-rose-600 hover:border-rose-200"
+                    className="rounded-2xl border border-[var(--console-border)] px-4 py-2 text-[var(--console-error)] hover:border-[var(--console-error)]"
                   >
                     Delete
                   </button>

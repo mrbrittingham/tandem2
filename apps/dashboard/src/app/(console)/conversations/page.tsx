@@ -5,9 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useActiveLocation } from "@/lib/store-hooks";
 
 const roleStyles: Record<string, string> = {
-  user: "bg-blue-50 text-blue-700 border-blue-100",
-  assistant: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  system: "bg-slate-100 text-slate-700 border-slate-200",
+  user: "bg-[var(--console-primary-light)] text-[var(--console-primary)] border-[var(--console-primary)]",
+  assistant: "bg-[var(--console-success-light)] text-[var(--console-success)] border-[var(--console-success)]",
+  system: "bg-[var(--console-bg-hover)] text-[var(--console-text-secondary)] border-[var(--console-border)]",
 };
 
 const roleLabels: Record<string, string> = {
@@ -74,9 +74,9 @@ export default function ConversationsPage() {
 
   if (!activeLocation || !locationId) {
     return (
-      <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
-        <h2 className="text-lg font-semibold text-slate-900">Select a location</h2>
-        <p className="mt-2 text-sm text-slate-500">
+      <section className="rounded-3xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-card)] p-8 text-[var(--console-text-secondary)]">
+        <h2 className="text-lg font-semibold text-[var(--console-text-primary)]">Select a location</h2>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">
           Pick or create a location from the header switcher to review conversations.
         </p>
       </section>
@@ -87,28 +87,28 @@ export default function ConversationsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Conversations</p>
-          <h1 className="text-3xl font-semibold text-slate-900">Conversations</h1>
-          <p className="text-sm text-slate-500">Review chat sessions, search threads, and monitor escalations by location.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--console-text-tertiary)]">Conversations</p>
+          <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Conversations</h1>
+          <p className="text-sm text-[var(--console-text-tertiary)]">Review chat sessions, search threads, and monitor escalations by location.</p>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Location</p>
-          <p className="font-semibold text-slate-900">{selectedLocationLabel}</p>
+        <div className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-2 text-sm text-[var(--console-text-secondary)] shadow-sm">
+          <p className="text-xs uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">Location</p>
+          <p className="font-semibold text-[var(--console-text-primary)]">{selectedLocationLabel}</p>
         </div>
       </header>
 
-      <section className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_220px]">
-        <label className="flex flex-col gap-2 text-sm text-slate-600">
-          <span className="font-semibold text-slate-800">Search conversations</span>
+      <section className="grid gap-3 rounded-3xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4 shadow-sm md:grid-cols-[1fr_220px]">
+        <label className="flex flex-col gap-2 text-sm text-[var(--console-text-secondary)]">
+          <span className="font-semibold text-[var(--console-text-primary)]">Search conversations</span>
           <input
             type="search"
             placeholder="Search by session title"
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900"
+            className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-2.5 text-sm text-[var(--console-text-primary)]"
           />
         </label>
-        <label className="flex flex-col gap-2 text-sm text-slate-600">
-          <span className="font-semibold text-slate-800">Filter</span>
-          <select className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900">
+        <label className="flex flex-col gap-2 text-sm text-[var(--console-text-secondary)]">
+          <span className="font-semibold text-[var(--console-text-primary)]">Filter</span>
+          <select className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-2.5 text-sm text-[var(--console-text-primary)]">
             <option value="all">All sessions</option>
             <option value="handoff">Handoff sessions</option>
             <option value="assistant">Assistant-only sessions</option>
@@ -200,16 +200,16 @@ function ConversationsWorkspace({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-3xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4 shadow-sm">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-900">Recent sessions</p>
-          <span className="text-xs text-slate-500">{selectedLocationLabel}</span>
+          <p className="text-sm font-semibold text-[var(--console-text-primary)]">Recent sessions</p>
+          <span className="text-xs text-[var(--console-text-tertiary)]">{selectedLocationLabel}</span>
         </div>
         {sessionError ? (
-          <p className="mt-4 rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-700">{sessionError}</p>
+          <p className="mt-4 rounded-2xl bg-[var(--console-warning-light)] px-3 py-2 text-sm text-[var(--console-warning)]">{sessionError}</p>
         ) : null}
         {sessionsLoading ? (
-          <p className="mt-4 text-sm text-slate-500">Loading sessions…</p>
+          <p className="mt-4 text-sm text-[var(--console-text-tertiary)]">Loading sessions…</p>
         ) : sessions.length ? (
           <ul className="mt-4 space-y-2">
             {sessions.map((session) => {
@@ -224,14 +224,14 @@ function ConversationsWorkspace({
                     }}
                     className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                       isActive
-                        ? 'border-blue-200 bg-blue-50 text-blue-800'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        ? 'border-[var(--console-primary)] bg-[var(--console-primary-light)] text-[var(--console-primary)]'
+                        : 'border-[var(--console-border)] bg-[var(--console-bg-card)] text-[var(--console-text-secondary)] hover:border-[var(--console-border-dark)]'
                     }`}
                   >
                     <p className="text-sm font-semibold">
                       {session.title?.trim() || `Session ${session.id.slice(0, 6)}`}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-[var(--console-text-tertiary)]">
                       Updated {formatTimestamp(session.updatedAt)}
                     </p>
                   </button>
@@ -240,17 +240,17 @@ function ConversationsWorkspace({
             })}
           </ul>
         ) : (
-          <p className="mt-4 rounded-2xl border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
+          <p className="mt-4 rounded-2xl border border-dashed border-[var(--console-border)] px-3 py-4 text-sm text-[var(--console-text-tertiary)]">
             No sessions for this location yet.
           </p>
         )}
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-3xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4 shadow-sm">
         {selectedSessionId ? (
           <ConversationMessages key={selectedSessionId} selectedSessionId={selectedSessionId} />
         ) : (
-          <p className="text-sm text-slate-500">Select a session to view the thread.</p>
+          <p className="text-sm text-[var(--console-text-tertiary)]">Select a session to view the thread.</p>
         )}
       </section>
     </div>
@@ -297,29 +297,29 @@ function ConversationMessages({ selectedSessionId }: { selectedSessionId: string
   return (
     <>
       {messageError ? (
-        <p className="rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-700">{messageError}</p>
+        <p className="rounded-2xl bg-[var(--console-warning-light)] px-3 py-2 text-sm text-[var(--console-warning)]">{messageError}</p>
       ) : null}
       {messagesLoading ? (
-        <p className="text-sm text-slate-500">Loading conversation…</p>
+        <p className="text-sm text-[var(--console-text-tertiary)]">Loading conversation…</p>
       ) : messages.length ? (
         <ul className="space-y-4">
           {messages.map((message) => {
             const badgeStyle = roleStyles[message.role] ?? roleStyles.system;
             return (
-              <li key={message.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <div className="flex items-center justify-between text-xs text-slate-500">
+              <li key={message.id} className="rounded-2xl border border-[var(--console-border-light)] bg-[var(--console-bg-hover)] p-4">
+                <div className="flex items-center justify-between text-xs text-[var(--console-text-tertiary)]">
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeStyle}`}>
                     {roleLabels[message.role] ?? message.role}
                   </span>
                   <span>{formatTimestamp(message.createdAt)}</span>
                 </div>
-                <p className="mt-3 whitespace-pre-line text-sm text-slate-800">{message.content}</p>
+                <p className="mt-3 whitespace-pre-line text-sm text-[var(--console-text-primary)]">{message.content}</p>
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="text-sm text-slate-500">No messages captured for this session.</p>
+        <p className="text-sm text-[var(--console-text-tertiary)]">No messages captured for this session.</p>
       )}
     </>
   );

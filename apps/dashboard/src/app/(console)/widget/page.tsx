@@ -89,7 +89,7 @@ function WidgetEditor({ business }: { business: BusinessProfile }) {
           <div className="md:col-span-2 flex justify-end">
             <button
               type="submit"
-              className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+              className="rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]"
             >
               Save theme
             </button>
@@ -101,14 +101,14 @@ function WidgetEditor({ business }: { business: BusinessProfile }) {
         title="Add chat to your website"
         description="Paste this script inside the <head> on every page where the assistant should appear."
       >
-        <pre className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-900 p-4 text-sm text-slate-100">
+        <pre className="mt-2 overflow-x-auto rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-code)] p-4 text-sm text-[var(--console-text-inverse)]">
           <code>{snippet}</code>
         </pre>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleCopy}
-            className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+            className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]"
           >
             {copied ? "Copied" : "Copy snippet"}
           </button>
@@ -116,7 +116,7 @@ function WidgetEditor({ business }: { business: BusinessProfile }) {
             href="https://docs.tandem.dev/widget-install"
             target="_blank"
             rel="noreferrer"
-            className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            className="rounded-2xl border border-[var(--console-border)] px-5 py-2 text-sm font-semibold text-[var(--console-text-secondary)] hover:border-[var(--console-border-dark)]"
           >
             View docs
           </a>

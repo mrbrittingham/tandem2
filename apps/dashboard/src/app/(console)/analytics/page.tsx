@@ -14,8 +14,8 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-semibold text-slate-900">Analytics</h1>
-        <p className="mt-2 text-sm text-slate-500">Track assistant performance and customer behavior across channels.</p>
+        <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Analytics</h1>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Track assistant performance and customer behavior across channels.</p>
       </header>
 
       <SectionCard
@@ -24,9 +24,9 @@ export default function AnalyticsPage() {
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {analyticsCards.map((card) => (
-            <article key={card.title} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h2 className="text-sm font-semibold text-slate-900">{card.title}</h2>
-              <p className="mt-2 text-sm text-slate-500">{card.state}</p>
+            <article key={card.title} className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4">
+              <h2 className="text-sm font-semibold text-[var(--console-text-primary)]">{card.title}</h2>
+              <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">{card.state}</p>
             </article>
           ))}
         </div>

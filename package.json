@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "npm --workspace apps/dashboard run dev",
+    "dev:reset": "npm run clean && npm run dev",
     "lint": "npm --workspace apps/dashboard run lint",
     "typecheck": "npx tsc -p packages/shared/tsconfig.json --noEmit && npx tsc -p packages/ui-kit/tsconfig.json --noEmit && npm --workspace apps/dashboard run typecheck",
     "build": "npm --workspace apps/dashboard run build",
