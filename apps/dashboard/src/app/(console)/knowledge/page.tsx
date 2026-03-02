@@ -29,15 +29,15 @@ const formatTimestamp = (value: string) =>
 
 export default function KnowledgePage() {
   const business = useActiveBusiness();
-  const { openCreateBusiness } = useConsoleDialogs();
+  const { openCreateLocation } = useConsoleDialogs();
 
   if (!business) {
     return (
       <EmptyState
-        title="No business selected"
-        description="Create a business to start curating FAQs, policies, and menu links."
-        actionLabel="Create business"
-        onAction={openCreateBusiness}
+        title="No location selected"
+        description="Create a location to start curating FAQs, policies, and menu links."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
       />
     );
   }

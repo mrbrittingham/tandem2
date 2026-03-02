@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { useBusinesses } from "@/lib/store-hooks";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useActiveLocation } from "@/lib/store-hooks";
 
 const roleStyles: Record<string, string> = {
   user: "bg-blue-50 text-blue-700 border-blue-100",
@@ -17,7 +18,7 @@ const roleLabels: Record<string, string> = {
 
 type ConversationSession = {
   id: string;
-  businessId: string;
+  locationId: string;
   title: string | null;
   createdAt: string;
   updatedAt: string;
@@ -31,19 +32,54 @@ type ConversationMessage = {
 };
 
 export default function ConversationsPage() {
-  const businesses = useBusinesses();
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string | undefined>();
-  const businessId = selectedBusinessId ?? businesses[0]?.slug;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeLocation = useActiveLocation();
 
-  const selectedBusinessLabel = useMemo(() => {
-    return businesses.find((biz) => biz.slug === businessId)?.name ?? 'Select a business';
-  }, [businessId, businesses]);
+  const sessionIdFromUrl = searchParams.get("sessionId")?.trim();
 
-  if (!businesses.length) {
+  const locationId = activeLocation?.locationSlug ?? activeLocation?.slug;
+
+  useEffect(() => {
+    if (!locationId) {
+      return;
+    }
+
+    const next = new URLSearchParams(searchParams.toString());
+    let changed = false;
+
+    if (next.get("locationId") !== locationId) {
+      next.set("locationId", locationId);
+      changed = true;
+    }
+
+    if (changed) {
+      router.replace(`${pathname}?${next.toString()}`);
+    }
+  }, [locationId, pathname, router, searchParams]);
+
+  const selectedLocationLabel = useMemo(() => {
+    return activeLocation?.locationName ?? activeLocation?.location ?? "Select a location";
+  }, [activeLocation]);
+
+  const onSessionChange = useCallback((nextSessionId: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (locationId) {
+      next.set("locationId", locationId);
+    }
+    next.set("sessionId", nextSessionId);
+    router.replace(`${pathname}?${next.toString()}`);
+  }, [locationId, pathname, router, searchParams]);
+
+  if (!activeLocation || !locationId) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-300 bg-white/40 p-10 text-center text-slate-500">
-        Add a business to start capturing live conversations.
-      </div>
+      <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
+        <h2 className="text-lg font-semibold text-slate-900">Select a location</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Pick or create a location from the header switcher to review conversations.
+        </p>
+      </section>
     );
   }
 
@@ -53,29 +89,21 @@ export default function ConversationsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Inbox</p>
           <h1 className="text-3xl font-semibold text-slate-900">Conversations</h1>
-          <p className="text-sm text-slate-500">Monitor live chats and handoffs across every business.</p>
+          <p className="text-sm text-slate-500">Monitor live chats and handoffs for this location.</p>
         </div>
-        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
-          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">Business</span>
-          <select
-            value={businessId}
-            onChange={(event) => setSelectedBusinessId(event.target.value)}
-            className="rounded-xl border border-slate-200 px-3 py-1 text-sm text-slate-900 focus:border-blue-400 focus:outline-none"
-          >
-            {businesses.map((business) => (
-              <option key={business.id} value={business.slug}>
-                {business.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Location</p>
+          <p className="font-semibold text-slate-900">{selectedLocationLabel}</p>
+        </div>
       </header>
 
-      {businessId ? (
+      {locationId ? (
         <ConversationsWorkspace
-          key={businessId}
-          businessId={businessId}
-          selectedBusinessLabel={selectedBusinessLabel}
+          key={locationId}
+          locationId={locationId}
+          selectedLocationLabel={selectedLocationLabel}
+          selectedSessionIdFromUrl={sessionIdFromUrl}
+          onSessionChange={onSessionChange}
         />
       ) : null}
     </div>
@@ -83,21 +111,32 @@ export default function ConversationsPage() {
 }
 
 function ConversationsWorkspace({
-  businessId,
-  selectedBusinessLabel,
+  locationId,
+  selectedLocationLabel,
+  selectedSessionIdFromUrl,
+  onSessionChange,
 }: {
-  businessId: string;
-  selectedBusinessLabel: string;
+  locationId: string;
+  selectedLocationLabel: string;
+  selectedSessionIdFromUrl?: string;
+  onSessionChange: (sessionId: string) => void;
 }) {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
+  const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>(selectedSessionIdFromUrl);
+
+  useEffect(() => {
+    setSelectedSessionId(selectedSessionIdFromUrl);
+  }, [selectedSessionIdFromUrl]);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`/api/conversations?businessId=${encodeURIComponent(businessId)}`)
+    setSessionsLoading(true);
+    setSessionError(null);
+
+    fetch(`/api/conversations?locationId=${encodeURIComponent(locationId)}`)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error((await response.json()).error ?? 'Failed to load sessions');
@@ -108,8 +147,19 @@ function ConversationsWorkspace({
         if (cancelled) {
           return;
         }
-        setSessions(payload.sessions ?? []);
-        setSelectedSessionId(payload.sessions?.[0]?.id);
+        const nextSessions = payload.sessions ?? [];
+        setSessions(nextSessions);
+
+        const nextFromUrl = selectedSessionIdFromUrl;
+        const nextSessionId =
+          nextFromUrl && nextSessions.some((session: ConversationSession) => session.id === nextFromUrl)
+            ? nextFromUrl
+            : nextSessions?.[0]?.id;
+
+        setSelectedSessionId(nextSessionId);
+        if (nextSessionId && nextSessionId !== nextFromUrl) {
+          onSessionChange(nextSessionId);
+        }
       })
       .catch((error) => {
         if (!cancelled) {
@@ -127,14 +177,14 @@ function ConversationsWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [businessId]);
+  }, [locationId, onSessionChange, selectedSessionIdFromUrl]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-900">Recent sessions</p>
-          <span className="text-xs text-slate-500">{selectedBusinessLabel}</span>
+          <span className="text-xs text-slate-500">{selectedLocationLabel}</span>
         </div>
         {sessionError ? (
           <p className="mt-4 rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-700">{sessionError}</p>
@@ -149,7 +199,10 @@ function ConversationsWorkspace({
                 <li key={session.id}>
                   <button
                     type="button"
-                    onClick={() => setSelectedSessionId(session.id)}
+                    onClick={() => {
+                      setSelectedSessionId(session.id);
+                      onSessionChange(session.id);
+                    }}
                     className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                       isActive
                         ? 'border-blue-200 bg-blue-50 text-blue-800'
@@ -169,7 +222,7 @@ function ConversationsWorkspace({
           </ul>
         ) : (
           <p className="mt-4 rounded-2xl border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-500">
-            No sessions for this business yet.
+            No sessions for this location yet.
           </p>
         )}
       </section>

@@ -1,49 +1,80 @@
 import { NextResponse } from "next/server";
-import {
-  asGuardResponse,
-  getChatStore,
-  requireApiKey,
-  requireBusinessAllowed,
-} from "@tandem/shared/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const DEFAULT_LIMIT = 50;
+const LOCATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/;
+
+type SessionRow = {
+  id: string;
+  business_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function parseLocationId(value: string | null) {
+  const locationId = (value ?? "").trim();
+  if (!locationId) {
+    return { ok: false as const, reason: "locationId required" };
+  }
+  if (!LOCATION_ID_PATTERN.test(locationId)) {
+    return { ok: false as const, reason: "locationId is invalid" };
+  }
+  return { ok: true as const, locationId };
+}
 
 export async function GET(request: Request) {
   try {
-    requireApiKey(request);
+    const supabase = await createSupabaseServerClient();
 
-    const url = new URL(request.url);
-    const businessId = (url.searchParams.get("businessId") ?? "").trim();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (!businessId) {
-      return NextResponse.json({ error: "businessId required" }, { status: 400 });
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    requireBusinessAllowed(businessId);
+    const url = new URL(request.url);
+    const parsedLocationId = parseLocationId(url.searchParams.get("locationId"));
 
-    const store = await getChatStore();
-    const sessions = await store.listSessions(businessId, { limit: DEFAULT_LIMIT });
+    if (!parsedLocationId.ok) {
+      return NextResponse.json({ error: parsedLocationId.reason }, { status: 400 });
+    }
 
-    const ordered = [...sessions].sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+    const { locationId } = parsedLocationId;
+
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .select("id,business_id,title,created_at,updated_at")
+      .eq("business_id", locationId)
+      .order("updated_at", { ascending: false })
+      .limit(DEFAULT_LIMIT)
+      .returns<SessionRow[]>();
+
+    if (error) {
+      const code = error.code || "unknown";
+      const message = error.message || "Unknown Supabase error";
+      return NextResponse.json(
+        { error: `Failed to load conversations (code: ${code}): ${message}` },
+        { status: 500 },
+      );
+    }
+
+    const sessions = data ?? [];
 
     return NextResponse.json({
-      businessId,
-      sessions: ordered.map((session) => ({
+      locationId,
+      sessions: sessions.map((session) => ({
         id: session.id,
-        businessId: session.businessId,
-        title: session.title ?? null,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
+        locationId: session.business_id,
+        title: session.title,
+        createdAt: session.created_at,
+        updatedAt: session.updated_at,
       })),
     });
   } catch (error) {
-    const guardResponse = asGuardResponse(error);
-    if (guardResponse) {
-      return guardResponse;
-    }
-
     const message = error instanceof Error ? error.message : "Failed to load conversations";
     return NextResponse.json({ error: message }, { status: 500 });
   }

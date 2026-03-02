@@ -11,15 +11,15 @@ import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
 
 export default function HandoffPage() {
   const business = useActiveBusiness();
-  const { openCreateBusiness } = useConsoleDialogs();
+  const { openCreateLocation } = useConsoleDialogs();
 
   if (!business) {
     return (
       <EmptyState
-        title="No business selected"
-        description="Create a business to set how guests reach your team."
-        actionLabel="Create business"
-        onAction={openCreateBusiness}
+        title="No location selected"
+        description="Create a location to set how guests reach your team."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
       />
     );
   }

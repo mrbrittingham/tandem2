@@ -1,0 +1,255 @@
+import { randomUUID } from "node:crypto";
+import { getServerSupabaseClient } from "../supabase/server";
+import type {
+  AppendMessageInput,
+  ChatMessage,
+  ChatSession,
+  ChatStore,
+  ListSessionsOptions,
+  UpdateSessionInput,
+} from "./types";
+
+type SupabaseError = {
+  code?: string | null;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+};
+
+type SessionRow = {
+  id: string;
+  business_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type MessageRow = {
+  id: string;
+  session_id: string;
+  business_id: string;
+  role: ChatMessage["role"];
+  content: string;
+  created_at: string;
+};
+
+type BusinessRow = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+const BUSINESSES_TABLE = "businesses";
+const SESSIONS_TABLE = "chat_sessions";
+const MESSAGES_TABLE = "chat_messages";
+
+function asSession(row: SessionRow): ChatSession {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    title: row.title,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function asMessage(row: MessageRow): ChatMessage {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    businessId: row.business_id,
+    role: row.role,
+    content: row.content,
+    createdAt: row.created_at,
+  };
+}
+
+function toError(operation: string, table: string, error: SupabaseError | null): never {
+  const code = error?.code ?? "unknown";
+  const message = error?.message ?? "Unknown Supabase error";
+  const details = error?.details ? ` | details: ${error.details}` : "";
+  const hint = error?.hint ? ` | hint: ${error.hint}` : "";
+  throw new Error(`Supabase ${operation} on ${table} failed (code: ${code}): ${message}${details}${hint}`);
+}
+
+function isNoRowsError(error: { code?: string } | null): boolean {
+  return error?.code === "PGRST116";
+}
+
+export function createSupabaseChatStore(): ChatStore {
+  const supabase = getServerSupabaseClient();
+
+  const ensureBusinessExists = async (businessId: string) => {
+    const payload = {
+      id: businessId,
+      name: businessId,
+    } satisfies Omit<BusinessRow, "created_at">;
+
+    const { error } = await supabase
+      .from(BUSINESSES_TABLE)
+      .upsert(payload, { onConflict: "id", ignoreDuplicates: true });
+
+    if (error) {
+      toError("upsert", BUSINESSES_TABLE, error);
+    }
+  };
+
+  return {
+    async createSession(businessId) {
+      await ensureBusinessExists(businessId);
+
+      const timestamp = new Date().toISOString();
+      const payload = {
+        id: randomUUID(),
+        business_id: businessId,
+        title: null,
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+
+      const { data, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .insert(payload)
+        .select("id,business_id,title,created_at,updated_at")
+        .single<SessionRow>();
+
+      if (error || !data) {
+        toError("insert", SESSIONS_TABLE, error);
+      }
+
+      return asSession(data);
+    },
+
+    async getSession(sessionId) {
+      const { data, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .select("id,business_id,title,created_at,updated_at")
+        .eq("id", sessionId)
+        .single<SessionRow>();
+
+      if (error) {
+        if (isNoRowsError(error)) {
+          return null;
+        }
+        toError("select", SESSIONS_TABLE, error);
+      }
+
+      return data ? asSession(data) : null;
+    },
+
+    async listSessions(businessId, options?: ListSessionsOptions) {
+      await ensureBusinessExists(businessId);
+
+      const limit = options?.limit ?? 20;
+      const { data, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .select("id,business_id,title,created_at,updated_at")
+        .eq("business_id", businessId)
+        .order("updated_at", { ascending: false })
+        .limit(limit)
+        .returns<SessionRow[]>();
+
+      if (error) {
+        toError("select", SESSIONS_TABLE, error);
+      }
+
+      return (data ?? []).map(asSession);
+    },
+
+    async appendMessage(sessionId, messageInput: AppendMessageInput) {
+      const session = await this.getSession(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+
+      const createdAt = messageInput.createdAt ?? new Date().toISOString();
+      const messagePayload = {
+        id: randomUUID(),
+        session_id: sessionId,
+        business_id: session.businessId,
+        role: messageInput.role,
+        content: messageInput.content,
+        created_at: createdAt,
+      };
+
+      const { data: messageData, error: messageError } = await supabase
+        .from(MESSAGES_TABLE)
+        .insert(messagePayload)
+        .select("id,session_id,business_id,role,content,created_at")
+        .single<MessageRow>();
+
+      if (messageError || !messageData) {
+        toError("insert", MESSAGES_TABLE, messageError);
+      }
+
+      const { error: sessionError } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({ updated_at: createdAt })
+        .eq("id", sessionId);
+
+      if (sessionError) {
+        toError("update", SESSIONS_TABLE, sessionError);
+      }
+
+      return asMessage(messageData);
+    },
+
+    async listMessages(sessionId) {
+      const { data, error } = await supabase
+        .from(MESSAGES_TABLE)
+        .select("id,session_id,business_id,role,content,created_at")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: true })
+        .returns<MessageRow[]>();
+
+      if (error) {
+        toError("select", MESSAGES_TABLE, error);
+      }
+
+      return (data ?? []).map(asMessage);
+    },
+
+    async updateSession(sessionId, patch: UpdateSessionInput) {
+      const updates: { title?: string | null; updated_at: string } = {
+        updated_at: patch.updatedAt ?? new Date().toISOString(),
+      };
+
+      if (patch.title !== undefined) {
+        updates.title = patch.title;
+      }
+
+      const { data, error } = await supabase
+        .from(SESSIONS_TABLE)
+        .update(updates)
+        .eq("id", sessionId)
+        .select("id,business_id,title,created_at,updated_at")
+        .single<SessionRow>();
+
+      if (error || !data) {
+        toError("update", SESSIONS_TABLE, error);
+      }
+
+      return asSession(data);
+    },
+
+    async deleteSession(sessionId) {
+      const { error: deleteMessagesError } = await supabase
+        .from(MESSAGES_TABLE)
+        .delete()
+        .eq("session_id", sessionId);
+
+      if (deleteMessagesError) {
+        toError("delete", MESSAGES_TABLE, deleteMessagesError);
+      }
+
+      const { error: deleteSessionError } = await supabase
+        .from(SESSIONS_TABLE)
+        .delete()
+        .eq("id", sessionId);
+
+      if (deleteSessionError) {
+        toError("delete", SESSIONS_TABLE, deleteSessionError);
+      }
+    },
+  } satisfies ChatStore;
+}

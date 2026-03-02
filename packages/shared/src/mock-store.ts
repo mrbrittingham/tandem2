@@ -2,6 +2,7 @@ import type {
   BusinessProfile,
   ContactMethod,
   CreateBusinessPayload,
+  CreateLocationPayload,
   FAQItem,
   HandoffConfig,
   Industry,
@@ -41,6 +42,18 @@ import type {
     }
     const parsed = JSON.parse(raw) as MockState;
     if (parsed && Array.isArray(parsed.businesses)) {
+      if (!parsed.accountBusinessName && parsed.businesses[0]) {
+        parsed.accountBusinessName = parsed.businesses[0].businessName ?? parsed.businesses[0].name;
+      }
+      if (!parsed.accountBusinessSlug && parsed.businesses[0]) {
+        parsed.accountBusinessSlug = parsed.businesses[0].businessSlug ?? slugify(parsed.businesses[0].name);
+      }
+      if (!parsed.activeLocationId) {
+        parsed.activeLocationId = parsed.activeBusinessId ?? parsed.businesses[0]?.id;
+      }
+      if (!parsed.activeBusinessId) {
+        parsed.activeBusinessId = parsed.activeLocationId;
+      }
       return parsed;
     }
   } catch (error) {
@@ -91,32 +104,88 @@ import type {
   notify();
  }
 
- export function getActiveBusiness(snapshot: MockState = state): BusinessProfile | undefined {
-  const { activeBusinessId, businesses } = snapshot;
+export function getLocations(snapshot: MockState = state): BusinessProfile[] {
+  return snapshot.businesses;
+}
+
+export function getActiveLocation(snapshot: MockState = state): BusinessProfile | undefined {
+  const { businesses } = snapshot;
+  const activeLocationId = snapshot.activeLocationId ?? snapshot.activeBusinessId;
   if (!businesses.length) {
     return undefined;
   }
-  return businesses.find((biz) => biz.id === activeBusinessId) ?? businesses[0];
+  return businesses.find((entry) => entry.id === activeLocationId) ?? businesses[0];
+}
+
+export function selectActiveLocation(locationId: string) {
+  updateMockState((draft) => {
+    draft.activeLocationId = locationId;
+    draft.activeBusinessId = locationId;
+  });
+}
+
+ export function getActiveBusiness(snapshot: MockState = state): BusinessProfile | undefined {
+  return getActiveLocation(snapshot);
  }
 
  export function selectActiveBusiness(businessId: string) {
-  updateMockState((draft) => {
-    draft.activeBusinessId = businessId;
-  });
+  selectActiveLocation(businessId);
  }
+
+export function createLocation(payload: CreateLocationPayload): BusinessProfile {
+  const source = payload.mode === "copy"
+    ? getLocations().find((entry) => entry.id === payload.sourceLocationId)
+    : undefined;
+  const template = source ? cloneLocation(source) : buildIndustryTemplate(getAccountIndustry());
+  const timestamp = new Date().toISOString();
+  const businessName = state.accountBusinessName ?? template.businessName ?? template.name;
+  const businessSlug = state.accountBusinessSlug ?? template.businessSlug ?? slugify(businessName);
+  const locationName = payload.name.trim() || "New location";
+
+  const location: BusinessProfile = {
+    ...template,
+    id: createId(),
+    slug: `${businessSlug}-${slugify(locationName)}`,
+    name: businessName,
+    businessName,
+    businessSlug,
+    locationName,
+    locationSlug: slugify(locationName),
+    location: payload.address?.trim() || source?.location || "",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  updateMockState((draft) => {
+    draft.accountBusinessName = businessName;
+    draft.accountBusinessSlug = businessSlug;
+    draft.businesses.push(location);
+    draft.activeLocationId = location.id;
+    draft.activeBusinessId = location.id;
+  });
+
+  return location;
+}
 
  export function createBusiness(payload: CreateBusinessPayload): BusinessProfile {
   const template = buildIndustryTemplate(payload.industry);
   const timestamp = new Date().toISOString();
+  const businessName = payload.name;
+  const businessSlug = slugify(payload.name);
+  const locationName = "Main location";
   const business: BusinessProfile = {
     ...template,
     id: createId(),
-    slug: slugify(payload.name),
-    name: payload.name,
+    slug: `${businessSlug}-${slugify(locationName)}`,
+    name: businessName,
+    businessName,
+    businessSlug,
+    locationName,
+    locationSlug: slugify(locationName),
     industry: payload.industry,
     timezone: payload.timezone,
-    tagline: template.tagline.replace(template.name, payload.name),
-    summary: payload.summary ?? template.summary.replace(template.name, payload.name),
+    tagline: template.tagline.replace(template.name, businessName),
+    summary: payload.summary ?? template.summary.replace(template.name, businessName),
     contacts: mergeContacts(payload, template.contacts),
     theme: {
       ...template.theme,
@@ -150,7 +219,10 @@ import type {
   }
 
   updateMockState((draft) => {
-    draft.businesses.push(business);
+    draft.accountBusinessName = businessName;
+    draft.accountBusinessSlug = businessSlug;
+    draft.businesses = [business];
+    draft.activeLocationId = business.id;
     draft.activeBusinessId = business.id;
   });
 
@@ -187,7 +259,7 @@ import type {
   const handoffMethod = business.handoff.contactMethods.find((method) => method.enabled);
 
   return {
-    businessName: business.name,
+    businessName: business.businessName ?? business.name,
     tagline: business.tagline,
     welcomeMessage: business.summary,
     intents: business.intents.map((intent) => ({
@@ -311,11 +383,41 @@ import type {
   }
  }
 
+function getAccountIndustry(): Industry {
+  return getActiveLocation()?.industry ?? "restaurant";
+}
+
+function cloneLocation(source: BusinessProfile): BusinessProfile {
+  const cloned = JSON.parse(JSON.stringify(source)) as BusinessProfile;
+  cloned.hours = cloned.hours.map((entry) => ({ ...entry, id: createId() }));
+  cloned.contacts = cloned.contacts.map((entry) => ({ ...entry, id: createId() }));
+  cloned.intents = cloned.intents.map((entry) => ({ ...entry, id: createId() }));
+  cloned.faqs = cloned.faqs.map((entry) => ({ ...entry, id: createId() }));
+  cloned.policies = cloned.policies.map((entry) => ({ ...entry, id: createId() }));
+  cloned.integrations = cloned.integrations.map((entry) => ({ ...entry, id: createId() }));
+  cloned.handoff = {
+    ...cloned.handoff,
+    contactMethods: cloned.handoff.contactMethods.map((entry) => ({ ...entry, id: createId() })),
+  };
+  return cloned;
+}
+
  function createDefaultState(): MockState {
-  const business = createRestaurantTemplate();
+  const location = createRestaurantTemplate();
+  const secondLocation = cloneLocation(location);
+  secondLocation.id = createId();
+  secondLocation.locationName = "Mission Bay";
+  secondLocation.locationSlug = "mission-bay";
+  secondLocation.slug = `${location.businessSlug ?? location.slug}-mission-bay`;
+  secondLocation.location = "500 Terry Francine St, San Francisco";
+  secondLocation.updatedAt = new Date().toISOString();
+
   return {
-    businesses: [business],
-    activeBusinessId: business.id,
+    accountBusinessName: location.businessName ?? location.name,
+    accountBusinessSlug: location.businessSlug ?? slugify(location.name),
+    businesses: [location, secondLocation],
+    activeLocationId: location.id,
+    activeBusinessId: location.id,
   };
  }
 
@@ -357,6 +459,10 @@ import type {
     id: createId(),
     slug: slugify(name),
     name,
+    businessName: name,
+    businessSlug: slugify(name),
+    locationName: "Valencia St",
+    locationSlug: "valencia-st",
     industry: "restaurant",
     timezone,
     tagline: "Concierge for the tasting room",
@@ -541,6 +647,10 @@ import type {
     id: createId(),
     slug: slugify(name),
     name,
+    businessName: name,
+    businessSlug: slugify(name),
+    locationName: "Orchard St",
+    locationSlug: "orchard-st",
     industry: "services",
     timezone,
     tagline: "Concierge for appointment-driven teams",
@@ -698,6 +808,10 @@ import type {
     id: createId(),
     slug: slugify(name),
     name,
+    businessName: name,
+    businessSlug: slugify(name),
+    locationName: "Blake St",
+    locationSlug: "blake-st",
     industry: "retail",
     timezone,
     tagline: "Concierge for modern retail",
@@ -838,14 +952,28 @@ import type {
   return defs.map((def) => ({ ...def, id: createId(), lastUpdated: timestamp }));
  }
 
- function buildFaqs(defs: Array<Omit<FAQItem, "id" | "updatedAt">>): FAQItem[] {
+function buildFaqs(
+  defs: Array<Omit<FAQItem, "id" | "updatedAt" | "showInHelp"> & { showInHelp?: boolean }>,
+): FAQItem[] {
   const timestamp = new Date().toISOString();
-  return defs.map((def) => ({ ...def, id: createId(), updatedAt: timestamp, showInHelp: true }));
+  return defs.map((def) => ({
+    ...def,
+    id: createId(),
+    updatedAt: timestamp,
+    showInHelp: def.showInHelp ?? true,
+  }));
  }
 
- function buildPolicies(defs: Array<Omit<PolicyItem, "id" | "updatedAt">>): PolicyItem[] {
+function buildPolicies(
+  defs: Array<Omit<PolicyItem, "id" | "updatedAt" | "showInHelp"> & { showInHelp?: boolean }>,
+): PolicyItem[] {
   const timestamp = new Date().toISOString();
-  return defs.map((def) => ({ ...def, id: createId(), updatedAt: timestamp, showInHelp: true }));
+  return defs.map((def) => ({
+    ...def,
+    id: createId(),
+    updatedAt: timestamp,
+    showInHelp: def.showInHelp ?? true,
+  }));
  }
 
 function buildIntegrations(defs: Array<Omit<IntegrationConfig, "id">>): IntegrationConfig[] {

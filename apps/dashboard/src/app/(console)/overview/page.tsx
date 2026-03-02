@@ -9,7 +9,7 @@ import { useActiveBusiness } from "@/lib/store-hooks";
 
 const checklistConfig = [
   {
-    label: "Add business hours",
+    label: "Add location hours",
     description: "So your assistant knows when people can visit.",
     href: "/businesses",
     key: "hours",
@@ -40,18 +40,28 @@ const checklistConfig = [
   },
 ] as const;
 
+function formatUtcMDY(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const m = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  const y = d.getUTCFullYear();
+  return `${m}/${day}/${y}`;
+}
+
 export default function OverviewPage() {
-  const { openCreateBusiness } = useConsoleDialogs();
+  const { openCreateLocation } = useConsoleDialogs();
   const business = useActiveBusiness();
   const previewDock = usePreviewDock();
 
   if (!business) {
     return (
       <EmptyState
-        title="Create your first assistant"
-        description="Add a business to unlock setup checklists, preview, and install docs."
-        actionLabel="Create business"
-        onAction={openCreateBusiness}
+        title="Create your first location assistant"
+        description="Add a location to unlock setup checklists, preview, and install docs."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
       />
     );
   }
@@ -131,8 +141,11 @@ export default function OverviewPage() {
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
               <dt className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Last updated</dt>
-              <dd className="mt-2 text-xl font-semibold text-slate-900">
-                {new Date(business.updatedAt).toLocaleDateString()}
+              <dd
+                className="mt-2 text-xl font-semibold text-slate-900"
+                suppressHydrationWarning
+              >
+                {formatUtcMDY(business.updatedAt)}
               </dd>
               <p className="text-xs text-slate-500">Keep content fresh</p>
             </div>

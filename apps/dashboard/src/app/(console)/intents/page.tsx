@@ -32,17 +32,17 @@ const defaultIntent: IntentFormState = {
 
 export default function IntentsPage() {
   const business = useActiveBusiness();
-  const { openCreateBusiness } = useConsoleDialogs();
+  const { openCreateLocation } = useConsoleDialogs();
   const [intentForm, setIntentForm] = useState<IntentFormState>(defaultIntent);
   const [editingIntentId, setEditingIntentId] = useState<string | null>(null);
 
   if (!business) {
     return (
       <EmptyState
-        title="No business selected"
-        description="Add a business profile to choose what your assistant can help with."
-        actionLabel="Create business"
-        onAction={openCreateBusiness}
+        title="No location selected"
+        description="Add a location profile to choose what this assistant can help with."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
       />
     );
   }

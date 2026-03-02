@@ -8,7 +8,7 @@ export default function ReportsPage() {
       <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Reports</p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-900">Reports coming soon</h1>
       <p className="mt-3 text-sm text-slate-600">
-        Analytics dashboards are not wired yet in this build. Use Conversations and Overview for current operational insights.
+        Analytics dashboards are not wired yet in this build. Use Conversations and Overview for current location insights.
       </p>
       <div className="mt-6">
         <Link

@@ -19,14 +19,14 @@ const colorFields: Array<{ key: keyof WidgetThemeSettings; label: string }> = [
 
 export default function WidgetPage() {
   const business = useActiveBusiness();
-  const { openCreateBusiness } = useConsoleDialogs();
+  const { openCreateLocation } = useConsoleDialogs();
   if (!business) {
     return (
       <EmptyState
-        title="No business selected"
-        description="Create a business to customize the widget look and grab the install snippet."
-        actionLabel="Create business"
-        onAction={openCreateBusiness}
+        title="No location selected"
+        description="Create a location to customize the widget look and grab the install snippet."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
       />
     );
   }
@@ -40,8 +40,9 @@ function WidgetEditor({ business }: { business: BusinessProfile }) {
   const [copied, setCopied] = useState(false);
 
   const snippet = useMemo(() => {
-    return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${business.slug}"></script>`;
-  }, [business.slug]);
+    const snippetId = business.locationSlug ?? business.slug;
+    return `<script async src="https://cdn.tandem.dev/widget.js" data-location="${snippetId}"></script>`;
+  }, [business.locationSlug, business.slug]);
 
   const handleThemeSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

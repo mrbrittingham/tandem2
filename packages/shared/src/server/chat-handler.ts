@@ -1,5 +1,5 @@
 import { getChatStore } from "../storage";
-import { llmStream, type LLMMessage } from "../llm";
+import { llmStream, type LLMMessage, validateLLMServerConfig } from "../llm";
 import { asGuardResponse, requireApiKey, requireBusinessAllowed } from "./auth";
 
 const SESSION_COOKIE = "tandem_session";
@@ -11,6 +11,10 @@ type ChatRequestBody = {
   system?: string;
   temperature?: number;
   maxTokens?: number;
+};
+
+type ChatHandlerOptions = {
+  requireRequestApiKey?: boolean;
 };
 
 const sanitizeBusinessId = (value?: string) => {
@@ -75,9 +79,11 @@ function readBusinessIdFromGet(req: Request): string | undefined {
   return sanitizeBusinessId(url.searchParams.get("businessId") ?? undefined);
 }
 
-export async function handleChatGet(req: Request): Promise<Response> {
+export async function handleChatGet(req: Request, options?: ChatHandlerOptions): Promise<Response> {
   try {
-    requireApiKey(req);
+    if (options?.requireRequestApiKey !== false) {
+      requireApiKey(req);
+    }
     const businessId = readBusinessIdFromGet(req);
     if (!businessId) {
       return Response.json({ error: "businessId required" }, { status: 400 });
@@ -115,9 +121,11 @@ export async function handleChatGet(req: Request): Promise<Response> {
   }
 }
 
-export async function handleChatPost(req: Request): Promise<Response> {
+export async function handleChatPost(req: Request, options?: ChatHandlerOptions): Promise<Response> {
   try {
-    requireApiKey(req);
+    if (options?.requireRequestApiKey !== false) {
+      requireApiKey(req);
+    }
 
     let body: ChatRequestBody;
     try {
@@ -132,6 +140,17 @@ export async function handleChatPost(req: Request): Promise<Response> {
     }
 
     requireBusinessAllowed(businessId);
+
+    const llmConfig = validateLLMServerConfig();
+    if (!llmConfig.ok) {
+      return Response.json(
+        {
+          error: llmConfig.message,
+          missingEnv: llmConfig.missingEnv,
+        },
+        { status: 500 },
+      );
+    }
 
     const userMessages = (body.messages ?? []).filter(
       (message) => message.role === "user" && typeof message.content === "string" && message.content.trim().length > 0,

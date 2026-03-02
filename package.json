@@ -7,14 +7,16 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm --workspace apps/chatbot run dev",
-    "lint": "npm --workspace apps/chatbot run lint",
-    "typecheck": "npx tsc -p packages/shared/tsconfig.json --noEmit && npx tsc -p packages/ui-kit/tsconfig.json --noEmit && npm --workspace apps/chatbot run typecheck",
-    "build": "npm --workspace apps/chatbot run build",
+    "dev": "npm --workspace apps/dashboard run dev",
+    "lint": "npm --workspace apps/dashboard run lint",
+    "typecheck": "npx tsc -p packages/shared/tsconfig.json --noEmit && npx tsc -p packages/ui-kit/tsconfig.json --noEmit && npm --workspace apps/dashboard run typecheck",
+    "build": "npm --workspace apps/dashboard run build",
     "clean": "node ./scripts/clean.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.37",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.98.0",
     "ai": "^6.0.105"
   }
 }

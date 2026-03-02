@@ -1,34 +1,40 @@
 'use client';
 
-import { selectActiveBusiness } from "@/lib/store-hooks";
-import { useActiveBusiness, useBusinesses } from "@/lib/store-hooks";
+import { selectActiveLocation, useAccountBusiness, useActiveLocation, useLocations } from "@/lib/store-hooks";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { EmptyState } from "@/components/EmptyState";
 
 export default function BusinessesPage() {
-  const businesses = useBusinesses();
-  const active = useActiveBusiness();
-  const { openCreateBusiness } = useConsoleDialogs();
+  const locations = useLocations();
+  const active = useActiveLocation();
+  const accountBusiness = useAccountBusiness();
+  const { openCreateLocation } = useConsoleDialogs();
 
-  if (!businesses.length) {
+  if (!locations.length) {
     return (
       <EmptyState
-        title="No businesses yet"
-        description="Spin up a concierge to configure assistant content, live routing, and installs."
-        actionLabel="Create business"
-        onAction={openCreateBusiness}
+        title="No locations yet"
+        description="Add a location to configure assistant content, live routing, and installs."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
       />
     );
   }
 
   return (
     <div className="space-y-8">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Business</p>
+        <h2 className="mt-2 text-2xl font-semibold text-slate-900">{accountBusiness.name}</h2>
+        <p className="mt-2 text-sm text-slate-500">One business account with multiple location-level assistants and settings.</p>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2">
-        {businesses.map((business) => {
-          const isActive = active?.id === business.id;
+        {locations.map((location) => {
+          const isActive = active?.id === location.id;
           return (
             <article
-              key={business.id}
+              key={location.id}
               className={`rounded-3xl border p-5 transition shadow-sm ${
                 isActive
                   ? 'border-blue-200 bg-blue-50 shadow-blue-100'
@@ -37,28 +43,28 @@ export default function BusinessesPage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.3em] text-slate-400">{business.industry}</p>
-                  <h3 className="text-xl font-semibold text-slate-900">{business.name}</h3>
-                  <p className="text-sm text-slate-500">{business.location}</p>
+                  <p className="text-sm uppercase tracking-[0.3em] text-slate-400">{location.industry}</p>
+                  <h3 className="text-xl font-semibold text-slate-900">{location.locationName ?? location.location}</h3>
+                  <p className="text-sm text-slate-500">{location.location || "No address"}</p>
                 </div>
-                {business.theme.logoUrl && (
+                {location.theme.logoUrl && (
                   <img
-                    src={business.theme.logoUrl}
-                    alt="Business logo"
+                    src={location.theme.logoUrl}
+                    alt="Location logo"
                     className="h-12 w-12 rounded-2xl border border-slate-200 object-cover"
                   />
                 )}
               </div>
-              <p className="mt-4 text-sm text-slate-600">{business.summary}</p>
+              <p className="mt-4 text-sm text-slate-600">{location.summary}</p>
               <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                <span className="rounded-full bg-slate-100 px-3 py-1">{business.timezone}</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">{business.intents.length} intents</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1">{business.faqs.length} FAQs</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">{location.timezone}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">{location.intents.length} intents</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">{location.faqs.length} FAQs</span>
               </div>
               <div className="mt-5 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => selectActiveBusiness(business.id)}
+                  onClick={() => selectActiveLocation(location.id)}
                   className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
                     isActive
                       ? 'bg-blue-600 text-white'
@@ -69,10 +75,10 @@ export default function BusinessesPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={openCreateBusiness}
+                  onClick={openCreateLocation}
                   className="rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
                 >
-                  Duplicate template
+                  Add location
                 </button>
               </div>
             </article>
@@ -82,8 +88,8 @@ export default function BusinessesPage() {
 
       {active && (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Selected business</p>
-          <h3 className="mt-2 text-2xl font-semibold text-slate-900">{active.name}</h3>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Selected location</p>
+          <h3 className="mt-2 text-2xl font-semibold text-slate-900">{active.locationName ?? active.location}</h3>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
               <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Contacts</h4>

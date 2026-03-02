@@ -1,13 +1,15 @@
 'use client';
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ChatWidget } from "@tandem/ui-kit";
 import { ConsoleDialogProvider } from "@/components/ConsoleDialogContext";
-import { CreateBusinessWizard } from "@/components/CreateBusinessWizard";
+import { CreateLocationDialog } from "@/components/CreateLocationDialog";
+import { LocationSwitcher } from "@/components/LocationSwitcher";
 import { PreviewDockProvider } from "@/components/PreviewDockContext";
-import { businessToWidgetConfig, useActiveBusiness } from "@/lib/store-hooks";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { businessToWidgetConfig, useActiveLocation } from "@/lib/store-hooks";
 
 const navItems = [
   { label: "Home", href: "/overview" },
@@ -23,9 +25,10 @@ const navItems = [
 ];
 
 export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const activeBusiness = useActiveBusiness();
-  const [wizardOpen, setWizardOpen] = useState(false);
+  const activeBusiness = useActiveLocation();
+  const [createLocationOpen, setCreateLocationOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const isPreviewOpen = Boolean(activeBusiness) && previewOpen;
 
@@ -36,9 +39,10 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
 
   const providerValue = useMemo(
     () => ({
-      openCreateBusiness: () => setWizardOpen(true),
+      openCreateLocation: () => setCreateLocationOpen(true),
+      openCreateBusiness: () => setCreateLocationOpen(true),
     }),
-    [setWizardOpen],
+    [setCreateLocationOpen],
   );
 
   const previewContextValue = useMemo(
@@ -50,9 +54,12 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
     [previewOpen, setPreviewOpen],
   );
 
-  const assistantSummary = activeBusiness
-    ? `${activeBusiness.industry} • ${activeBusiness.location || "Location coming soon"}`
-    : "Launch an assistant to unlock insights.";
+  const handleSignOut = async () => {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  };
 
   return (
     <ConsoleDialogProvider value={providerValue}>
@@ -65,13 +72,6 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                 <p className="mt-2 text-xl font-semibold text-slate-900">Client console</p>
                 <p className="text-sm text-slate-500">Guide your concierge setup in minutes.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setWizardOpen(true)}
-                className="mt-5 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
-              >
-                Add business
-              </button>
               <nav className="mt-8 flex flex-1 flex-col gap-1">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href;
@@ -93,12 +93,15 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
             </aside>
             <div className="flex flex-1 flex-col">
               <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-slate-200 bg-white/90 px-8 py-5 text-sm text-slate-600 backdrop-blur supports-[backdrop-filter]:bg-white/75 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Active business</p>
-                  <p className="text-lg font-semibold text-slate-900">{activeBusiness?.name ?? 'No business yet'}</p>
-                  <p className="text-sm text-slate-500">{assistantSummary}</p>
-                </div>
+                <LocationSwitcher onAddLocation={() => setCreateLocationOpen(true)} />
                 <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  >
+                    Sign out
+                  </button>
                   <button
                     type="button"
                     onClick={() => setPreviewOpen(true)}
@@ -106,13 +109,6 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                     className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWizardOpen(true)}
-                    className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-                  >
-                    New business
                   </button>
                 </div>
               </header>
@@ -169,9 +165,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                 <ChatWidget config={widgetConfig} initiallyOpen />
               </div>
             ) : (
-              <p className="text-sm text-slate-500">
-                Select or create a business to load a live preview of the assistant experience.
-              </p>
+              <p className="text-sm text-slate-500">Select or create a location to load a live preview of the assistant experience.</p>
             )}
           </div>
         </div>
@@ -183,8 +177,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
             className="fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-sm"
           />
         ) : null}
-
-        <CreateBusinessWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+        <CreateLocationDialog open={createLocationOpen} onClose={() => setCreateLocationOpen(false)} />
       </PreviewDockProvider>
     </ConsoleDialogProvider>
   );

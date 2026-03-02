@@ -1,14 +1,16 @@
 {
   "name": "Tandem 2.0 Dev",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
-
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "node",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
   "runArgs": [
     "--init",
     "--privileged"
   ],
-
-  "remoteUser": "node",
-
   "customizations": {
     "vscode": {
       "extensions": [
@@ -21,9 +23,5 @@
       ]
     }
   },
-
-  "postCreateCommand": "npm install",
-  "mounts": [
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
-  ]
+  "postCreateCommand": "npm install"
 }

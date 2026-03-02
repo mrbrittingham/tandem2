@@ -44,5 +44,5 @@
 3. Businesses onboarding wizard + overview state.
 4. Knowledge + Intents CRUD screens referencing store.
 5. Handoff + Widget theme/install flows (including copy buttons).
-6. Wire widget (ui-kit + chatbot app) to shared store config; update UX (tabs, help, intents, handoff entry).
+6. Wire widget (ui-kit + dashboard preview) to shared store config; update UX (tabs, help, intents, handoff entry).
 7. Polish copy, empty states, and add DEV note with instructions.

@@ -31,6 +31,11 @@ export type MessageDescriptor = {
 
 type Message = MessageDescriptor & { id: string };
 
+type InlineComposerError = {
+  message: string;
+  devHint?: string;
+};
+
 const VIEW_OPTIONS: Array<{ value: ViewState; label: string }> = [
   { value: "chat", label: "Chat" },
   { value: "help", label: "Help" },
@@ -349,6 +354,7 @@ export function ChatWidget({
     return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
   }, [apiBaseUrl]);
   const chatApiUrl = `${normalizedApiBaseUrl}/api/chat`;
+  const conversationsApiUrl = `${normalizedApiBaseUrl}/api/conversations`;
   const contentConfig = useMemo(() => {
     return {
       ...defaultContentConfig,
@@ -370,7 +376,8 @@ export function ChatWidget({
   const [showAllFaqs, setShowAllFaqs] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => hydrateMessages(initialMessages));
   const [isStreaming, setIsStreaming] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [composerError, setComposerError] = useState<InlineComposerError | null>(null);
+  const [lastSubmittedMessage, setLastSubmittedMessage] = useState<string | null>(null);
   const [isHydratingHistory, setIsHydratingHistory] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
@@ -378,6 +385,7 @@ export function ChatWidget({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const historyWarnedRef = useRef(false);
 
   useEffect(() => {
     setMessages(hydrateMessages(initialMessages));
@@ -394,31 +402,86 @@ export function ChatWidget({
 
     const loadHistory = async () => {
       setIsHydratingHistory(true);
+
+      const warnHistoryFailure = (detail: { url: string; status: number; bodyPreview: string }) => {
+        if (historyWarnedRef.current) {
+          return;
+        }
+        historyWarnedRef.current = true;
+        console.warn("Failed to load conversation history", detail);
+      };
+
+      const getBodyPreview = async (response: Response) => {
+        try {
+          const text = await response.text();
+          return text.slice(0, 200);
+        } catch {
+          return "";
+        }
+      };
+
       try {
         const params = new URLSearchParams({ businessId: resolvedBusinessId });
-        const response = await fetch(`${chatApiUrl}?${params.toString()}`, {
+        const historyListUrl = `${conversationsApiUrl}?${params.toString()}`;
+        const response = await fetch(historyListUrl, {
           method: "GET",
           signal: controller.signal,
         });
-        if (!response.ok) {
-          throw new Error("Failed to load conversation history");
-        }
-        const data = await response.json();
-        if (cancelled) {
-          return;
-        }
-        if (Array.isArray(data.messages) && data.messages.length) {
-          setMessages(
-            data.messages.map((message: { role: MessageRole; content: string }) => ({
-              id: createId(),
-              role: message.role,
-              text: message.content,
-            })),
-          );
+        if (response.ok) {
+          const data = await response.json();
+          if (cancelled) {
+            return;
+          }
+
+          const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+          const latestSessionId = sessions[0]?.id;
+
+          if (latestSessionId) {
+            const historyDetailUrl = `${conversationsApiUrl}/${encodeURIComponent(latestSessionId)}`;
+            const detailResponse = await fetch(historyDetailUrl, {
+              method: "GET",
+              signal: controller.signal,
+            });
+
+            if (detailResponse.ok) {
+              const detailData = await detailResponse.json();
+              if (cancelled) {
+                return;
+              }
+
+              if (Array.isArray(detailData.messages) && detailData.messages.length) {
+                setMessages(
+                  detailData.messages.map((message: { role: MessageRole; content: string }) => ({
+                    id: createId(),
+                    role: message.role,
+                    text: message.content,
+                  })),
+                );
+                return;
+              }
+            } else {
+              const bodyPreview = await getBodyPreview(detailResponse);
+              warnHistoryFailure({
+                url: historyDetailUrl,
+                status: detailResponse.status,
+                bodyPreview,
+              });
+            }
+          }
+        } else {
+          const bodyPreview = await getBodyPreview(response);
+          warnHistoryFailure({
+            url: historyListUrl,
+            status: response.status,
+            bodyPreview,
+          });
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("Failed to hydrate chat history", error);
+          if (!historyWarnedRef.current) {
+            historyWarnedRef.current = true;
+            console.warn("Failed to hydrate chat history", error);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -434,7 +497,7 @@ export function ChatWidget({
       cancelled = true;
       controller.abort();
     };
-  }, [chatApiUrl, historyLoaded, resolvedBusinessId]);
+  }, [conversationsApiUrl, historyLoaded, resolvedBusinessId]);
 
   const handleViewChange = useCallback((next: ViewState) => {
     setView(next);
@@ -535,7 +598,7 @@ export function ChatWidget({
 
   const startAssistantResponse = useCallback(
     async (history: Message[], assistantMessageId: string) => {
-      setErrorMessage(null);
+      setComposerError(null);
       setIsStreaming(true);
 
       const controller = new AbortController();
@@ -565,8 +628,27 @@ export function ChatWidget({
         });
 
         if (!response.ok || !response.body) {
-          const errorText = await response.text().catch(() => "");
-          throw new Error(errorText || "Assistant failed to respond.");
+          const payload = await response
+            .json()
+            .catch(() => ({ error: "Assistant failed to respond." }));
+          const serverMessage =
+            typeof payload.error === "string" && payload.error.trim().length > 0
+              ? payload.error
+              : "Assistant failed to respond.";
+          const missingEnv = Array.isArray(payload.missingEnv)
+            ? payload.missingEnv.filter((entry: unknown) => typeof entry === "string")
+            : [];
+
+          const isConfigError = response.status >= 500 && /server not configured/i.test(serverMessage);
+
+          throw new Error(
+            JSON.stringify({
+              status: response.status,
+              serverMessage,
+              isConfigError,
+              missingEnv,
+            }),
+          );
         }
 
         const reader = response.body.getReader();
@@ -601,22 +683,37 @@ export function ChatWidget({
         }
       } catch (error) {
         const isAbort = error instanceof DOMException && error.name === "AbortError";
-        const fallback = isAbort
-          ? "Generation stopped."
-          : error instanceof Error
-            ? error.message
-            : "Something went wrong. Please try again.";
+        let friendlyMessage = "We couldn’t send that message. Please try again.";
+        let devHint: string | undefined;
 
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, role: "system", text: fallback }
-              : message,
-          ),
-        );
+        if (!isAbort && error instanceof Error) {
+          try {
+            const parsed = JSON.parse(error.message) as {
+              serverMessage?: string;
+              isConfigError?: boolean;
+              missingEnv?: string[];
+            };
+
+            if (parsed.isConfigError) {
+              friendlyMessage = "Chat is not configured yet. Ask an admin to set the API key.";
+              if (process.env.NODE_ENV !== "production") {
+                const hintFromArray = parsed.missingEnv?.[0];
+                const hintFromMessage = parsed.serverMessage?.match(/missing\s+([A-Z0-9_]+)/)?.[1];
+                const envName = hintFromArray || hintFromMessage;
+                if (envName && typeof window !== "undefined" && window.location.port === "3100") {
+                  devHint = `Missing ${envName}`;
+                }
+              }
+            }
+          } catch {
+            friendlyMessage = "We couldn’t send that message. Please try again.";
+          }
+        }
+
+        setMessages((prev) => prev.filter((message) => message.id !== assistantMessageId));
 
         if (!isAbort) {
-          setErrorMessage(fallback);
+          setComposerError({ message: friendlyMessage, devHint });
         }
       } finally {
         if (abortControllerRef.current === controller) {
@@ -656,9 +753,36 @@ export function ChatWidget({
     const conversationSnapshot = [...messages, userMessage];
     setMessages([...conversationSnapshot, assistantPlaceholder]);
     setInputValue("");
+    setLastSubmittedMessage(trimmed);
 
     await startAssistantResponse(conversationSnapshot, assistantMessageId);
   }, [inputValue, isHydratingHistory, isStreaming, messages, startAssistantResponse]);
+
+  const retryLastMessage = useCallback(async () => {
+    const retryText = lastSubmittedMessage?.trim();
+    if (!retryText || isStreaming || isHydratingHistory) {
+      return;
+    }
+
+    const userMessage: Message = {
+      id: createId(),
+      role: "user",
+      text: retryText,
+    };
+
+    const assistantMessageId = createId();
+    const assistantPlaceholder: Message = {
+      id: assistantMessageId,
+      role: "assistant",
+      text: "",
+    };
+
+    const conversationSnapshot = [...messages, userMessage];
+    setMessages([...conversationSnapshot, assistantPlaceholder]);
+    setComposerError(null);
+
+    await startAssistantResponse(conversationSnapshot, assistantMessageId);
+  }, [isHydratingHistory, isStreaming, lastSubmittedMessage, messages, startAssistantResponse]);
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -826,12 +950,29 @@ export function ChatWidget({
                     Send
                   </button>
                 </form>
-                {isStreaming || errorMessage ? (
+                {isStreaming || composerError ? (
                   <div className={styles.inputStatusRow} aria-live="polite">
                     {isStreaming ? (
                       <p className={styles.typingIndicator}>Assistant is responding...</p>
                     ) : null}
-                    {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}
+                    {composerError ? (
+                      <div className={styles.errorRow}>
+                        <p className={styles.errorText}>
+                          {composerError.message}
+                          {composerError.devHint ? ` (${composerError.devHint})` : ""}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void retryLastMessage();
+                          }}
+                          disabled={!lastSubmittedMessage || isStreaming || isHydratingHistory}
+                          className={styles.retryButton}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </>
