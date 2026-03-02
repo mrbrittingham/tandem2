@@ -17,25 +17,25 @@ const checklistConfig = [
   {
     label: "Add at least 3 FAQs",
     description: "Give the assistant confident answers.",
-    href: "/knowledge",
+    href: "/knowledge-base",
     key: "faqs",
   },
   {
     label: "Set how customers reach you",
     description: "Choose phone, email, or SMS handoff.",
-    href: "/handoff",
+    href: "/channels",
     key: "handoff",
   },
   {
     label: "Add chat to your website",
     description: "Drop the Tandem snippet into your site.",
-    href: "/widget",
+    href: "/channels",
     key: "widget",
   },
   {
     label: "Test your assistant",
     description: "Try the quick actions before going live.",
-    href: "/intents",
+    href: "/assistant-settings",
     key: "test",
   },
 ] as const;
@@ -108,6 +108,11 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-8">
+      <header>
+        <h1 className="text-3xl font-semibold text-slate-900">Overview</h1>
+        <p className="mt-2 text-sm text-slate-500">Track readiness, setup progress, and assistant launch status.</p>
+      </header>
+
       <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           <div className="flex flex-wrap items-center justify-between gap-4">

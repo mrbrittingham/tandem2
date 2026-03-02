@@ -87,15 +87,34 @@ export default function ConversationsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Inbox</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Conversations</p>
           <h1 className="text-3xl font-semibold text-slate-900">Conversations</h1>
-          <p className="text-sm text-slate-500">Monitor live chats and handoffs for this location.</p>
+          <p className="text-sm text-slate-500">Review chat sessions, search threads, and monitor escalations by location.</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm">
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Location</p>
           <p className="font-semibold text-slate-900">{selectedLocationLabel}</p>
         </div>
       </header>
+
+      <section className="grid gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_220px]">
+        <label className="flex flex-col gap-2 text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">Search conversations</span>
+          <input
+            type="search"
+            placeholder="Search by session title"
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900"
+          />
+        </label>
+        <label className="flex flex-col gap-2 text-sm text-slate-600">
+          <span className="font-semibold text-slate-800">Filter</span>
+          <select className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900">
+            <option value="all">All sessions</option>
+            <option value="handoff">Handoff sessions</option>
+            <option value="assistant">Assistant-only sessions</option>
+          </select>
+        </label>
+      </section>
 
       {locationId ? (
         <ConversationsWorkspace

@@ -73,7 +73,7 @@ export function LocationSwitcher({ onAddLocation }: Props) {
               + Add location
             </button>
             <Link
-              href="/businesses"
+              href="/account"
               onClick={() => setOpen(false)}
               className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
             >

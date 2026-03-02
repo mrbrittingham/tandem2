@@ -198,6 +198,11 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
 
   return (
     <div className="space-y-8">
+      <header>
+        <h1 className="text-3xl font-semibold text-slate-900">Knowledge Base</h1>
+        <p className="mt-2 text-sm text-slate-500">Manage FAQs, policies, suggested questions, and coverage for your assistant.</p>
+      </header>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <SectionCard
           title="FAQs"
@@ -435,6 +440,26 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
               ))}
             </div>
           )}
+        </SectionCard>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SectionCard
+          title="Suggested Questions"
+          description="Starter prompts that guide customers to common tasks in chat."
+        >
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Coming soon. Suggested questions are not configured yet.
+          </p>
+        </SectionCard>
+
+        <SectionCard
+          title="Coverage"
+          description="See where your assistant has strong answers versus content gaps."
+        >
+          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Not configured. Coverage analytics will appear here.
+          </p>
         </SectionCard>
       </div>
 

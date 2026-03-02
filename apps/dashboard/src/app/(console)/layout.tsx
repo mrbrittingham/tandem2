@@ -12,16 +12,15 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { businessToWidgetConfig, useActiveLocation } from "@/lib/store-hooks";
 
 const navItems = [
-  { label: "Home", href: "/overview" },
+  { label: "Overview", href: "/overview" },
   { label: "Conversations", href: "/conversations" },
-  { label: "Assistant", href: "/intents" },
-  { label: "FAQs & Policies", href: "/knowledge" },
-  { label: "Talk to a person", href: "/handoff" },
-  { label: "Widget", href: "/widget" },
+  { label: "Knowledge Base", href: "/knowledge-base" },
+  { label: "Channels", href: "/channels" },
   { label: "Integrations", href: "/integrations" },
-  { label: "LLM status", href: "/llm" },
-  { label: "Reports", href: "/reports" },
-  { label: "Settings", href: "/branding" },
+  { label: "Analytics", href: "/analytics" },
+  { label: "Assistant Settings", href: "/assistant-settings" },
+  { label: "Advanced", href: "/advanced" },
+  { label: "Account", href: "/account" },
 ];
 
 export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
