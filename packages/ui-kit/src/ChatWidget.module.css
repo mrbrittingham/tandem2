@@ -79,12 +79,12 @@
 }
 
 .header {
-	display: flex;
+	display: grid;
+	grid-template-columns: 1fr auto;
 	min-height: var(--widget-header-height);
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: var(--tandem-space-16, 16px);
-	padding: var(--tandem-space-20, 20px);
+	align-items: center;
+	gap: var(--widget-space-2);
+	padding: var(--widget-header-padding) var(--widget-panel-padding-x);
 	border-bottom: 1px solid var(--widget-border);
 	background: var(--widget-gradient-header);
 }
@@ -92,10 +92,8 @@
 .brand {
 	display: flex;
 	align-items: center;
-	gap: var(--tandem-space-12, 12px);
+	gap: var(--widget-space-2);
 	min-width: 0;
-	margin-bottom: 32px;
-	align-self: flex-end;
 }
 
 .logo {
@@ -129,18 +127,16 @@
 .headerActions {
 	display: flex;
 	align-items: center;
-	gap: var(--tandem-space-12, 12px);
+	gap: var(--widget-space-1);
 	flex-wrap: nowrap;
 	justify-content: flex-end;
-	margin-left: auto;
-	align-self: flex-start;
 }
 
 .viewSwitch {
 	display: flex;
 	align-items: center;
 	height: var(--widget-nav-height);
-	gap: 4px;
+	gap: calc(var(--widget-space-1) / 2);
 	padding: 4px;
 	border-radius: var(--widget-radius-lg);
 	border: 1px solid var(--widget-border-light);
@@ -150,11 +146,14 @@
 .viewSwitchButton {
 	border: none;
 	border-radius: calc(var(--widget-radius-md) - 2px);
-	padding: 6px 12px;
+	height: 100%;
+	padding: 0 12px;
 	font-size: 0.85rem;
 	font-weight: 600;
 	background: transparent;
 	color: var(--widget-text-secondary);
+	display: flex;
+	align-items: center;
 	cursor: pointer;
 	transition: background-color 150ms ease, color 150ms ease;
 }
@@ -168,12 +167,16 @@
 .closeButton {
 	border: none;
 	border-radius: var(--widget-radius-md);
-	width: 36px;
-	height: 36px;
-	display: grid;
-	place-items: center;
+	width: var(--widget-nav-height);
+	height: var(--widget-nav-height);
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	background: var(--widget-bg-elevated);
 	color: var(--widget-text-secondary);
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1;
 	cursor: pointer;
 	transition: background-color 150ms ease;
 }
@@ -195,7 +198,7 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	padding: var(--tandem-space-16, 16px) var(--tandem-space-20, 20px);
+	padding: var(--widget-panel-padding-y) var(--widget-panel-padding-x);
 	min-height: 0;
 	overflow: hidden;
 }
@@ -204,8 +207,8 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-16, 16px);
-	padding-right: 6px;
+	gap: var(--widget-section-gap);
+	padding-right: 0;
 	min-height: 0;
 	overflow-y: auto;
 	scrollbar-gutter: stable;
@@ -214,13 +217,13 @@
 
 .chatIntro {
 	border: 1px solid var(--widget-border-light);
-	border-radius: var(--widget-radius-lg);
-	padding: var(--tandem-space-20, 20px);
+	border-radius: var(--widget-card-radius);
+	padding: var(--widget-card-padding);
 	background: var(--widget-bg-card);
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-16, 16px);
-	box-shadow: var(--widget-shadow-sm);
+	gap: var(--widget-section-gap);
+	box-shadow: var(--widget-card-shadow);
 	flex-shrink: 0;
 }
 
@@ -248,18 +251,19 @@
 .intentChips {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--tandem-space-12, 12px);
+	gap: var(--widget-space-1);
 }
 
 .intentChip {
-	border-radius: 999px;
+	border-radius: var(--widget-card-radius);
 	border: 1px solid var(--widget-border);
 	background: var(--widget-bg-elevated);
-	padding: var(--tandem-space-12, 12px) var(--tandem-space-20, 20px);
+	padding: var(--widget-card-padding);
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-4, 4px);
+	gap: calc(var(--widget-space-1) / 2);
 	min-width: 150px;
+	box-shadow: var(--widget-card-shadow);
 	cursor: pointer;
 	transition: border-color 150ms ease, background-color 150ms ease;
 }
@@ -276,33 +280,34 @@
 
 .intentDescription {
 	font-size: 0.8rem;
-	color: var(--tandem-text-secondary);
+	color: var(--widget-text-subtle);
 }
 
 .handoffButton {
-	margin-top: var(--tandem-space-12, 12px);
+	margin-top: 0;
 	align-self: flex-start;
-	border-radius: var(--widget-radius-md);
+	border-radius: var(--widget-card-radius);
 	border: 1px solid var(--widget-border);
-	padding: var(--tandem-space-16, 16px) var(--tandem-space-20, 20px);
+	padding: var(--widget-card-padding);
 	background: var(--widget-bg-page);
 	color: var(--widget-text-primary);
 	font-weight: 600;
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-4, 4px);
+	gap: calc(var(--widget-space-1) / 2);
+	box-shadow: var(--widget-card-shadow);
 	cursor: pointer;
 }
 
 .handoffStatus {
 	font-size: 0.8rem;
-	color: var(--tandem-text-secondary);
+	color: var(--widget-text-subtle);
 }
 
 .messageList {
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-8, 8px);
+	gap: var(--widget-section-gap);
 }
 
 .messageBubble {
@@ -347,22 +352,23 @@
 
 .inputRow {
 	display: flex;
-	gap: var(--tandem-space-12, 12px);
-	padding: calc(var(--tandem-space-16, 16px) + 16px) var(--tandem-space-20, 20px) var(--tandem-space-16, 16px);
-	border-top: 1px solid var(--tandem-border);
-	background: var(--tandem-surface);
+	gap: var(--widget-space-1);
+	min-height: var(--widget-composer-height);
+	padding: 0 var(--widget-panel-padding-x);
+	border-top: 1px solid var(--widget-border);
+	background: var(--widget-bg-card);
 	align-items: center;
 	flex: 0 0 auto;
 }
 
 .inputField {
 	flex: 1;
-	height: var(--tandem-input-height, 52px);
+	height: var(--widget-input-height);
 	border-radius: var(--tandem-radius-input, 12px);
-	border: 1px solid var(--tandem-border-light);
+	border: 1px solid var(--widget-border-light);
 	padding: 0 var(--tandem-space-16, 16px);
 	font-size: 0.95rem;
-	background: var(--tandem-surface-elevated);
+	background: var(--widget-bg-elevated);
 	color: var(--tandem-text-primary);
 	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
 }
@@ -371,7 +377,7 @@
 	border-radius: var(--tandem-radius-button, 12px);
 	border: none;
 	padding: 0 var(--tandem-space-24, 24px);
-	height: var(--tandem-input-height, 52px);
+	height: var(--widget-input-height);
 	font-weight: 600;
 	font-size: 0.95rem;
 	background-color: var(--tandem-primary);
@@ -401,7 +407,7 @@
 	border-radius: var(--tandem-radius-button, 12px);
 	border: 1px solid var(--tandem-border);
 	padding: 0 var(--tandem-space-16, 16px);
-	height: var(--tandem-input-height, 52px);
+	height: var(--widget-input-height);
 	font-weight: 600;
 	font-size: 0.9rem;
 	background: var(--tandem-secondary);
@@ -420,7 +426,7 @@
 }
 
 .inputStatusRow {
-	padding: 0 var(--tandem-space-20, 20px) var(--tandem-space-8, 8px);
+	padding: 0 var(--widget-panel-padding-x) var(--widget-space-1);
 	min-height: 22px;
 	display: flex;
 	flex-direction: column;
@@ -466,8 +472,8 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-16, 16px);
-	padding: var(--tandem-space-20, 20px);
+	gap: var(--widget-section-gap);
+	padding: var(--widget-panel-padding-y) var(--widget-panel-padding-x);
 	background: var(--tandem-surface-elevated);
 	overflow-y: auto;
 	min-height: 0;
@@ -475,7 +481,7 @@
 
 .helpSearchRow {
 	display: flex;
-	gap: var(--tandem-space-12, 12px);
+	gap: var(--widget-space-1);
 }
 
 .helpSearchInput {
@@ -499,17 +505,18 @@
 .helpCategories {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	gap: var(--tandem-space-12, 12px);
+	gap: var(--widget-section-gap);
 }
 
 .helpCategoryCard {
 	border: 1px solid var(--tandem-border-light);
-	border-radius: var(--tandem-radius-widget, 16px);
-	padding: var(--tandem-space-16, 16px);
+	border-radius: var(--widget-card-radius);
+	padding: var(--widget-card-padding);
 	background: var(--tandem-surface);
 	display: flex;
 	flex-direction: column;
 	gap: var(--tandem-space-8, 8px);
+	box-shadow: var(--widget-card-shadow);
 }
 
 .helpCategoryLabel {
@@ -538,17 +545,18 @@
 .helpFaqList {
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-12, 12px);
+	gap: var(--widget-section-gap);
 }
 
 .faqCard {
 	border: 1px solid var(--tandem-border-light);
-	border-radius: var(--tandem-radius-widget, 16px);
-	padding: var(--tandem-space-16, 16px);
+	border-radius: var(--widget-card-radius);
+	padding: var(--widget-card-padding);
 	background: var(--tandem-surface);
 	display: flex;
 	flex-direction: column;
 	gap: var(--tandem-space-8, 8px);
+	box-shadow: var(--widget-card-shadow);
 }
 
 .faqCategory {
@@ -585,11 +593,12 @@
 
 .emptyHelpMessage {
 	margin: 0;
-	padding: var(--tandem-space-16, 16px);
-	border-radius: var(--tandem-radius-widget, 16px);
+	padding: var(--widget-card-padding);
+	border-radius: var(--widget-card-radius);
 	background: var(--tandem-surface);
 	color: var(--tandem-text-secondary);
 	text-align: center;
+	box-shadow: var(--widget-card-shadow);
 }
 
 .showAllButton {

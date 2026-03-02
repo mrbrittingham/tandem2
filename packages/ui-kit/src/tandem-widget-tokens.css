@@ -19,6 +19,7 @@
 
   --widget-text-primary: #0F172A;
   --widget-text-secondary: #475569;
+  --widget-text-subtle: #334155;
   --widget-text-tertiary: #94A3B8;
   --widget-text-inverse: #FFFFFF;
 
@@ -64,9 +65,17 @@
 
   --widget-width-desktop: 400px;
   --widget-max-height: 700px;
-  --widget-header-height: 160px;
-  --widget-nav-height: 68px;
-  --widget-input-height: auto;
+  --widget-panel-padding-x: 16px;
+  --widget-panel-padding-y: 16px;
+  --widget-header-height: 150px;
+  --widget-header-padding: 16px;
+  --widget-section-gap: 16px;
+  --widget-nav-height: 40px;
+  --widget-input-height: 44px;
+  --widget-composer-height: 64px;
+  --widget-card-radius: 12px;
+  --widget-card-padding: 16px;
+  --widget-card-shadow: var(--widget-shadow-sm);
   --widget-launcher-size: 60px;
 }
 

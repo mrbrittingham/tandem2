@@ -21,10 +21,15 @@
   --console-bg-disabled: #F8FAFC;
 
   --console-sidebar-bg: #1E1B2E;
-  --console-sidebar-item: #64748B;
-  --console-sidebar-item-hover: #CBD5E1;
-  --console-sidebar-item-active: #FFFFFF;
-  --console-sidebar-item-active-bg: rgba(99, 102, 241, 0.15);
+  --console-sidebar-link: rgba(255, 255, 255, 0.85);
+  --console-sidebar-link-hover: #ffffff;
+  --console-sidebar-link-active: #ffffff;
+  --console-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+  --console-sidebar-active-bg: rgba(255, 255, 255, 0.16);
+  --console-sidebar-item: var(--console-sidebar-link);
+  --console-sidebar-item-hover: var(--console-sidebar-link-hover);
+  --console-sidebar-item-active: var(--console-sidebar-link-active);
+  --console-sidebar-item-active-bg: var(--console-sidebar-active-bg);
   --console-sidebar-divider: rgba(255, 255, 255, 0.08);
 
   --console-border: #E2E8F0;
@@ -104,4 +109,6 @@
   --console-secondary-light: #F9E8EF;
 
   --console-sidebar-item-active-bg: rgba(212, 89, 139, 0.15);
+  --console-sidebar-active-bg: rgba(255, 255, 255, 0.16);
+  --console-sidebar-hover-bg: rgba(255, 255, 255, 0.08);
 }
