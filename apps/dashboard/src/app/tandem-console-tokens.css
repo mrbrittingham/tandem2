@@ -1,0 +1,107 @@
+/* ===== TANDEM CONSOLE V2 - COMPLETE TOKEN SYSTEM ===== */
+/* Developer Handoff Specification */
+
+:root {
+  --console-primary: #4F46E5;
+  --console-primary-hover: #4338CA;
+  --console-primary-pressed: #3730A3;
+  --console-primary-light: #EEF2FF;
+
+  --console-gradient-primary: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+  --console-gradient-sidebar: linear-gradient(180deg, #1E1B2E 0%, #0F0D1A 100%);
+  --console-gradient-hero: linear-gradient(135deg, #6366F1 0%, #4F46E5 50%, #4338CA 100%);
+
+  --console-secondary: #8B5CF6;
+  --console-secondary-light: #F5F3FF;
+
+  --console-bg-page: #F8FAFC;
+  --console-bg-card: #FFFFFF;
+  --console-bg-elevated: #FFFFFF;
+  --console-bg-hover: #F1F5F9;
+  --console-bg-disabled: #F8FAFC;
+
+  --console-sidebar-bg: #1E1B2E;
+  --console-sidebar-item: #64748B;
+  --console-sidebar-item-hover: #CBD5E1;
+  --console-sidebar-item-active: #FFFFFF;
+  --console-sidebar-item-active-bg: rgba(99, 102, 241, 0.15);
+  --console-sidebar-divider: rgba(255, 255, 255, 0.08);
+
+  --console-border: #E2E8F0;
+  --console-border-light: #F1F5F9;
+  --console-border-dark: #CBD5E1;
+
+  --console-text-primary: #0F172A;
+  --console-text-secondary: #475569;
+  --console-text-tertiary: #94A3B8;
+  --console-text-disabled: #CBD5E1;
+  --console-text-inverse: #FFFFFF;
+
+  --console-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --console-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --console-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --console-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+
+  --console-success: #10B981;
+  --console-success-light: #D1FAE5;
+  --console-warning: #F59E0B;
+  --console-warning-light: #FEF3C7;
+  --console-error: #EF4444;
+  --console-error-light: #FEE2E2;
+  --console-info: #3B82F6;
+  --console-info-light: #DBEAFE;
+
+  --console-space-1: 8px;
+  --console-space-2: 16px;
+  --console-space-3: 24px;
+  --console-space-4: 32px;
+  --console-space-5: 40px;
+  --console-space-6: 48px;
+
+  --console-radius-sm: 8px;
+  --console-radius-md: 12px;
+  --console-radius-lg: 16px;
+  --console-radius-full: 9999px;
+
+  --console-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --console-text-xs: 12px;
+  --console-text-sm: 13px;
+  --console-text-base: 14px;
+  --console-text-lg: 16px;
+  --console-text-xl: 18px;
+  --console-text-2xl: 24px;
+  --console-text-3xl: 30px;
+  --console-text-4xl: 36px;
+
+  --console-weight-normal: 400;
+  --console-weight-medium: 500;
+  --console-weight-semibold: 600;
+  --console-weight-bold: 700;
+  --console-weight-extrabold: 800;
+
+  --console-leading-tight: 1.2;
+  --console-leading-normal: 1.5;
+  --console-leading-relaxed: 1.75;
+
+  --console-sidebar-width: 260px;
+  --console-sidebar-collapsed-width: 72px;
+  --console-header-height: 64px;
+  --console-button-height: 40px;
+  --console-input-height: 40px;
+}
+
+.theme-wine {
+  --console-primary: #5C2E4A;
+  --console-primary-hover: #4A2539;
+  --console-primary-pressed: #3B1E2E;
+  --console-primary-light: #F9E8EF;
+
+  --console-gradient-primary: linear-gradient(135deg, #D4598B 0%, #5C2E4A 100%);
+  --console-gradient-hero: linear-gradient(135deg, #D4598B 0%, #5C2E4A 50%, #4A2539 100%);
+
+  --console-secondary: #D4598B;
+  --console-secondary-light: #F9E8EF;
+
+  --console-sidebar-item-active-bg: rgba(212, 89, 139, 0.15);
+}

@@ -63,13 +63,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
   return (
     <ConsoleDialogProvider value={providerValue}>
       <PreviewDockProvider value={previewContextValue}>
-        <div className="min-h-screen bg-[var(--bg)] text-slate-900">
-          <div className="grid min-h-screen gap-0 lg:grid-cols-[260px_1fr]">
-            <aside className="flex flex-col border-r border-slate-200 bg-white/95 px-6 py-8">
+        <div className="min-h-screen bg-[var(--console-bg-page)] text-[var(--console-text-primary)] [font-family:var(--console-font-family)]">
+          <div className="grid min-h-screen gap-0 lg:grid-cols-[var(--console-sidebar-width)_1fr]">
+            <aside className="flex flex-col border-r border-[var(--console-sidebar-divider)] bg-[var(--console-gradient-sidebar)] px-6 py-8">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Tandem</p>
-                <p className="mt-2 text-xl font-semibold text-slate-900">Client console</p>
-                <p className="text-sm text-slate-500">Guide your concierge setup in minutes.</p>
+                <p className="text-[var(--console-text-xs)] font-semibold uppercase tracking-[0.4em] text-[var(--console-sidebar-item)]">Tandem</p>
+                <p className="mt-2 text-[var(--console-text-xl)] font-semibold text-[var(--console-sidebar-item-active)]">Client console</p>
+                <p className="text-[var(--console-text-base)] text-[var(--console-sidebar-item)]">Guide your concierge setup in minutes.</p>
               </div>
               <nav className="mt-8 flex flex-1 flex-col gap-1">
                 {navItems.map((item) => {
@@ -78,10 +78,10 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
+                      className={`rounded-[var(--console-radius-md)] px-4 py-2.5 text-[var(--console-text-base)] font-medium transition ${
                         isActive
-                          ? 'border border-blue-100 bg-blue-50 text-blue-700'
-                          : 'text-slate-600 hover:bg-slate-100'
+                          ? 'bg-[var(--console-sidebar-item-active-bg)] text-[var(--console-sidebar-item-active)]'
+                          : 'text-[var(--console-sidebar-item)] hover:bg-[var(--console-sidebar-item-active-bg)] hover:text-[var(--console-sidebar-item-hover)]'
                       }`}
                     >
                       {item.label}
@@ -91,13 +91,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
               </nav>
             </aside>
             <div className="flex flex-1 flex-col">
-              <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-slate-200 bg-white/90 px-8 py-5 text-sm text-slate-600 backdrop-blur supports-[backdrop-filter]:bg-white/75 md:flex-row md:items-center md:justify-between">
+              <header className="sticky top-0 z-10 flex min-h-[var(--console-header-height)] flex-col gap-4 border-b border-[var(--console-border)] bg-[var(--console-bg-card)] px-8 py-4 text-[var(--console-text-base)] text-[var(--console-text-secondary)] shadow-[var(--console-shadow-sm)] md:flex-row md:items-center md:justify-between">
                 <LocationSwitcher onAddLocation={() => setCreateLocationOpen(true)} />
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={handleSignOut}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                    className="rounded-[var(--console-radius-md)] border border-[var(--console-border)] px-4 py-2 text-[var(--console-text-base)] font-semibold text-[var(--console-text-secondary)] transition hover:bg-[var(--console-bg-hover)]"
                   >
                     Sign out
                   </button>
@@ -105,13 +105,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                     type="button"
                     onClick={() => setPreviewOpen(true)}
                     disabled={!widgetConfig}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-[var(--console-radius-md)] border border-[var(--console-border)] px-4 py-2 text-[var(--console-text-base)] font-semibold text-[var(--console-text-secondary)] transition hover:bg-[var(--console-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Preview
                   </button>
                 </div>
               </header>
-              <main className="flex-1 bg-[var(--bg)] px-6 py-10 md:px-8">{children}</main>
+              <main className="flex-1 bg-[var(--console-bg-page)] px-6 py-12 md:px-8">{children}</main>
             </div>
           </div>
         </div>

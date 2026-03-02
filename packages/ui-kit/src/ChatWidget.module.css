@@ -8,8 +8,8 @@
 	gap: var(--tandem-space-12, 12px);
 	z-index: 50;
 	pointer-events: none;
-	font-family: var(--tandem-font-body, "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
-	color: var(--tandem-text-primary, #1a1a1a);
+	font-family: var(--widget-font-family);
+	color: var(--widget-text-primary);
 }
 
 .themeScope > * {
@@ -17,31 +17,31 @@
 }
 
 .launcher {
-	width: var(--tandem-launcher-size, 56px);
-	height: var(--tandem-launcher-size, 56px);
+	width: var(--widget-launcher-size);
+	height: var(--widget-launcher-size);
 	border: none;
-	border-radius: var(--tandem-radius-launcher, 28px);
-	background: var(--tandem-primary, #2563eb);
-	color: var(--tandem-text-on-primary, #ffffff);
+	border-radius: var(--widget-radius-full);
+	background: var(--widget-gradient-primary);
+	color: var(--widget-text-inverse);
 	display: grid;
 	place-items: center;
-	box-shadow: var(--tandem-shadow-launcher, 0 24px 48px rgba(15, 23, 42, 0.25));
+	box-shadow: var(--widget-shadow-launcher);
 	cursor: pointer;
 	transition: transform 150ms ease, background-color 150ms ease, box-shadow 200ms ease;
 }
 
 .launcher:hover {
-	background: var(--tandem-primary-hover, #1d4ed8);
+	background: var(--widget-primary-hover);
 	transform: translateY(-2px);
 }
 
 .launcher:active {
-	background: var(--tandem-primary-pressed, #1e40af);
+	background: var(--widget-primary-pressed);
 	transform: scale(0.94);
 }
 
 .launcher:focus-visible {
-	outline: 2px solid var(--tandem-accent, #3b82f6);
+	outline: 2px solid var(--widget-primary);
 	outline-offset: 3px;
 }
 
@@ -54,13 +54,13 @@
 	position: absolute;
 	bottom: calc(100% + var(--tandem-space-12, 12px));
 	right: 0;
-	width: min(var(--tandem-panel-width-desktop, 420px), calc(100vw - 64px));
-	height: min(var(--tandem-panel-max-height, 700px), calc(100vh - 160px));
-	max-height: min(var(--tandem-panel-max-height, 700px), calc(100vh - 160px));
-	background: var(--tandem-surface, #ffffff);
-	border-radius: var(--tandem-radius-widget, 20px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
-	box-shadow: var(--tandem-shadow-deep, 0 30px 60px rgba(15, 23, 42, 0.18));
+	width: min(var(--widget-width-desktop), calc(100vw - 64px));
+	height: min(var(--widget-max-height), calc(100vh - 160px));
+	max-height: min(var(--widget-max-height), calc(100vh - 160px));
+	background: var(--widget-bg-card);
+	border-radius: var(--widget-radius-lg);
+	border: 1px solid var(--widget-border);
+	box-shadow: var(--widget-shadow-lg);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -80,12 +80,13 @@
 
 .header {
 	display: flex;
-	align-items: center;
+	min-height: var(--widget-header-height);
+	align-items: flex-start;
 	justify-content: space-between;
 	gap: var(--tandem-space-16, 16px);
 	padding: var(--tandem-space-20, 20px);
-	border-bottom: 1px solid var(--tandem-border, #e5e5e5);
-	background: var(--tandem-surface, #ffffff);
+	border-bottom: 1px solid var(--widget-border);
+	background: var(--widget-gradient-header);
 }
 
 .brand {
@@ -93,6 +94,8 @@
 	align-items: center;
 	gap: var(--tandem-space-12, 12px);
 	min-width: 0;
+	margin-bottom: 32px;
+	align-self: flex-end;
 }
 
 .logo {
@@ -100,8 +103,8 @@
 	height: 40px;
 	border-radius: 12px;
 	object-fit: cover;
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
-	background: var(--tandem-surface-elevated, #fafafa);
+	border: 1px solid var(--tandem-border-light);
+	background: var(--tandem-surface-elevated);
 }
 
 .brandText {
@@ -114,66 +117,69 @@
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--widget-text-inverse);
 }
 
 .brandSubtitle {
 	margin: 0;
 	font-size: 0.85rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--widget-bg-frosted);
 }
 
 .headerActions {
 	display: flex;
 	align-items: center;
 	gap: var(--tandem-space-12, 12px);
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	justify-content: flex-end;
+	margin-left: auto;
+	align-self: flex-start;
 }
 
 .viewSwitch {
 	display: flex;
 	align-items: center;
+	height: var(--widget-nav-height);
 	gap: 4px;
 	padding: 4px;
-	border-radius: var(--tandem-radius-button, 12px);
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
-	background: var(--tandem-surface-elevated, #fafafa);
+	border-radius: var(--widget-radius-lg);
+	border: 1px solid var(--widget-border-light);
+	background: var(--widget-bg-elevated);
 }
 
 .viewSwitchButton {
 	border: none;
-	border-radius: calc(var(--tandem-radius-button, 12px) - 4px);
+	border-radius: calc(var(--widget-radius-md) - 2px);
 	padding: 6px 12px;
 	font-size: 0.85rem;
 	font-weight: 600;
 	background: transparent;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--widget-text-secondary);
 	cursor: pointer;
 	transition: background-color 150ms ease, color 150ms ease;
 }
 
 .viewSwitchButtonActive {
-	background: var(--tandem-primary, #2563eb);
-	color: var(--tandem-text-on-primary, #ffffff);
-	box-shadow: var(--tandem-shadow-soft, 0 1px 2px rgba(0, 0, 0, 0.08));
+	background: var(--widget-primary);
+	color: var(--widget-text-inverse);
+	box-shadow: var(--widget-shadow-sm);
 }
 
 .closeButton {
 	border: none;
-	border-radius: var(--tandem-radius-button, 12px);
+	border-radius: var(--widget-radius-md);
 	width: 36px;
 	height: 36px;
 	display: grid;
 	place-items: center;
-	background: var(--tandem-surface-elevated, #f7f7f7);
-	color: var(--tandem-text-secondary, #666666);
+	background: var(--widget-bg-elevated);
+	color: var(--widget-text-secondary);
 	cursor: pointer;
 	transition: background-color 150ms ease;
 }
 
 .closeButton:hover {
-	background: var(--tandem-surface-hover, #f1f1f1);
+	background: var(--widget-bg-hover);
 }
 
 .panelBody {
@@ -182,7 +188,7 @@
 	flex-direction: column;
 	min-height: 0;
 	overflow: hidden;
-	background: var(--tandem-surface-elevated, #fafafa);
+	background: var(--widget-bg-page);
 }
 
 .chatContent {
@@ -207,14 +213,14 @@
 }
 
 .chatIntro {
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
-	border-radius: var(--tandem-radius-widget, 16px);
+	border: 1px solid var(--widget-border-light);
+	border-radius: var(--widget-radius-lg);
 	padding: var(--tandem-space-20, 20px);
-	background: var(--tandem-surface, #ffffff);
+	background: var(--widget-bg-card);
 	display: flex;
 	flex-direction: column;
-	gap: var(--tandem-space-12, 12px);
-	box-shadow: var(--tandem-shadow-soft, 0 8px 20px rgba(15, 23, 42, 0.06));
+	gap: var(--tandem-space-16, 16px);
+	box-shadow: var(--widget-shadow-sm);
 	flex-shrink: 0;
 }
 
@@ -223,33 +229,33 @@
 	font-size: 0.75rem;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	color: var(--tandem-text-tertiary, #999999);
+	color: var(--tandem-text-tertiary);
 }
 
 .chatTitle {
 	margin: 0;
 	font-size: 1.15rem;
 	font-weight: 600;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--tandem-text-primary);
 }
 
 .chatSubtitle {
 	margin: 0;
 	font-size: 0.95rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 }
 
 .intentChips {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--tandem-space-8, 8px);
+	gap: var(--tandem-space-12, 12px);
 }
 
 .intentChip {
 	border-radius: 999px;
-	border: 1px solid var(--tandem-border, #e5e5e5);
-	background: var(--tandem-surface-elevated, #fafafa);
-	padding: var(--tandem-space-8, 8px) var(--tandem-space-16, 16px);
+	border: 1px solid var(--widget-border);
+	background: var(--widget-bg-elevated);
+	padding: var(--tandem-space-12, 12px) var(--tandem-space-20, 20px);
 	display: flex;
 	flex-direction: column;
 	gap: var(--tandem-space-4, 4px);
@@ -259,28 +265,28 @@
 }
 
 .intentChip:hover {
-	border-color: var(--tandem-primary, #2563eb);
-	background: #ffffff;
+	border-color: var(--widget-primary);
+	background: var(--widget-bg-card);
 }
 
 .intentLabel {
 	font-weight: 600;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--tandem-text-primary);
 }
 
 .intentDescription {
 	font-size: 0.8rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 }
 
 .handoffButton {
-	margin-top: var(--tandem-space-8, 8px);
+	margin-top: var(--tandem-space-12, 12px);
 	align-self: flex-start;
-	border-radius: var(--tandem-radius-button, 12px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
-	padding: var(--tandem-space-12, 12px) var(--tandem-space-16, 16px);
-	background: var(--tandem-secondary, #f5f5f5);
-	color: var(--tandem-secondary-text, #1a1a1a);
+	border-radius: var(--widget-radius-md);
+	border: 1px solid var(--widget-border);
+	padding: var(--tandem-space-16, 16px) var(--tandem-space-20, 20px);
+	background: var(--widget-bg-page);
+	color: var(--widget-text-primary);
 	font-weight: 600;
 	display: flex;
 	flex-direction: column;
@@ -290,7 +296,7 @@
 
 .handoffStatus {
 	font-size: 0.8rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 }
 
 .messageList {
@@ -310,27 +316,27 @@
 
 .assistantBubble {
 	align-self: flex-start;
-	background: var(--tandem-assistant-bg, #f2f2f2);
-	color: var(--tandem-assistant-text, #1a1a1a);
+	background: var(--tandem-assistant-bg);
+	color: var(--tandem-assistant-text);
 }
 
 .userBubble {
 	align-self: flex-end;
-	background: var(--tandem-user-bg, #1a1a1a);
-	color: var(--tandem-user-text, #ffffff);
+	background: var(--tandem-user-bg);
+	color: var(--tandem-user-text);
 }
 
 .systemBubble {
 	align-self: center;
-	background: var(--tandem-system-bubble-bg, #f8f8f8);
-	color: var(--tandem-system-bubble-text, #666666);
+	background: var(--tandem-system-bubble-bg);
+	color: var(--tandem-system-bubble-text);
 }
 
 .ctaButton {
 	display: inline-flex;
 	margin-top: var(--tandem-space-8, 8px);
 	border-radius: var(--tandem-radius-button, 12px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
+	border: 1px solid var(--tandem-border);
 	padding: 4px 10px;
 	font-size: 0.82rem;
 	font-weight: 600;
@@ -342,9 +348,9 @@
 .inputRow {
 	display: flex;
 	gap: var(--tandem-space-12, 12px);
-	padding: var(--tandem-space-16, 16px) var(--tandem-space-20, 20px);
-	border-top: 1px solid var(--tandem-border, #e5e5e5);
-	background: var(--tandem-surface, #ffffff);
+	padding: calc(var(--tandem-space-16, 16px) + 16px) var(--tandem-space-20, 20px) var(--tandem-space-16, 16px);
+	border-top: 1px solid var(--tandem-border);
+	background: var(--tandem-surface);
 	align-items: center;
 	flex: 0 0 auto;
 }
@@ -353,11 +359,11 @@
 	flex: 1;
 	height: var(--tandem-input-height, 52px);
 	border-radius: var(--tandem-radius-input, 12px);
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
+	border: 1px solid var(--tandem-border-light);
 	padding: 0 var(--tandem-space-16, 16px);
 	font-size: 0.95rem;
-	background: var(--tandem-surface-elevated, #fafafa);
-	color: var(--tandem-text-primary, #1a1a1a);
+	background: var(--tandem-surface-elevated);
+	color: var(--tandem-text-primary);
 	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
@@ -368,19 +374,19 @@
 	height: var(--tandem-input-height, 52px);
 	font-weight: 600;
 	font-size: 0.95rem;
-	background-color: var(--tandem-primary, #2563eb);
-	color: var(--tandem-text-on-primary, #ffffff);
+	background-color: var(--tandem-primary);
+	color: var(--tandem-text-on-primary);
 	cursor: pointer;
 	box-shadow: var(--tandem-shadow-medium, 0 4px 6px rgba(15, 23, 42, 0.2));
 	transition: background-color 150ms ease, transform 100ms ease, opacity 150ms ease;
 }
 
 .sendButton:hover {
-	background-color: var(--tandem-primary-hover, #1d4ed8);
+	background-color: var(--tandem-primary-hover);
 }
 
 .sendButton:active {
-	background-color: var(--tandem-primary-pressed, #1e40af);
+	background-color: var(--tandem-primary-pressed);
 	transform: scale(0.98);
 }
 
@@ -393,19 +399,19 @@
 
 .stopButton {
 	border-radius: var(--tandem-radius-button, 12px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
+	border: 1px solid var(--tandem-border);
 	padding: 0 var(--tandem-space-16, 16px);
 	height: var(--tandem-input-height, 52px);
 	font-weight: 600;
 	font-size: 0.9rem;
-	background: var(--tandem-secondary, #f5f5f5);
-	color: var(--tandem-secondary-text, #1a1a1a);
+	background: var(--tandem-secondary);
+	color: var(--tandem-secondary-text);
 	cursor: pointer;
 	transition: background-color 150ms ease, opacity 150ms ease;
 }
 
 .stopButton:hover {
-	background: var(--tandem-surface-hover, #f1f1f1);
+	background: var(--tandem-surface-hover);
 }
 
 .stopButton:disabled {
@@ -424,13 +430,13 @@
 .typingIndicator {
 	margin: 0;
 	font-size: 0.8rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 }
 
 .errorText {
 	margin: 0;
 	font-size: 0.8rem;
-	color: #b91c1c;
+	color: var(--widget-primary-pressed);
 }
 
 .errorRow {
@@ -441,9 +447,9 @@
 }
 
 .retryButton {
-	border: 1px solid var(--tandem-border, #e5e5e5);
-	background: var(--tandem-surface, #ffffff);
-	color: var(--tandem-text-primary, #1a1a1a);
+	border: 1px solid var(--tandem-border);
+	background: var(--tandem-surface);
+	color: var(--tandem-text-primary);
 	border-radius: 999px;
 	padding: 2px 10px;
 	font-size: 0.75rem;
@@ -462,7 +468,7 @@
 	flex-direction: column;
 	gap: var(--tandem-space-16, 16px);
 	padding: var(--tandem-space-20, 20px);
-	background: var(--tandem-surface-elevated, #fafafa);
+	background: var(--tandem-surface-elevated);
 	overflow-y: auto;
 	min-height: 0;
 }
@@ -475,18 +481,18 @@
 .helpSearchInput {
 	flex: 1;
 	border-radius: var(--tandem-radius-input, 12px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
+	border: 1px solid var(--tandem-border);
 	padding: var(--tandem-space-12, 12px) var(--tandem-space-16, 16px);
 	font-size: 0.95rem;
-	background: var(--tandem-surface, #ffffff);
+	background: var(--tandem-surface);
 }
 
 .clearSearchButton {
 	border-radius: var(--tandem-radius-button, 12px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
+	border: 1px solid var(--tandem-border);
 	padding: var(--tandem-space-8, 8px) var(--tandem-space-16, 16px);
 	background: transparent;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 	cursor: pointer;
 }
 
@@ -497,10 +503,10 @@
 }
 
 .helpCategoryCard {
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
+	border: 1px solid var(--tandem-border-light);
 	border-radius: var(--tandem-radius-widget, 16px);
 	padding: var(--tandem-space-16, 16px);
-	background: var(--tandem-surface, #ffffff);
+	background: var(--tandem-surface);
 	display: flex;
 	flex-direction: column;
 	gap: var(--tandem-space-8, 8px);
@@ -509,21 +515,21 @@
 .helpCategoryLabel {
 	margin: 0;
 	font-weight: 600;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--tandem-text-primary);
 }
 
 .helpCategoryDescription {
 	margin: 0;
 	font-size: 0.85rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 }
 
 .helpCategoryButton {
 	align-self: flex-start;
 	border-radius: var(--tandem-radius-button, 12px);
 	border: none;
-	background: var(--tandem-primary, #2563eb);
-	color: var(--tandem-text-on-primary, #ffffff);
+	background: var(--tandem-primary);
+	color: var(--tandem-text-on-primary);
 	padding: var(--tandem-space-8, 8px) var(--tandem-space-16, 16px);
 	font-weight: 600;
 	cursor: pointer;
@@ -536,10 +542,10 @@
 }
 
 .faqCard {
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
+	border: 1px solid var(--tandem-border-light);
 	border-radius: var(--tandem-radius-widget, 16px);
 	padding: var(--tandem-space-16, 16px);
-	background: var(--tandem-surface, #ffffff);
+	background: var(--tandem-surface);
 	display: flex;
 	flex-direction: column;
 	gap: var(--tandem-space-8, 8px);
@@ -550,29 +556,29 @@
 	font-size: 0.75rem;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	color: var(--tandem-text-tertiary, #999999);
+	color: var(--tandem-text-tertiary);
 }
 
 .faqQuestion {
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--tandem-text-primary);
 }
 
 .faqAnswer {
 	margin: 0;
 	font-size: 0.9rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: var(--tandem-text-secondary);
 }
 
 .faqActionButton {
 	align-self: flex-start;
 	border-radius: var(--tandem-radius-button, 12px);
-	border: 1px solid var(--tandem-border, #e5e5e5);
+	border: 1px solid var(--tandem-border);
 	padding: var(--tandem-space-8, 8px) var(--tandem-space-16, 16px);
 	background: transparent;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--tandem-text-primary);
 	font-weight: 600;
 	cursor: pointer;
 }
@@ -581,8 +587,8 @@
 	margin: 0;
 	padding: var(--tandem-space-16, 16px);
 	border-radius: var(--tandem-radius-widget, 16px);
-	background: var(--tandem-surface, #ffffff);
-	color: var(--tandem-text-secondary, #666666);
+	background: var(--tandem-surface);
+	color: var(--tandem-text-secondary);
 	text-align: center;
 }
 
@@ -590,7 +596,7 @@
 	align-self: flex-start;
 	border: none;
 	background: transparent;
-	color: var(--tandem-primary, #2563eb);
+	color: var(--tandem-primary);
 	font-weight: 600;
 	cursor: pointer;
 }
