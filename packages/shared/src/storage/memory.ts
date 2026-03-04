@@ -21,11 +21,12 @@ export function createMemoryChatStore(): ChatStore {
   const messages = new Map<string, ChatMessage[]>();
 
   return {
-    async createSession(businessId) {
+    async createSession(businessId, options) {
       const timestamp = new Date().toISOString();
       const session: ChatSession = {
         id: createId(),
         businessId,
+        locationSlug: options?.locationSlug,
         createdAt: timestamp,
         updatedAt: timestamp,
       };

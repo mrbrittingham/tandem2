@@ -7,6 +7,7 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const MESSAGE_CONTEXT_LIMIT = 50;
 type ChatRequestBody = {
   businessId?: string;
+  locationSlug?: string;
   messages: LLMMessage[];
   system?: string;
   temperature?: number;
@@ -18,6 +19,11 @@ type ChatHandlerOptions = {
 };
 
 const sanitizeBusinessId = (value?: string) => {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+};
+
+const sanitizeLocationSlug = (value?: string) => {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
 };
@@ -57,26 +63,35 @@ const getCookieValue = (req: Request, cookieName: string): string | undefined =>
   return undefined;
 };
 
-async function ensureSession(req: Request, businessId: string) {
+async function ensureSession(req: Request, businessId: string, locationSlug?: string) {
   const store = await getChatStore();
   const sessionIdFromCookie = getCookieValue(req, SESSION_COOKIE);
   let created = false;
 
   if (sessionIdFromCookie) {
     const existing = await store.getSession(sessionIdFromCookie);
-    if (existing && existing.businessId === businessId) {
+    const isMatchingScope =
+      existing &&
+      existing.businessId === businessId &&
+      (existing.locationSlug ?? undefined) === (locationSlug ?? undefined);
+    if (isMatchingScope) {
       return { store, session: existing, created };
     }
   }
 
-  const session = await store.createSession(businessId);
+  const session = await store.createSession(businessId, { locationSlug });
   created = true;
   return { store, session, created };
 }
 
-function readBusinessIdFromGet(req: Request): string | undefined {
+export function readBusinessIdFromGet(req: Request): string | undefined {
   const url = new URL(req.url);
   return sanitizeBusinessId(url.searchParams.get("businessId") ?? undefined);
+}
+
+export function readLocationSlugFromGet(req: Request): string | undefined {
+  const url = new URL(req.url);
+  return sanitizeLocationSlug(url.searchParams.get("locationSlug") ?? undefined);
 }
 
 export async function handleChatGet(req: Request, options?: ChatHandlerOptions): Promise<Response> {
@@ -85,18 +100,20 @@ export async function handleChatGet(req: Request, options?: ChatHandlerOptions):
       requireApiKey(req);
     }
     const businessId = readBusinessIdFromGet(req);
+    const locationSlug = readLocationSlugFromGet(req);
     if (!businessId) {
       return Response.json({ error: "businessId required" }, { status: 400 });
     }
 
     requireBusinessAllowed(businessId);
 
-    const { session, store, created } = await ensureSession(req, businessId);
+    const { session, store, created } = await ensureSession(req, businessId, locationSlug);
     const messages = await store.listMessages(session.id);
 
     const response = Response.json({
       sessionId: session.id,
       businessId: session.businessId,
+      locationSlug: session.locationSlug ?? null,
       messages: messages.map((message) => ({
         id: message.id,
         role: message.role,
@@ -135,6 +152,7 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
     }
 
     const businessId = sanitizeBusinessId(body.businessId);
+    const locationSlug = sanitizeLocationSlug(body.locationSlug);
     if (!businessId) {
       return Response.json({ error: "businessId required" }, { status: 400 });
     }
@@ -160,7 +178,7 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
       return Response.json({ error: "messages are required" }, { status: 400 });
     }
 
-    const { session, store, created } = await ensureSession(req, businessId);
+    const { session, store, created } = await ensureSession(req, businessId, locationSlug);
 
     for (const message of userMessages) {
       await store.appendMessage(session.id, {

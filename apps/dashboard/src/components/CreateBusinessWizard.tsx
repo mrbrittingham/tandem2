@@ -84,15 +84,15 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 text-[var(--console-text-inverse)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 text-white">
       <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-[#0b0d15] p-8 shadow-2xl">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-[var(--console-text-inverse)]/50">Onboarding</p>
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Onboarding</p>
             <h2 className="text-2xl font-semibold">
               {step === 'form' ? 'Create a new concierge' : 'Business ready to install'}
             </h2>
-            <p className="text-sm text-[var(--console-text-inverse)]/60">
+            <p className="text-sm text-white/60">
               {step === 'form'
                 ? 'Add the basics so Tandem can personalize the widget and next steps.'
                 : 'Drop this snippet into your site or open the preview to see the concierge in action.'}
@@ -101,7 +101,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[var(--console-text-inverse)]/70 transition hover:border-white/40 hover:text-[var(--console-text-inverse)]"
+            className="rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-white/70 transition hover:border-white/40 hover:text-white"
           >
             Close
           </button>
@@ -116,7 +116,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
                   required
                   value={form.name}
                   onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-[var(--console-text-inverse)] focus:border-white/40 focus:outline-none"
+                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-white focus:border-white/40 focus:outline-none"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm">
@@ -165,7 +165,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
                   required
                   value={form.contactName}
                   onChange={(event) => setForm((prev) => ({ ...prev, contactName: event.target.value }))}
-                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-[var(--console-text-inverse)]"
+                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-white"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm">
@@ -175,7 +175,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
                   type="email"
                   value={form.contactEmail}
                   onChange={(event) => setForm((prev) => ({ ...prev, contactEmail: event.target.value }))}
-                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-[var(--console-text-inverse)]"
+                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-white"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm">
@@ -183,7 +183,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
                 <input
                   value={form.contactPhone}
                   onChange={(event) => setForm((prev) => ({ ...prev, contactPhone: event.target.value }))}
-                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-[var(--console-text-inverse)]"
+                  className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-white"
                 />
               </label>
             </div>
@@ -193,7 +193,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
               <input
                 value={form.supportHoursLabel}
                 onChange={(event) => setForm((prev) => ({ ...prev, supportHoursLabel: event.target.value }))}
-                className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-[var(--console-text-inverse)]"
+                className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-white"
               />
             </label>
 
@@ -203,7 +203,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
                 rows={3}
                 value={form.summary}
                 onChange={(event) => setForm((prev) => ({ ...prev, summary: event.target.value }))}
-                className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-[var(--console-text-inverse)]"
+                className="rounded-2xl border border-white/15 bg-transparent px-4 py-3 text-base text-white"
               />
             </label>
 
@@ -211,14 +211,14 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-[var(--console-text-inverse)]/80 transition hover:border-white/40"
+                className="rounded-2xl border border-white/20 px-5 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-2xl bg-[var(--console-bg-card)] px-6 py-3 text-sm font-semibold text-black transition hover:bg-[var(--console-bg-card)]/90 disabled:opacity-60"
+                className="rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90 disabled:opacity-60"
               >
                 {isSaving ? 'Saving...' : 'Create business'}
               </button>
@@ -227,37 +227,37 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
         ) : (
           <div className="space-y-5">
             <div className="rounded-3xl border border-white/15 bg-black/20 p-5">
-              <p className="text-xs uppercase tracking-[0.4em] text-[var(--console-text-inverse)]/50">Install snippet</p>
-              <p className="mt-2 text-sm text-[var(--console-text-inverse)]/70">Paste just before the closing <code>&lt;/body&gt;</code> tag of your site.</p>
-              <pre className="mt-3 overflow-x-auto rounded-2xl bg-black/60 p-4 text-sm text-[var(--console-text-inverse)]/90">
+              <p className="text-xs uppercase tracking-[0.4em] text-white/50">Install snippet</p>
+              <p className="mt-2 text-sm text-white/70">Paste just before the closing <code>&lt;/body&gt;</code> tag of your site.</p>
+              <pre className="mt-3 overflow-x-auto rounded-2xl bg-black/60 p-4 text-sm text-white/90">
                 <code>{snippet}</code>
               </pre>
               <div className="mt-3 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="rounded-2xl bg-[var(--console-bg-card)]/10 px-4 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-bg-card)]/20"
+                  className="rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
                 >
                   {copied ? 'Copied' : 'Copy snippet'}
                 </button>
                 <Link
                   href="/overview"
                   target="_blank"
-                  className="rounded-2xl border border-white/30 px-4 py-2 text-sm font-semibold text-[var(--console-text-inverse)]/90 transition hover:border-white"
+                  className="rounded-2xl border border-white/30 px-4 py-2 text-sm font-semibold text-white/90 transition hover:border-white"
                 >
                   Preview widget
                 </Link>
               </div>
             </div>
             <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-              <p className="text-sm text-[var(--console-text-inverse)]/70">
+              <p className="text-sm text-white/70">
                 Tandem automatically applied the {createdBusiness?.industry ?? 'restaurant'} template. Head to {' '}
-                <span className="font-semibold text-[var(--console-text-inverse)]">Widget</span> to adjust theme and install docs next.
+                <span className="font-semibold text-white">Widget</span> to adjust theme and install docs next.
               </p>
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-4 rounded-2xl bg-[var(--console-bg-card)] px-6 py-3 text-sm font-semibold text-black"
+                className="mt-4 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black"
               >
                 Done
               </button>

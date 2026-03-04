@@ -34,3 +34,11 @@ body {
 * {
   box-sizing: border-box;
 }
+
+[class*="bg-[var(--console-primary)]"],
+[class*="bg-[var(--console-secondary)]"],
+[class*="bg-indigo-"],
+[class*="bg-violet-"],
+[class*="bg-blue-"] {
+  color: #fff;
+}

@@ -9,9 +9,14 @@ export type BusinessRecord = {
 export type ChatSession = {
   id: string;
   businessId: string;
+  locationSlug?: string;
   createdAt: string;
   updatedAt: string;
   title?: string | null;
+};
+
+export type CreateSessionOptions = {
+  locationSlug?: string;
 };
 
 export type ChatMessage = {
@@ -40,7 +45,7 @@ export type ListSessionsOptions = {
 };
 
 export interface ChatStore {
-  createSession(businessId: string): Promise<ChatSession>;
+  createSession(businessId: string, options?: CreateSessionOptions): Promise<ChatSession>;
   getSession(sessionId: string): Promise<ChatSession | null>;
   listSessions(businessId: string, options?: ListSessionsOptions): Promise<ChatSession[]>;
   appendMessage(sessionId: string, message: AppendMessageInput): Promise<ChatMessage>;

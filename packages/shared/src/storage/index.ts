@@ -31,6 +31,7 @@ export type {
   ChatMessageRole,
   ChatSession,
   ChatStore,
+  CreateSessionOptions,
   ListSessionsOptions,
   UpdateSessionInput,
 } from "./types";

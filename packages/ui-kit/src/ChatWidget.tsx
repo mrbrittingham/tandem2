@@ -11,13 +11,12 @@ import {
 } from "react";
 import type { WidgetContentConfig } from "@tandem/shared";
 
-import "./tandem-widget-tokens.css";
 import styles from "./ChatWidget.module.css";
+import { resolveWidgetRuntimeConfig } from "./runtime-config";
 
 type CSSVarStyles = CSSProperties & Record<string, string>;
 
 type MessageRole = "user" | "assistant" | "system";
-type ViewState = "chat" | "help";
 
 export type MessageCTA = {
   label: string;
@@ -37,10 +36,7 @@ type InlineComposerError = {
   devHint?: string;
 };
 
-const VIEW_OPTIONS: Array<{ value: ViewState; label: string }> = [
-  { value: "chat", label: "Chat" },
-  { value: "help", label: "Help" },
-];
+type QuickAction = "hours" | "reservations" | "menu";
 
 const SCROLL_STICKY_THRESHOLD = 48;
 
@@ -85,6 +81,16 @@ export type ThemeTokens = {
   textSecondaryColor: string;
   textTertiaryColor: string;
   textOnPrimaryColor: string;
+  headerBackground: string;
+  headerTextColor: string;
+  quickActionColor: string;
+  quickActionTextColor: string;
+  quickActionBorderColor: string;
+  quickActionHoverColor: string;
+  sendButtonColor: string;
+  sendButtonHoverColor: string;
+  sendButtonPressedColor: string;
+  sendButtonTextColor: string;
   panelShadow: string;
   shadowSoft: string;
   shadowMedium: string;
@@ -129,7 +135,9 @@ export type ChatWidgetProps = {
   config?: WidgetContentConfig;
   initiallyOpen?: boolean;
   showLauncher?: boolean;
+  onClose?: () => void;
   businessId?: string;
+  locationSlug?: string;
   apiBaseUrl?: string;
 };
 
@@ -142,55 +150,65 @@ const defaultTheme: ThemeTokens = {
   primaryTextColor: "var(--widget-text-inverse)",
   accentColor: "var(--widget-primary)",
   accentLightColor: "var(--widget-primary-light)",
-  accentTextColor: "var(--widget-text-primary)",
+  accentTextColor: "#1A1A1A",
   surfaceColor: "var(--widget-bg-card)",
   surfaceElevatedColor: "var(--widget-bg-elevated)",
   surfaceHoverColor: "var(--widget-bg-hover)",
   surfaceMutedColor: "var(--widget-bg-page)",
-  surfaceContrastColor: "var(--widget-text-primary)",
+  surfaceContrastColor: "#1A1A1A",
   borderColor: "var(--widget-border)",
   borderLightColor: "var(--widget-border-light)",
-  mutedColor: "var(--widget-text-secondary)",
-  textPrimaryColor: "var(--widget-text-primary)",
-  textSecondaryColor: "var(--widget-text-secondary)",
-  textTertiaryColor: "var(--widget-text-tertiary)",
-  textOnPrimaryColor: "var(--widget-text-inverse)",
-  panelShadow: "var(--widget-shadow-lg)",
-  shadowSoft: "var(--widget-shadow-sm)",
-  shadowMedium: "var(--widget-shadow-md)",
-  shadowDeep: "var(--widget-shadow-lg)",
-  shadowLauncher: "var(--widget-shadow-launcher)",
-  panelRadius: "var(--widget-radius-lg)",
-  bubbleRadius: "var(--widget-radius-bubble)",
-  buttonRadius: "var(--widget-radius-md)",
-  inputRadius: "var(--widget-radius-md)",
-  launcherRadius: "var(--widget-radius-full)",
-  userBubbleBg: "var(--widget-primary)",
-  userBubbleText: "var(--widget-text-inverse)",
-  assistantBubbleBg: "var(--widget-bg-page)",
-  assistantBubbleText: "var(--widget-text-primary)",
-  systemBubbleBg: "var(--widget-bg-page)",
-  systemBubbleText: "var(--widget-text-secondary)",
-  secondaryColor: "var(--widget-bg-page)",
-  secondaryHoverColor: "var(--widget-bg-hover)",
-  secondaryTextColor: "var(--widget-text-primary)",
+  mutedColor: "#666666",
+  textPrimaryColor: "#1A1A1A",
+  textSecondaryColor: "#666666",
+  textTertiaryColor: "#999999",
+  textOnPrimaryColor: "#FFFFFF",
+  headerBackground: "var(--widget-primary)",
+  headerTextColor: "#FFFFFF",
+  quickActionColor: "var(--widget-primary-light)",
+  quickActionTextColor: "#0F172A",
+  quickActionBorderColor: "var(--widget-primary)",
+  quickActionHoverColor: "#DDE8FF",
+  sendButtonColor: "var(--widget-primary)",
+  sendButtonHoverColor: "var(--widget-primary-hover)",
+  sendButtonPressedColor: "var(--widget-primary-pressed)",
+  sendButtonTextColor: "#FFFFFF",
+  panelShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+  shadowSoft: "0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 3px 0 rgba(0, 0, 0, 0.04)",
+  shadowMedium: "0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04)",
+  shadowDeep: "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+  shadowLauncher: "0 8px 16px -4px rgba(0, 0, 0, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.06)",
+  panelRadius: "16px",
+  bubbleRadius: "18px",
+  buttonRadius: "12px",
+  inputRadius: "12px",
+  launcherRadius: "28px",
+  userBubbleBg: "#1A1A1A",
+  userBubbleText: "#FFFFFF",
+  assistantBubbleBg: "#F5F5F5",
+  assistantBubbleText: "#1A1A1A",
+  systemBubbleBg: "#FAFAFA",
+  systemBubbleText: "#666666",
+  secondaryColor: "#F5F5F5",
+  secondaryHoverColor: "#E5E5E5",
+  secondaryTextColor: "#1A1A1A",
   ctaBg: "var(--widget-primary)",
   ctaText: "var(--widget-text-inverse)",
-  space4: "calc(var(--widget-space-1) / 2)",
-  space8: "var(--widget-space-1)",
-  space12: "calc(var(--widget-space-1) + 4px)",
-  space16: "var(--widget-space-2)",
-  space20: "calc(var(--widget-space-2) + 4px)",
-  space24: "var(--widget-space-3)",
-  space32: "var(--widget-space-4)",
-  fontDisplay: "var(--widget-font-family)",
-  fontBody: "var(--widget-font-family)",
+  space4: "4px",
+  space8: "8px",
+  space12: "12px",
+  space16: "16px",
+  space20: "20px",
+  space24: "24px",
+  space32: "32px",
+  fontDisplay: "'Lilita One', sans-serif",
+  fontBody: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
   panelWidthMobile: "100vw",
-  panelWidthDesktop: "var(--widget-width-desktop)",
-  panelMaxHeight: "var(--widget-max-height)",
-  launcherSize: "var(--widget-launcher-size)",
-  headerHeight: "var(--widget-header-height)",
-  inputHeight: "var(--widget-input-height)",
+  panelWidthDesktop: "400px",
+  panelMaxHeight: "700px",
+  launcherSize: "56px",
+  headerHeight: "64px",
+  inputHeight: "52px",
 };
 
 const defaultMessages: MessageDescriptor[] = [
@@ -260,6 +278,43 @@ const defaultContentConfig: WidgetContentConfig = {
   },
 };
 
+const RESERVATIONS_URL = "https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime";
+
+const WEEKDAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+const FALLBACK_HOURS: Record<(typeof WEEKDAY_ORDER)[number], string> = {
+  Sunday: "10:00 AM – 8:00 PM",
+  Monday: "11:00 AM – 9:00 PM",
+  Tuesday: "11:00 AM – 9:00 PM",
+  Wednesday: "11:00 AM – 9:00 PM",
+  Thursday: "11:00 AM – 10:00 PM",
+  Friday: "11:00 AM – 11:00 PM",
+  Saturday: "10:00 AM – 11:00 PM",
+};
+
+const MENU_OPTIONS = [
+  {
+    key: "1",
+    label: "Appetizers",
+    items: ["Crispy Calamari", "Truffle Fries", "Burrata & Tomato"],
+  },
+  {
+    key: "2",
+    label: "Sandwiches",
+    items: ["Steak Sandwich", "Cedar Chicken Club", "Roasted Veggie Panini"],
+  },
+  {
+    key: "3",
+    label: "Entrees",
+    items: ["Herb Salmon", "Braised Short Rib", "Wild Mushroom Risotto"],
+  },
+  {
+    key: "4",
+    label: "Desserts",
+    items: ["Basque Cheesecake", "Dark Chocolate Torte", "Seasonal Sorbet"],
+  },
+] as const;
+
 const createId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
@@ -292,6 +347,16 @@ const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-text-primary": tokens.textPrimaryColor,
   "--tandem-text-secondary": tokens.textSecondaryColor,
   "--tandem-text-tertiary": tokens.textTertiaryColor,
+  "--tandem-header-bg": tokens.headerBackground,
+  "--tandem-header-text": tokens.headerTextColor,
+  "--tandem-quick-action-bg": tokens.quickActionColor,
+  "--tandem-quick-action-text": tokens.quickActionTextColor,
+  "--tandem-quick-action-border": tokens.quickActionBorderColor,
+  "--tandem-quick-action-hover": tokens.quickActionHoverColor,
+  "--tandem-send-bg": tokens.sendButtonColor,
+  "--tandem-send-hover": tokens.sendButtonHoverColor,
+  "--tandem-send-pressed": tokens.sendButtonPressedColor,
+  "--tandem-send-text": tokens.sendButtonTextColor,
   "--tandem-shadow": tokens.shadowDeep,
   "--tandem-shadow-soft": tokens.shadowSoft,
   "--tandem-shadow-medium": tokens.shadowMedium,
@@ -337,7 +402,9 @@ export function ChatWidget({
   config,
   initiallyOpen = false,
   showLauncher = true,
+  onClose,
   businessId,
+  locationSlug,
   apiBaseUrl,
 }: ChatWidgetProps) {
   const mergedTheme = useMemo(
@@ -348,16 +415,11 @@ export function ChatWidget({
     () => themeToCSSVariables(mergedTheme),
     [mergedTheme]
   );
-  const resolvedBusinessId = businessId ?? "default";
-  const normalizedApiBaseUrl = useMemo(() => {
-    const trimmed = apiBaseUrl?.trim() ?? "";
-    if (!trimmed) {
-      return "";
-    }
-    return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
-  }, [apiBaseUrl]);
-  const chatApiUrl = `${normalizedApiBaseUrl}/api/chat`;
-  const conversationsApiUrl = `${normalizedApiBaseUrl}/api/conversations`;
+  const runtimeConfig = useMemo(
+    () => resolveWidgetRuntimeConfig({ businessId, locationSlug, apiBaseUrl }),
+    [apiBaseUrl, businessId, locationSlug],
+  );
+  const chatApiUrl = `${runtimeConfig.apiBaseUrl}/api/chat`;
   const contentConfig = useMemo(() => {
     return {
       ...defaultContentConfig,
@@ -374,9 +436,7 @@ export function ChatWidget({
 
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [inputValue, setInputValue] = useState("");
-  const [view, setView] = useState<ViewState>("chat");
-  const [helpSearch, setHelpSearch] = useState("");
-  const [showAllFaqs, setShowAllFaqs] = useState(false);
+  const [awaitingMenuSelection, setAwaitingMenuSelection] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => hydrateMessages(initialMessages));
   const [isStreaming, setIsStreaming] = useState(false);
   const [composerError, setComposerError] = useState<InlineComposerError | null>(null);
@@ -391,11 +451,35 @@ export function ChatWidget({
   const historyWarnedRef = useRef(false);
 
   useEffect(() => {
-    setMessages(hydrateMessages(initialMessages));
-    setHistoryLoaded(false);
-  }, [initialMessages, resolvedBusinessId]);
+    setIsOpen(initiallyOpen);
+  }, [initiallyOpen]);
 
   useEffect(() => {
+    if (runtimeConfig.isValid) {
+      return;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(runtimeConfig.error ?? "Invalid ChatWidget runtime config");
+    }
+    setComposerError({
+      message: "Chat is unavailable right now.",
+      devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
+    });
+  }, [runtimeConfig.error, runtimeConfig.isValid]);
+
+  useEffect(() => {
+    setMessages(hydrateMessages(initialMessages));
+    setHistoryLoaded(false);
+  }, [initialMessages, runtimeConfig.businessId, runtimeConfig.locationSlug]);
+
+  useEffect(() => {
+    if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+      setIsHydratingHistory(false);
+      setHistoryLoaded(true);
+      return;
+    }
+
     if (historyLoaded) {
       return;
     }
@@ -424,9 +508,13 @@ export function ChatWidget({
       };
 
       try {
-        const params = new URLSearchParams({ businessId: resolvedBusinessId });
-        const historyListUrl = `${conversationsApiUrl}?${params.toString()}`;
-        const response = await fetch(historyListUrl, {
+        const params = new URLSearchParams();
+        params.set("businessId", runtimeConfig.businessId!);
+        if (runtimeConfig.locationSlug) {
+          params.set("locationSlug", runtimeConfig.locationSlug);
+        }
+        const historyUrl = `${chatApiUrl}?${params.toString()}`;
+        const response = await fetch(historyUrl, {
           method: "GET",
           signal: controller.signal,
         });
@@ -436,45 +524,20 @@ export function ChatWidget({
             return;
           }
 
-          const sessions = Array.isArray(data.sessions) ? data.sessions : [];
-          const latestSessionId = sessions[0]?.id;
-
-          if (latestSessionId) {
-            const historyDetailUrl = `${conversationsApiUrl}/${encodeURIComponent(latestSessionId)}`;
-            const detailResponse = await fetch(historyDetailUrl, {
-              method: "GET",
-              signal: controller.signal,
-            });
-
-            if (detailResponse.ok) {
-              const detailData = await detailResponse.json();
-              if (cancelled) {
-                return;
-              }
-
-              if (Array.isArray(detailData.messages) && detailData.messages.length) {
-                setMessages(
-                  detailData.messages.map((message: { role: MessageRole; content: string }) => ({
-                    id: createId(),
-                    role: message.role,
-                    text: message.content,
-                  })),
-                );
-                return;
-              }
-            } else {
-              const bodyPreview = await getBodyPreview(detailResponse);
-              warnHistoryFailure({
-                url: historyDetailUrl,
-                status: detailResponse.status,
-                bodyPreview,
-              });
-            }
+          if (Array.isArray(data.messages) && data.messages.length) {
+            setMessages(
+              data.messages.map((message: { role: MessageRole; content: string }) => ({
+                id: createId(),
+                role: message.role,
+                text: message.content,
+              })),
+            );
+            return;
           }
         } else {
           const bodyPreview = await getBodyPreview(response);
           warnHistoryFailure({
-            url: historyListUrl,
+            url: historyUrl,
             status: response.status,
             bodyPreview,
           });
@@ -500,42 +563,12 @@ export function ChatWidget({
       cancelled = true;
       controller.abort();
     };
-  }, [conversationsApiUrl, historyLoaded, resolvedBusinessId]);
-
-  const handleViewChange = useCallback((next: ViewState) => {
-    setView(next);
-    if (next === "help") {
-      setShowAllFaqs(false);
-    }
-  }, []);
-  const isChatView = view === "chat";
-
-  const handlePromptInsert = useCallback((prompt: string) => {
-    setView("chat");
-    setInputValue(prompt);
-    if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
-    }
-  }, []);
-
-  const handleHandoffAction = useCallback(() => {
-    const value = contentConfig.handoff.actionValue;
-    if (value?.startsWith("http")) {
-      window.open(value, "_blank", "noopener");
-      return;
-    }
-    if (value?.includes("@")) {
-      window.location.href = `mailto:${value}`;
-      return;
-    }
-    handlePromptInsert("I'd like to talk to a person.");
-  }, [contentConfig.handoff.actionValue, handlePromptInsert]);
+  }, [chatApiUrl, historyLoaded, runtimeConfig.businessId, runtimeConfig.isValid, runtimeConfig.locationSlug]);
 
   const closePanel = useCallback(() => {
     setIsOpen(false);
-  }, []);
+    onClose?.();
+  }, [onClose]);
 
   useEffect(() => {
     return () => {
@@ -567,7 +600,7 @@ export function ChatWidget({
   }, [closePanel, isOpen]);
 
   useEffect(() => {
-    if (!isOpen || view !== "chat") {
+    if (!isOpen) {
       return;
     }
 
@@ -587,20 +620,101 @@ export function ChatWidget({
     handleScroll();
     node.addEventListener("scroll", handleScroll, { passive: true });
     return () => node.removeEventListener("scroll", handleScroll);
-  }, [isOpen, view]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || view !== "chat") {
+    if (!isOpen) {
       return;
     }
 
     if (shouldAutoScrollRef.current) {
       scrollToBottom(messagesRef.current, "smooth");
     }
-  }, [messages, isOpen, view]);
+  }, [messages, isOpen]);
+
+  const appendAssistantMessage = useCallback((text: string, cta?: MessageCTA) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: createId(),
+        role: "assistant",
+        text,
+        cta,
+      },
+    ]);
+  }, []);
+
+  const formatHoursMessage = useCallback(() => {
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
+    const orderedDays = WEEKDAY_ORDER.filter((day) => day === today).concat(
+      WEEKDAY_ORDER.filter((day) => day !== today),
+    );
+
+    const lines = orderedDays.map((day) => {
+      const value = FALLBACK_HOURS[day];
+      if (day === today) {
+        return `Today (${day}): ${value}`;
+      }
+      return `${day}: ${value}`;
+    });
+
+    return `Here are our hours:\n${lines.join("\n")}`;
+  }, []);
+
+  const menuPromptMessage = useMemo(
+    () =>
+      [
+        "Which menu would you like to view? Reply with a number:",
+        ...MENU_OPTIONS.map((option) => `${option.key}) ${option.label}`),
+      ].join("\n"),
+    [],
+  );
+
+  const resolveMenuOption = useCallback((value: string) => {
+    const normalized = value.trim().toLowerCase();
+    return MENU_OPTIONS.find(
+      (option) =>
+        option.key === normalized ||
+        option.label.toLowerCase() === normalized ||
+        normalized.includes(option.label.toLowerCase()),
+    );
+  }, []);
+
+  const handleQuickAction = useCallback(
+    (action: QuickAction) => {
+      setComposerError(null);
+
+      if (action === "hours") {
+        setAwaitingMenuSelection(false);
+        appendAssistantMessage(formatHoursMessage());
+        return;
+      }
+
+      if (action === "reservations") {
+        setAwaitingMenuSelection(false);
+        appendAssistantMessage("You can book a table here:", {
+          label: "Open reservations",
+          href: RESERVATIONS_URL,
+        });
+        return;
+      }
+
+      setAwaitingMenuSelection(true);
+      appendAssistantMessage(menuPromptMessage);
+    },
+    [appendAssistantMessage, formatHoursMessage, menuPromptMessage],
+  );
 
   const startAssistantResponse = useCallback(
     async (history: Message[], assistantMessageId: string) => {
+      if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+        setComposerError({
+          message: "Chat is unavailable right now.",
+          devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
+        });
+        return;
+      }
+
       setComposerError(null);
       setIsStreaming(true);
 
@@ -619,7 +733,8 @@ export function ChatWidget({
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            businessId: resolvedBusinessId,
+            businessId: runtimeConfig.businessId,
+            locationSlug: runtimeConfig.locationSlug,
             messages: [
               {
                 role: latestUserMessage.role,
@@ -725,7 +840,7 @@ export function ChatWidget({
         setIsStreaming(false);
       }
     },
-    [chatApiUrl, resolvedBusinessId],
+    [chatApiUrl, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, runtimeConfig.locationSlug],
   );
 
   const stopStreaming = useCallback(() => {
@@ -736,7 +851,44 @@ export function ChatWidget({
 
   const sendMessage = useCallback(async () => {
     const trimmed = inputValue.trim();
+    if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+      setComposerError({
+        message: "Chat is unavailable right now.",
+        devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
+      });
+      return;
+    }
+
     if (!trimmed || isStreaming || isHydratingHistory) {
+      return;
+    }
+
+    if (awaitingMenuSelection) {
+      const option = resolveMenuOption(trimmed);
+      const userMessage: Message = {
+        id: createId(),
+        role: "user",
+        text: trimmed,
+      };
+
+      const assistantMessage: Message = option
+        ? {
+            id: createId(),
+            role: "assistant",
+            text: `${option.label}:\n${option.items.map((item) => `• ${item}`).join("\n")}`,
+          }
+        : {
+            id: createId(),
+            role: "assistant",
+            text: "Please choose a menu by replying with 1, 2, 3, or 4.",
+          };
+
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      setInputValue("");
+      setLastSubmittedMessage(trimmed);
+      if (option) {
+        setAwaitingMenuSelection(false);
+      }
       return;
     }
 
@@ -757,9 +909,10 @@ export function ChatWidget({
     setMessages([...conversationSnapshot, assistantPlaceholder]);
     setInputValue("");
     setLastSubmittedMessage(trimmed);
+    setAwaitingMenuSelection(false);
 
     await startAssistantResponse(conversationSnapshot, assistantMessageId);
-  }, [inputValue, isHydratingHistory, isStreaming, messages, startAssistantResponse]);
+  }, [awaitingMenuSelection, inputValue, isHydratingHistory, isStreaming, messages, resolveMenuOption, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, startAssistantResponse]);
 
   const retryLastMessage = useCallback(async () => {
     const retryText = lastSubmittedMessage?.trim();
@@ -795,21 +948,9 @@ export function ChatWidget({
   };
 
   const isSendDisabled = inputValue.trim().length === 0 || isStreaming || isHydratingHistory;
-  const helpQuery = helpSearch.trim().toLowerCase();
-  const filteredFaqs = contentConfig.faqs.filter((faq) => {
-    if (!helpQuery) {
-      return true;
-    }
-    return (
-      faq.question.toLowerCase().includes(helpQuery) ||
-      faq.answer.toLowerCase().includes(helpQuery) ||
-      faq.category.toLowerCase().includes(helpQuery)
-    );
-  });
-  const visibleFaqs = (helpQuery || showAllFaqs ? filteredFaqs : filteredFaqs.slice(0, 4)).slice(0, 8);
 
   return (
-    <div className={styles.themeScope} style={cssVarStyle}>
+    <div className={`${styles.themeScope} ${!showLauncher ? styles.embeddedScope : ""}`} style={cssVarStyle}>
       {showLauncher && !isOpen ? (
         <button
           type="button"
@@ -843,33 +984,21 @@ export function ChatWidget({
                 <p className={styles.brandSubtitle}>{contentConfig.tagline ?? "Always-on concierge"}</p>
               </div>
             </div>
+            <div className={styles.quickActions} role="toolbar" aria-label="Quick actions">
+              <button type="button" className={styles.quickActionButton} onClick={() => handleQuickAction("hours")}>
+                <ClockIcon />
+                <span>Hours</span>
+              </button>
+              <button type="button" className={styles.quickActionButton} onClick={() => handleQuickAction("reservations")}>
+                <ReservationIcon />
+                <span>Reservations</span>
+              </button>
+              <button type="button" className={styles.quickActionButton} onClick={() => handleQuickAction("menu")}>
+                <MenuIcon />
+                <span>Menus</span>
+              </button>
+            </div>
             <div className={styles.headerActions}>
-              <div
-                className={styles.viewSwitch}
-                role="tablist"
-                aria-label="Chat views"
-              >
-                {VIEW_OPTIONS.map((option) => {
-                  const isActive = option.value === view;
-                  const classNames = [styles.viewSwitchButton];
-                  if (isActive) {
-                    classNames.push(styles.viewSwitchButtonActive);
-                  }
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      className={classNames.join(" ")}
-                      onClick={() => handleViewChange(option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
               <button
                 type="button"
                 onClick={closePanel}
@@ -882,38 +1011,9 @@ export function ChatWidget({
           </header>
 
           <div className={styles.panelBody}>
-            {isChatView ? (
-              <>
+            <>
                 <div className={styles.chatContent}>
                   <div ref={messagesRef} className={styles.chatScroller}>
-                    <section className={styles.chatIntro}>
-                      <p className={styles.chatEyebrow}>Live concierge</p>
-                      <h2 className={styles.chatTitle}>
-                        Hi, I'm the concierge for {contentConfig.businessName}.
-                      </h2>
-                      <p className={styles.chatSubtitle}>{contentConfig.welcomeMessage}</p>
-                      <div className={styles.intentChips}>
-                        {contentConfig.intents.map((intent) => (
-                          <button
-                            key={intent.id}
-                            type="button"
-                            className={styles.intentChip}
-                            onClick={() => handlePromptInsert(intent.prompt)}
-                          >
-                            <span className={styles.intentLabel}>{intent.label}</span>
-                            <span className={styles.intentDescription}>{intent.description}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.handoffButton}
-                        onClick={handleHandoffAction}
-                      >
-                        <span>{contentConfig.handoff.actionLabel}</span>
-                        <span className={styles.handoffStatus}>{contentConfig.handoff.detail}</span>
-                      </button>
-                    </section>
                     <div className={styles.messageList}>
                       {messages.map((message) => (
                         <MessageBubble key={message.id} message={message} />
@@ -980,81 +1080,7 @@ export function ChatWidget({
                     ) : null}
                   </div>
                 ) : null}
-                <footer className={styles.poweredByRow}>
-                  <span className={styles.poweredByLabel}>Powered by</span>
-                  <span className={styles.poweredByBrand}>{mergedTheme.brandName}</span>
-                </footer>
               </>
-            ) : (
-              <div className={styles.helpView} role="region" aria-label="Help center">
-                <div className={styles.helpSearchRow}>
-                  <input
-                    type="search"
-                    value={helpSearch}
-                    onChange={(event) => setHelpSearch(event.target.value)}
-                    placeholder="Search policies, FAQs, menu notes"
-                    className={styles.helpSearchInput}
-                  />
-                  {helpQuery ? (
-                    <button
-                      type="button"
-                      className={styles.clearSearchButton}
-                      onClick={() => setHelpSearch("")}
-                    >
-                      Clear
-                    </button>
-                  ) : null}
-                </div>
-                <div className={styles.helpCategories}>
-                  {contentConfig.categories.map((category) => (
-                    <article key={category.id} className={styles.helpCategoryCard}>
-                      <div>
-                        <p className={styles.helpCategoryLabel}>{category.label}</p>
-                        <p className={styles.helpCategoryDescription}>{category.description}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.helpCategoryButton}
-                        onClick={() => handlePromptInsert(`Tell me about ${category.label}.`)}
-                      >
-                        Ask
-                      </button>
-                    </article>
-                  ))}
-                </div>
-                <div className={styles.helpFaqList}>
-                  {visibleFaqs.length ? (
-                    visibleFaqs.map((faq) => (
-                      <article key={faq.id} className={styles.faqCard}>
-                        <div>
-                          <p className={styles.faqCategory}>{faq.category}</p>
-                          <h4 className={styles.faqQuestion}>{faq.question}</h4>
-                          <p className={styles.faqAnswer}>{faq.answer}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className={styles.faqActionButton}
-                          onClick={() => handlePromptInsert(faq.question)}
-                        >
-                          Ask about this
-                        </button>
-                      </article>
-                    ))
-                  ) : (
-                    <p className={styles.emptyHelpMessage}>No articles match your search.</p>
-                  )}
-                </div>
-                {filteredFaqs.length > 4 && !helpQuery ? (
-                  <button
-                    type="button"
-                    className={styles.showAllButton}
-                    onClick={() => setShowAllFaqs((prev) => !prev)}
-                  >
-                    {showAllFaqs ? "Show fewer" : "View all"}
-                  </button>
-                ) : null}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1112,6 +1138,32 @@ function LauncherIcon() {
       <circle cx="8" cy="10.5" r="1" fill="currentColor" />
       <circle cx="12" cy="10.5" r="1" fill="currentColor" />
       <circle cx="16" cy="10.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ReservationIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <rect x="4" y="5" width="16" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <path d="M6 7h12M6 12h12M6 17h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

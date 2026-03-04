@@ -3,19 +3,19 @@
 /* Aligned with Console Design System */
 
 :root {
-  --widget-primary: #4F46E5;
-  --widget-primary-hover: #4338CA;
-  --widget-primary-pressed: #3730A3;
-  --widget-primary-light: #EEF2FF;
+  --widget-primary: #3170FC;
+  --widget-primary-hover: #285ED3;
+  --widget-primary-pressed: #1F4CAB;
+  --widget-primary-light: #E9F0FF;
 
-  --widget-gradient-primary: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
-  --widget-gradient-header: linear-gradient(135deg, rgba(99, 102, 241, 0.92) 0%, rgba(79, 70, 229, 0.92) 100%);
+  --widget-gradient-primary: linear-gradient(135deg, #3170FC 0%, #9E4770 100%);
+  --widget-gradient-header: linear-gradient(135deg, rgba(49, 112, 252, 0.94) 0%, rgba(10, 34, 57, 0.94) 100%);
 
   --widget-bg-card: #FFFFFF;
   --widget-bg-page: #F8FAFC;
   --widget-bg-elevated: #FFFFFF;
   --widget-bg-hover: #F1F5F9;
-  --widget-bg-frosted: rgba(255, 255, 255, 0.15);
+  --widget-bg-frosted: rgba(135, 246, 255, 0.22);
 
   --widget-text-primary: #0F172A;
   --widget-text-secondary: #475569;

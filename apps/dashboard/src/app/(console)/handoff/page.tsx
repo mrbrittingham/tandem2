@@ -90,7 +90,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
   return (
     <form className="space-y-8" onSubmit={handleSave}>
       <SectionCard
-        title="Talk to a person"
+        title="Handoff"
         description="Set the live support headline, status, and fallback message customers will see."
       >
         <div className="grid gap-4 md:grid-cols-2">
@@ -100,12 +100,12 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
             onChange={(value) => updateField("headline", value)}
             placeholder="Concierge team"
           />
-          <label className="flex flex-col gap-2 text-sm text-[var(--console-text-secondary)]">
-            <span className="font-semibold text-[var(--console-text-primary)]">Status</span>
+          <label className="flex flex-col gap-2 text-sm text-slate-600">
+            <span className="font-semibold text-slate-800">Status</span>
             <select
               value={handoff.status}
               onChange={(event) => updateField("status", event.target.value as HandoffConfig["status"])}
-              className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3 text-[var(--console-text-primary)]"
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
             >
               <option value="online">Online</option>
               <option value="offline">Offline</option>
@@ -136,12 +136,12 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
 
       <SectionCard
         title="Contact methods"
-        description="List every way a guest can reach you if they tap Talk to a person."
+        description="List every way a guest can reach you if they tap Handoff."
         actions={
           <button
             type="button"
             onClick={addContact}
-            className="rounded-2xl border border-[var(--console-border)] px-3 py-1 text-sm font-medium text-[var(--console-text-secondary)] hover:border-[var(--console-border-dark)]"
+            className="rounded-2xl border border-slate-200 px-3 py-1 text-sm font-medium text-slate-700 hover:border-slate-300"
           >
             Add method
           </button>
@@ -149,14 +149,14 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
       >
         <div className="space-y-4">
           {handoff.contactMethods.map((method) => (
-            <div key={method.id} className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4 shadow-[var(--console-shadow-sm)]">
+            <div key={method.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
               <div className="grid gap-4 md:grid-cols-[140px_1fr_1fr_auto]">
-                <label className="flex flex-col gap-2 text-sm text-[var(--console-text-secondary)]">
-                  <span className="font-semibold text-[var(--console-text-primary)]">Type</span>
+                <label className="flex flex-col gap-2 text-sm text-slate-600">
+                  <span className="font-semibold text-slate-800">Type</span>
                   <select
                     value={method.type}
                     onChange={(event) => updateContact(method.id, { type: event.target.value as ContactMethod["type"] })}
-                    className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-3 py-2 text-[var(--console-text-primary)]"
+                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-900"
                   >
                     <option value="email">Email</option>
                     <option value="phone">Phone</option>
@@ -184,7 +184,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
                   <button
                     type="button"
                     onClick={() => removeContact(method.id)}
-                    className="rounded-2xl border border-[var(--console-border)] px-3 py-1 text-xs font-medium text-[var(--console-error)] hover:border-[var(--console-error)]"
+                    className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-rose-600 hover:border-rose-200"
                   >
                     Remove
                   </button>
@@ -196,7 +196,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
       </SectionCard>
 
       <div className="flex justify-end">
-        <button type="submit" className="rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]">
+        <button type="submit" className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-500">
           Save contact settings
         </button>
       </div>

@@ -26,6 +26,9 @@
   - `LLM_MODEL` defaults to `gpt-5.2`.
   - `OPENAI_API_KEY` is required for OpenAI provider.
   - Anthropic/Google providers are currently placeholders that throw.
+- Supabase-backed auth/routes require:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - Chat persistence is via `getChatStore()` in `packages/shared/src/storage/index.ts`:
   - Prefers file store (`packages/shared/src/storage/file.ts`) in `.data/` at repo root.
   - `TANDEM_DATA_DIR` overrides storage path.
@@ -36,9 +39,13 @@
 - Install deps: `npm install` (repo root).
 - Main app dev loop (dashboard): `npm run dev`, `npm run lint`, `npm run typecheck`, `npm run build`.
 - Cleanup stale Next/Turbopack output: `npm run clean`.
+- Supabase migrations are pushed from `supabase/migrations/*` via `supabase db push`.
+- Avoid adding new production migrations only under `packages/shared/supabase/migrations/*`.
+- Run `npm run guard:migrations` before schema pushes.
 - There is currently no automated test suite in this repo; rely on typecheck/lint plus route/page verification.
 
 ## Project-specific coding conventions
 - Business identity in UI/API flows commonly uses `business.slug` as `businessId`.
+- Canonical chat/conversation scope is `businessId + locationSlug` across read/write paths.
 - Prefer adding reusable contracts/utilities to `packages/shared` and presentation logic to `packages/ui-kit` rather than duplicating in apps.
 - Keep App Router code consistent with existing patterns: `runtime = "nodejs"` for streaming chat routes, `NextResponse.json(...)` for JSON errors.

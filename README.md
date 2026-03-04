@@ -1,55 +1,61 @@
-# Tandem 2.0 Monorepo
+# Tandem Monorepo
 
-Tandem 2.0 is an npm workspaces monorepo for a concierge chatbot product with a dashboard app plus shared widget and domain/server packages.
+Tandem is an npm workspaces monorepo for the operator dashboard, embeddable chat widget, and shared server/domain modules.
 
 ## Workspace layout
 
 | Path | Purpose |
 | --- | --- |
-| `apps/dashboard` | Operator console for business setup, content, handoff, and conversation monitoring (port 3100) |
-| `packages/ui-kit` | Reusable `ChatWidget` implementation and themeable UI surface |
-| `packages/shared` | Shared domain types, mock state store, LLM client wrappers, and chat storage adapters |
+| `apps/dashboard` | Next.js App Router app (operator console + API routes, port 3100) |
+| `packages/ui-kit` | `ChatWidget` and widget runtime config helpers |
+| `packages/shared` | Shared types, mock store, LLM/provider routing, storage adapters, server helpers |
+| `supabase` | Active Supabase CLI config + migration path used by `supabase db push` |
 
-## Current product progress
+## Core architecture rules
 
-- Widget runtime is implemented in `@tandem/ui-kit` with Chat + Help tabs, FAQ search, handoff CTA, and streamed responses.
-- Dashboard console is implemented with routes for overview, businesses, knowledge, intents, handoff, widget, integrations, conversations, and LLM status.
-- Business configuration is currently mock-first and browser-persistent (`localStorage` key `tandem:mock-state`).
-- Chat history persistence is implemented through shared storage with file-backed data in `.data/` (fallback to in-memory).
+- Backend logic stays in Next.js route handlers under `apps/dashboard/src/app/api/**`.
+- Use `@tandem/shared` for client-safe imports and `@tandem/shared/server` for server-only code.
+- Keep chat behavior aligned with the shared handlers used by `apps/dashboard/src/app/api/chat/route.ts`.
+- Prefer shared domain logic in `packages/shared` and shared presentation logic in `packages/ui-kit`.
 
-## Architecture rules
-
-- Backend logic lives only in Next.js App Router route handlers under `src/app/api/**`.
-- Keep server-only imports on `@tandem/shared/server`; use `@tandem/shared` in client-safe code.
-- Keep chat route behavior aligned with shared handlers in `@tandem/shared/server`.
-- Reusable cross-app logic belongs in `packages/shared`; reusable UI belongs in `packages/ui-kit`.
-
-## Local development
+## Development commands
 
 Run from repo root:
 
 | Command | Description |
 | --- | --- |
 | `npm install` | Install workspace dependencies |
-| `npm run dev` | Start dashboard app on http://localhost:3100 |
+| `npm run dev` | Start dashboard app on `http://localhost:3100` |
 | `npm run lint` | Lint dashboard workspace |
-| `npm run typecheck` | Type-check shared, ui-kit, and dashboard packages |
+| `npm run typecheck` | Type-check shared, ui-kit, and dashboard |
 | `npm run build` | Build dashboard app |
-| `npm run clean` | Remove stale `.next` and `*.tsbuildinfo` artifacts |
+| `npm run clean` | Remove stale `.next` and tsbuildinfo artifacts |
 
-## Environment and integrations
+## Environment quick reference
 
-- LLM provider selection is env-driven in `packages/shared/src/llm/client.ts`.
-- Supported provider today: OpenAI.
-	- `LLM_PROVIDER=openai` (default)
-	- `LLM_MODEL=gpt-5.2` (default)
-	- `OPENAI_API_KEY` required for generation/streaming
-- Anthropic and Google providers exist as placeholders and currently throw not-implemented errors.
-- Optional: `TANDEM_DATA_DIR` overrides chat persistence directory (default resolves to repo `.data/`).
+Required for authenticated dashboard flows:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-## Validation expectations
+Required for LLM generation:
+- `OPENAI_API_KEY`
 
-- There is no automated test suite in this repo yet.
-- Validate changes with lint + typecheck and by exercising relevant pages/routes:
-	- Dashboard: `http://localhost:3100/`
-	- LLM connectivity check: dashboard `LLM status` page (`/llm`)
+Optional:
+- `LLM_PROVIDER` (default `openai`)
+- `LLM_MODEL` (default `gpt-5.2`)
+- `TANDEM_DATA_DIR`
+- `TANDEM_API_KEY`
+- `TANDEM_ALLOWED_BUSINESS_IDS`
+
+## Documentation index
+
+- System map: `docs/system-map.md`
+- Current audit status: `docs/current-status.md`
+- Stabilization priorities: `docs/stabilization-plan.md`
+- Operational setup/run guide: `RUNBOOK.md`
+- Migration reconciliation: `docs/migration-reconciliation.md`
+
+## Migration guardrail
+
+- Run `npm run guard:migrations` before pushing schema changes.
+- New production migrations must exist only in `supabase/migrations/*`.

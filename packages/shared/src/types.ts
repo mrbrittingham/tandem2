@@ -75,6 +75,23 @@ export type WidgetThemeSettings = {
   textSecondaryColor: string;
   fontFamily: string;
   logoUrl?: string;
+  headerBackground?: {
+    mode: "solid" | "gradient";
+    solidColor?: string;
+    gradient?: {
+      from?: string;
+      to?: string;
+      angle?: number;
+    };
+  };
+  quickActions?: {
+    color?: string;
+    variant?: "solid" | "outline";
+  };
+  sendButton?: {
+    color?: string;
+    textColor?: string;
+  };
 };
 
 export type HandoffConfig = {

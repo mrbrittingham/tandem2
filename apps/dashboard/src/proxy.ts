@@ -19,7 +19,7 @@ function withResponseCookies(target: NextResponse, source: NextResponse) {
   return target;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isStaticAsset(pathname) || PUBLIC_PATHS.has(pathname)) {

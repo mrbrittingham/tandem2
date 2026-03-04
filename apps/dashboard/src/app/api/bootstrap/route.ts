@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { assertDashboardEnv } from "@tandem/shared/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const BUSINESS_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/;
@@ -11,6 +12,8 @@ type BootstrapRequestBody = {
 
 export async function POST(request: Request) {
   try {
+    assertDashboardEnv();
+
     const supabase = await createSupabaseServerClient();
 
     const {

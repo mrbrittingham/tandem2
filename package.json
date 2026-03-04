@@ -12,7 +12,11 @@
     "lint": "npm --workspace apps/dashboard run lint",
     "typecheck": "npx tsc -p packages/shared/tsconfig.json --noEmit && npx tsc -p packages/ui-kit/tsconfig.json --noEmit && npm --workspace apps/dashboard run typecheck",
     "build": "npm --workspace apps/dashboard run build",
-    "clean": "node ./scripts/clean.mjs"
+    "clean": "node ./scripts/clean.mjs",
+    "guard:migrations": "node ./scripts/guard-migrations.mjs",
+    "verify:api": "bash ./scripts/verify-api.sh",
+    "smoke:chat": "node ./scripts/smoke-chat.mjs",
+    "smoke:chat:dev": "node ./scripts/smoke-chat-dev.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.37",
