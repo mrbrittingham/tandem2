@@ -134,8 +134,6 @@ function formatDate(value?: string | null): string {
 
 export function WebsiteImportPanel({ business }: { business: BusinessProfile }) {
   const businessSlug = (business.businessSlug ?? business.slug ?? "").trim();
-  const businessId = (business.id ?? "").trim();
-  const hasUuidBusinessId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(businessId);
   const locationSlug = business.locationSlug ?? business.slug;
 
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -157,9 +155,6 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         const params = new URLSearchParams();
         if (businessSlug) {
           params.set("businessSlug", businessSlug);
-        }
-        if (hasUuidBusinessId) {
-          params.set("businessId", businessId);
         }
         params.set("locationSlug", locationSlug);
 
@@ -198,7 +193,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [businessId, businessSlug, hasUuidBusinessId, locationSlug]);
+  }, [businessSlug, locationSlug]);
 
   const runImport = async (nextUrl?: string) => {
     const targetUrl = (nextUrl ?? url).trim();
@@ -220,7 +215,6 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         },
         body: JSON.stringify({
           businessSlug,
-          ...(hasUuidBusinessId ? { businessId } : {}),
           locationSlug,
           url: targetUrl,
         }),
