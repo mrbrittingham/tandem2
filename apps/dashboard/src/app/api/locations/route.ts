@@ -29,6 +29,10 @@ type LocationRow = {
   created_at: string;
 };
 
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
 function isLegacyDemoLocation(row: LocationRow): boolean {
   const slug = (row.slug ?? "").trim().toLowerCase();
   const name = (row.name ?? "").trim().toLowerCase();
@@ -324,7 +328,71 @@ export async function PATCH(request: Request) {
     }
 
     if (!data) {
-      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+      const { data: candidates, error: candidatesError } = await supabase
+        .from("business_locations")
+        .select("id,business_id,name,slug,address,created_at")
+        .eq("business_id", resolvedBusinessId)
+        .order("created_at", { ascending: false })
+        .returns<LocationRow[]>();
+
+      if (candidatesError) {
+        return NextResponse.json({ error: candidatesError.message || "Failed to resolve location" }, { status: 500 });
+      }
+
+      const rows = candidates ?? [];
+      if (!rows.length) {
+        return NextResponse.json({ error: "Location not found" }, { status: 404 });
+      }
+
+      let target: LocationRow | undefined;
+
+      const normalizedSlug = normalizeText(locationSlug);
+      if (normalizedSlug) {
+        target = rows.find((entry) => normalizeText(entry.slug) === normalizedSlug);
+      }
+
+      if (!target) {
+        const normalizedName = normalizeText(name);
+        if (normalizedName) {
+          target = rows.find((entry) => normalizeText(entry.name) === normalizedName);
+        }
+      }
+
+      if (!target && rows.length === 1) {
+        target = rows[0];
+      }
+
+      if (!target) {
+        return NextResponse.json({ error: "Location not found" }, { status: 404 });
+      }
+
+      const retry = await supabase
+        .from("business_locations")
+        .update(updatePayload)
+        .eq("id", target.id)
+        .select("id,business_id,name,slug,address,created_at")
+        .maybeSingle<LocationRow>();
+
+      if (retry.error) {
+        return NextResponse.json({ error: retry.error.message || "Failed to update location" }, { status: 500 });
+      }
+
+      if (!retry.data) {
+        return NextResponse.json({ error: "Location not found" }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        location: {
+          id: retry.data.id,
+          businessId: retry.data.business_id,
+          business_id: retry.data.business_id,
+          name: retry.data.name,
+          slug: retry.data.slug,
+          address: retry.data.address,
+          createdAt: retry.data.created_at,
+        },
+      });
     }
 
     return NextResponse.json({
