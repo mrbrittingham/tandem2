@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/EmptyState";
 import { usePreviewDock } from "@/components/PreviewDockContext";
@@ -87,7 +87,7 @@ function formatRangeLabel(value: string) {
   return value.slice(5).replace("-", "/");
 }
 
-export default function OverviewPage() {
+function OverviewPageClient() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -538,6 +538,14 @@ export default function OverviewPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function OverviewPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <OverviewPageClient />
+    </Suspense>
   );
 }
 

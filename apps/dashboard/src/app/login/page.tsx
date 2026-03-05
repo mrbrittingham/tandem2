@@ -1,10 +1,10 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from "react";
+import { Suspense, type FormEvent, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+function LoginPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/overview";
@@ -116,5 +116,13 @@ export default function LoginPage() {
         </button>
       </section>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <LoginPageClient />
+    </Suspense>
   );
 }
