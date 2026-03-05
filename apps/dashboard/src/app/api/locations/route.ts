@@ -30,6 +30,15 @@ type LocationRow = {
   created_at: string;
 };
 
+type LocationConfigRow = {
+  location_id: string;
+  assistant_config: unknown;
+  knowledge_config: unknown;
+  handoff_config: unknown;
+  widget_config: unknown;
+  integrations_config: unknown;
+};
+
 function normalizeText(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -120,6 +129,74 @@ async function bootstrapMembershipForUser(args: {
   }
 
   return candidateId;
+}
+
+async function createLocationDirect(args: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  businessId: string;
+  name: string;
+  address: string | null;
+  sourceLocationId?: string | null;
+}): Promise<{ data: LocationRow | null; error: string | null }> {
+  const baseSlug = slugify(args.name);
+
+  const { data: existingLocations, error: existingError } = await args.supabase
+    .from("business_locations")
+    .select("slug")
+    .eq("business_id", args.businessId)
+    .returns<Array<{ slug: string }>>();
+
+  if (existingError) {
+    return { data: null, error: existingError.message || "Failed to prepare location slug" };
+  }
+
+  const existing = new Set((existingLocations ?? []).map((entry) => normalizeText(entry.slug)).filter(Boolean));
+  let slugCandidate = baseSlug;
+  let counter = 2;
+  while (existing.has(normalizeText(slugCandidate))) {
+    slugCandidate = `${baseSlug}-${counter}`;
+    counter += 1;
+  }
+
+  const { data, error } = await args.supabase
+    .from("business_locations")
+    .insert({
+      business_id: args.businessId,
+      slug: slugCandidate,
+      name: args.name,
+      address: args.address,
+      created_by: args.userId,
+    })
+    .select("id,business_id,name,slug,address,created_at")
+    .single<LocationRow>();
+
+  if (error) {
+    return { data: null, error: error.message || "Failed to create location" };
+  }
+
+  if (args.sourceLocationId) {
+    const source = await args.supabase
+      .from("business_location_configs")
+      .select("location_id,assistant_config,knowledge_config,handoff_config,widget_config,integrations_config")
+      .eq("location_id", args.sourceLocationId)
+      .maybeSingle<LocationConfigRow>();
+
+    if (!source.error && source.data) {
+      await args.supabase
+        .from("business_location_configs")
+        .upsert({
+          location_id: data.id,
+          assistant_config: source.data.assistant_config,
+          knowledge_config: source.data.knowledge_config,
+          handoff_config: source.data.handoff_config,
+          widget_config: source.data.widget_config,
+          integrations_config: source.data.integrations_config,
+        }, { onConflict: "location_id" });
+    }
+  }
+
+  return { data, error: null };
 }
 
 export async function GET(request: Request) {
@@ -224,48 +301,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "sourceLocationId is required for copy mode" }, { status: 400 });
     }
 
-    const firstAttempt = await supabase.rpc("create_business_location", {
-      p_name: name,
-      p_address: address,
-      p_copy_from_location_id: mode === "copy" ? sourceLocationId : null,
-    });
-
-    if (firstAttempt.error) {
-      const message = firstAttempt.error.message || "Failed to create location";
-      const needsBootstrap = /no business membership found/i.test(message);
-
-      if (!needsBootstrap) {
-        return NextResponse.json({ error: message }, { status: 500 });
-      }
-
+    let businessIdForCreate: string | null = null;
+    const membershipResolution = await resolveSingleMembershipBusinessId(supabase, user.id);
+    if ("error" in membershipResolution) {
       const bootstrappedBusinessId = await bootstrapMembershipForUser({
         supabase,
         userId: user.id,
         preferredName: businessName || name,
       });
-
-      if (!bootstrappedBusinessId) {
-        return NextResponse.json({ error: message }, { status: 500 });
-      }
-
-      const retry = await supabase.rpc("create_business_location", {
-        p_name: name,
-        p_address: address,
-        p_copy_from_location_id: mode === "copy" ? sourceLocationId : null,
-      });
-
-      if (retry.error) {
-        return NextResponse.json({ error: retry.error.message || "Failed to create location" }, { status: 500 });
-      }
-
-      return NextResponse.json({
-        ok: true,
-        businessId: bootstrappedBusinessId,
-        location: retry.data?.[0] ?? null,
-      });
+      businessIdForCreate = bootstrappedBusinessId;
+    } else {
+      businessIdForCreate = membershipResolution.businessId;
     }
 
-    return NextResponse.json({ ok: true, location: firstAttempt.data?.[0] ?? null });
+    if (!businessIdForCreate) {
+      return NextResponse.json({ error: "Failed to resolve account business" }, { status: 500 });
+    }
+
+    const created = await createLocationDirect({
+      supabase,
+      userId: user.id,
+      businessId: businessIdForCreate,
+      name,
+      address,
+      sourceLocationId: mode === "copy" ? sourceLocationId : null,
+    });
+
+    if (created.error || !created.data) {
+      return NextResponse.json({ error: created.error || "Failed to create location" }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, businessId: businessIdForCreate, location: created.data });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create location";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -407,19 +473,22 @@ export async function PATCH(request: Request) {
 
       const rows = candidates ?? [];
       if (!rows.length) {
-        const createFirst = await supabase.rpc("create_business_location", {
-          p_name: name,
-          p_address: address,
-          p_copy_from_location_id: null,
+        const createFirst = await createLocationDirect({
+          supabase,
+          userId: user.id,
+          businessId: resolvedBusinessId,
+          name,
+          address,
+          sourceLocationId: null,
         });
 
-        if (createFirst.error) {
-          return NextResponse.json({ error: createFirst.error.message || "Failed to create location" }, { status: 500 });
+        if (createFirst.error || !createFirst.data) {
+          return NextResponse.json({ error: createFirst.error || "Failed to create location" }, { status: 500 });
         }
 
         return NextResponse.json({
           ok: true,
-          location: createFirst.data?.[0] ?? null,
+          location: createFirst.data,
         });
       }
 
@@ -442,7 +511,7 @@ export async function PATCH(request: Request) {
       }
 
       if (!target) {
-        return NextResponse.json({ error: "Location not found" }, { status: 404 });
+        target = rows[0];
       }
 
       const retry = await supabase
@@ -476,7 +545,24 @@ export async function PATCH(request: Request) {
         });
 
         if (createViaBootstrap.error) {
-          return NextResponse.json({ error: createViaBootstrap.error.message || "Failed to update location" }, { status: 500 });
+          const createFallback = await createLocationDirect({
+            supabase,
+            userId: user.id,
+            businessId: bootstrappedBusinessId,
+            name,
+            address,
+            sourceLocationId: null,
+          });
+
+          if (createFallback.error || !createFallback.data) {
+            return NextResponse.json({ error: createFallback.error || "Failed to update location" }, { status: 500 });
+          }
+
+          return NextResponse.json({
+            ok: true,
+            businessId: bootstrappedBusinessId,
+            location: createFallback.data,
+          });
         }
 
         return NextResponse.json({
