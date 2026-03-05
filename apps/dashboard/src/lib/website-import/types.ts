@@ -36,6 +36,8 @@ export type ImportFaq = {
   answer: string;
   sourceUrl: string | null;
   include: boolean;
+  confidence?: number;
+  lowConfidence?: boolean;
 };
 
 export type ImportPolicy = {

@@ -51,3 +51,29 @@ test("scoreFaqCandidate heavily penalizes known noisy phrases", () => {
 
   assert.ok(cleanScore > noisyScore);
 });
+
+test("normalizeFaqCandidate rejects URL fragment and social-share pollution", () => {
+  const candidate = normalizeFaqCandidate(
+    {
+      question: "/reserve?utm_source=facebook&fbclid=abc123",
+      answer: "Share on Facebook · See more comments · Copy link",
+      sourceUrl: "https://example.com/blog",
+    },
+    { faqPageHint: false, minScore: 4 },
+  );
+
+  assert.equal(candidate, null);
+});
+
+test("normalizeFaqCandidate rejects contact form label clusters", () => {
+  const candidate = normalizeFaqCandidate(
+    {
+      question: "Can I contact support?",
+      answer: "Name Email Phone Subject Message Submit",
+      sourceUrl: "https://example.com/contact",
+    },
+    { faqPageHint: false, minScore: 4 },
+  );
+
+  assert.equal(candidate, null);
+});

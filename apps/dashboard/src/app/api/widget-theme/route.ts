@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import type { WidgetThemeSettings } from "@tandem/shared";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeWidgetTheme } from "@/lib/widget-theme";
+import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,119}$/;
-const BUSINESS_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/;
 
 type ThemePayload = {
   theme?: Partial<WidgetThemeSettings>;
@@ -32,17 +32,6 @@ function parseLocationSlug(value: string | null) {
     return { ok: false as const, reason: "locationSlug is invalid" };
   }
   return { ok: true as const, locationSlug };
-}
-
-function parseBusinessId(value: string | null) {
-  const businessId = (value ?? "").trim();
-  if (!businessId) {
-    return { ok: false as const, reason: "businessId required" };
-  }
-  if (!BUSINESS_ID_PATTERN.test(businessId)) {
-    return { ok: false as const, reason: "businessId is invalid" };
-  }
-  return { ok: true as const, businessId };
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -296,23 +285,26 @@ export async function GET(request: Request) {
     }
 
     const url = new URL(request.url);
-    const parsedBusinessId = parseBusinessId(url.searchParams.get("businessId"));
+    const businessIdParam = (url.searchParams.get("businessId") ?? "").trim();
+    const businessSlugParam = (url.searchParams.get("businessSlug") ?? "").trim();
     const parsedLocationSlug = parseLocationSlug(url.searchParams.get("locationSlug"));
-
-    if (!parsedBusinessId.ok) {
-      return NextResponse.json({ error: parsedBusinessId.reason }, { status: 400 });
-    }
 
     if (!parsedLocationSlug.ok) {
       return NextResponse.json({ error: parsedLocationSlug.reason }, { status: 400 });
     }
 
-    const membership = await ensureBusinessMembership(supabase, parsedBusinessId.businessId, user.id);
+    const resolvedBusiness = await resolveBusinessId({
+      supabase,
+      businessId: businessIdParam,
+      businessSlug: businessSlugParam,
+    });
+
+    const membership = await ensureBusinessMembership(supabase, resolvedBusiness.businessId, user.id);
     if (!membership.ok) {
       return NextResponse.json({ error: membership.error }, { status: membership.status });
     }
 
-    const resolved = await resolveLocationId(supabase, parsedBusinessId.businessId, parsedLocationSlug.locationSlug);
+    const resolved = await resolveLocationId(supabase, resolvedBusiness.businessId, parsedLocationSlug.locationSlug);
     if (!resolved.ok) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
@@ -330,11 +322,16 @@ export async function GET(request: Request) {
     const existingTheme = extractThemeFromWidgetConfig(data?.widget_config);
 
     return NextResponse.json({
-      businessId: parsedBusinessId.businessId,
+      businessId: resolvedBusiness.businessId,
+      businessSlug: resolvedBusiness.businessSlug,
       locationSlug: parsedLocationSlug.locationSlug,
       theme: normalizeThemeForResponse(existingTheme),
     });
   } catch (error) {
+    if (error instanceof BusinessResolutionError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : "Failed to load widget theme";
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -353,14 +350,18 @@ export async function PUT(request: Request) {
     }
 
     const url = new URL(request.url);
-    const parsedBusinessId = parseBusinessId(url.searchParams.get("businessId"));
+    const businessIdParam = (url.searchParams.get("businessId") ?? "").trim();
+    const businessSlugParam = (url.searchParams.get("businessSlug") ?? "").trim();
     const parsedLocationSlug = parseLocationSlug(url.searchParams.get("locationSlug"));
-    if (!parsedBusinessId.ok) {
-      return NextResponse.json({ error: parsedBusinessId.reason }, { status: 400 });
-    }
     if (!parsedLocationSlug.ok) {
       return NextResponse.json({ error: parsedLocationSlug.reason }, { status: 400 });
     }
+
+    const resolvedBusiness = await resolveBusinessId({
+      supabase,
+      businessId: businessIdParam,
+      businessSlug: businessSlugParam,
+    });
 
     let body: ThemePayload;
     try {
@@ -374,13 +375,13 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "theme payload is required" }, { status: 400 });
     }
 
-    const membership = await ensureBusinessMembership(supabase, parsedBusinessId.businessId, user.id);
+    const membership = await ensureBusinessMembership(supabase, resolvedBusiness.businessId, user.id);
     if (!membership.ok) {
       return NextResponse.json({ error: membership.error }, { status: membership.status });
     }
 
     const resolved = await ensureLocationIdForSave(supabase, {
-      businessId: parsedBusinessId.businessId,
+      businessId: resolvedBusiness.businessId,
       locationSlug: parsedLocationSlug.locationSlug,
       userId: user.id,
       locationName: body.locationName,
@@ -431,11 +432,16 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      businessId: parsedBusinessId.businessId,
+      businessId: resolvedBusiness.businessId,
+      businessSlug: resolvedBusiness.businessSlug,
       locationSlug: parsedLocationSlug.locationSlug,
       theme: mergedTheme,
     });
   } catch (error) {
+    if (error instanceof BusinessResolutionError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : "Failed to save widget theme";
     return NextResponse.json({ error: message }, { status: 500 });
   }

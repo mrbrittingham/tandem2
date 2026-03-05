@@ -326,11 +326,11 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
           {sortedFaqs.length === 0 ? (
             <p className="text-sm text-slate-500">No FAQs yet. Publish your first answer above.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {sortedFaqs.map((faq) => (
                 <article
                   key={faq.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5"
+                  className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-900/5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-2">
@@ -342,7 +342,7 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                       <h4 className="text-base font-semibold text-slate-900">{faq.question}</h4>
                       <p className="text-sm text-slate-600">{faq.answer}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex min-w-[280px] flex-wrap justify-end gap-2">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
                           faq.showInHelp ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
@@ -353,21 +353,21 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                       <button
                         type="button"
                         onClick={() => startFaqEdit(faq)}
-                        className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
+                        className="min-w-[68px] rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => toggleFaqVisibility(faq.id)}
-                        className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
+                        className="min-w-[68px] rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
                       >
                         {faq.showInHelp ? "Hide" : "Show"}
                       </button>
                       <button
                         type="button"
                         onClick={() => removeFaq(faq.id)}
-                        className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-rose-600 hover:border-rose-200"
+                        className="min-w-[68px] rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-rose-600 hover:border-rose-200"
                       >
                         Delete
                       </button>
@@ -387,11 +387,11 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
           {sortedPolicies.length === 0 ? (
             <p className="text-sm text-slate-500">No policies yet. Add guidance above to get started.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {sortedPolicies.map((policy) => (
                 <article
                   key={policy.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5"
+                  className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm shadow-slate-900/5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-2">
@@ -403,7 +403,7 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                       <h4 className="text-base font-semibold text-slate-900">{policy.title}</h4>
                       <p className="text-sm text-slate-600">{policy.description}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex min-w-[280px] flex-wrap justify-end gap-2">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
                           policy.showInHelp ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-500"
@@ -414,21 +414,21 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                       <button
                         type="button"
                         onClick={() => startPolicyEdit(policy)}
-                        className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
+                        className="min-w-[68px] rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => togglePolicyVisibility(policy.id)}
-                        className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
+                        className="min-w-[68px] rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-300"
                       >
                         {policy.showInHelp ? "Hide" : "Show"}
                       </button>
                       <button
                         type="button"
                         onClick={() => removePolicy(policy.id)}
-                        className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-rose-600 hover:border-rose-200"
+                        className="min-w-[68px] rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-rose-600 hover:border-rose-200"
                       >
                         Delete
                       </button>

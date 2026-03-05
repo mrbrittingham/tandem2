@@ -24,6 +24,8 @@ import type {
  const listeners = new Set<Listener>();
  let state: MockState = initializeState();
 
+const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
+
  function initializeState(): MockState {
   if (typeof window !== "undefined") {
     const fromStorage = readFromStorage();
@@ -42,6 +44,7 @@ import type {
     }
     const parsed = JSON.parse(raw) as MockState;
     if (parsed && Array.isArray(parsed.businesses)) {
+      parsed.businesses = removeSeedDemoLocations(parsed.businesses);
       if (!parsed.accountBusinessName && parsed.businesses[0]) {
         parsed.accountBusinessName = parsed.businesses[0].businessName ?? parsed.businesses[0].name;
       }
@@ -76,6 +79,22 @@ import type {
  function notify() {
   listeners.forEach((listener) => listener(state));
  }
+
+function isSeedDemoLocation(location: BusinessProfile): boolean {
+  const slug = (location.businessSlug ?? location.slug ?? "").trim().toLowerCase();
+  const name = (location.businessName ?? location.name ?? "").trim().toLowerCase();
+  const hasDemoContact = location.contacts.some((entry) => /cedarandsage\.com/i.test(entry.value));
+  return slug === "cedar-sage" || name === "cedar & sage" || hasDemoContact;
+}
+
+function removeSeedDemoLocations(locations: BusinessProfile[]): BusinessProfile[] {
+  if (ENABLE_DEMO_DATA) {
+    return locations;
+  }
+
+  const filtered = locations.filter((location) => !isSeedDemoLocation(location));
+  return filtered;
+}
 
  function cloneState(): MockState {
   return JSON.parse(JSON.stringify(state)) as MockState;
@@ -447,6 +466,14 @@ function cloneLocation(source: BusinessProfile): BusinessProfile {
 }
 
  function createDefaultState(): MockState {
+  if (!ENABLE_DEMO_DATA) {
+    return {
+      businesses: [],
+      activeLocationId: undefined,
+      activeBusinessId: undefined,
+    };
+  }
+
   const location = createRestaurantTemplate();
   const secondLocation = cloneLocation(location);
   secondLocation.id = createId();

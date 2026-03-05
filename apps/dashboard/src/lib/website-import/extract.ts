@@ -53,12 +53,27 @@ function extractFallbackFaqs(pages: CrawledPage[]) {
   const seenQuestions = new Set<string>();
   const questionPattern = /([^?.!\n]{8,140}\?)/g;
 
+  const sanitizeFallbackText = (value: string) => value
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\/[a-z0-9\-_]+\?(?:[^\s]{6,})/gi, " ")
+    .replace(/\bshare\s+on\b/gi, " ")
+    .replace(/\bsee\s+more\b/gi, " ")
+    .replace(/\bcomments?\b/gi, " ")
+    .replace(/\blikes?\b/gi, " ")
+    .replace(/\bcopy\s+link\b/gi, " ")
+    .replace(/\bretweet\b/gi, " ")
+    .replace(/\bpinterest\b/gi, " ")
+    .replace(/(?:skip\s+to\s+content|main\s+menu|privacy\s+policy|terms)\b[^?.!\n]*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   for (const page of pages) {
     const faqPageHint = isLikelyFaqPage(page.url, page.title);
+    const sanitizedExcerpt = sanitizeFallbackText(page.textExcerpt);
     const questions: Array<{ text: string; start: number; end: number }> = [];
 
     let match: RegExpExecArray | null;
-    while ((match = questionPattern.exec(page.textExcerpt)) !== null && questions.length < 30) {
+    while ((match = questionPattern.exec(sanitizedExcerpt)) !== null && questions.length < 30) {
       const question = (match[1] ?? "").trim();
       questions.push({
         text: question,
@@ -71,8 +86,8 @@ function extractFallbackFaqs(pages: CrawledPage[]) {
       const question = questions[index];
       const nextQuestion = questions[index + 1];
       const answerStart = question.end;
-      const answerEnd = nextQuestion ? nextQuestion.start : Math.min(page.textExcerpt.length, answerStart + 420);
-      const answer = page.textExcerpt.slice(answerStart, answerEnd).trim();
+      const answerEnd = nextQuestion ? nextQuestion.start : Math.min(sanitizedExcerpt.length, answerStart + 420);
+      const answer = sanitizedExcerpt.slice(answerStart, answerEnd).trim();
 
       const candidate = normalizeFaqCandidate(
         {
@@ -101,7 +116,9 @@ function extractFallbackFaqs(pages: CrawledPage[]) {
         question: candidate.question,
         answer: candidate.answer,
         sourceUrl: candidate.sourceUrl,
-        include: true,
+        include: candidate.score >= 6,
+        confidence: Math.max(0, Math.min(1, candidate.score / 10)),
+        lowConfidence: candidate.score < 6,
       });
     }
 
@@ -400,7 +417,9 @@ function parseLlmDraft(input: {
           question: candidate.question,
           answer: candidate.answer,
           sourceUrl: candidate.sourceUrl,
-          include: true,
+          include: candidate.score >= 6,
+          confidence: Math.max(0, Math.min(1, candidate.score / 10)),
+          lowConfidence: candidate.score < 6,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))

@@ -89,7 +89,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const businessId = business.businessSlug ?? business.slug;
+  const businessSlug = (business.businessSlug ?? business.slug).trim();
   const locationSlug = activeLocationSlug?.trim() ?? "";
   const hasLocationScope = Boolean(locationSlug);
   const draftTheme = useMemo(() => toDraftTheme(theme, logoUrl), [logoUrl, theme]);
@@ -122,7 +122,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
   }, [draftTheme]);
 
   useEffect(() => {
-    if (!hasLocationScope || !businessId) {
+    if (!hasLocationScope || !businessSlug) {
       return;
     }
 
@@ -132,7 +132,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
     const loadTheme = async () => {
       setLoadingTheme(true);
       try {
-        const scopedUrl = `/api/widget-theme?businessId=${encodeURIComponent(businessId)}&locationSlug=${encodeURIComponent(locationSlug)}`;
+        const scopedUrl = `/api/widget-theme?businessSlug=${encodeURIComponent(businessSlug)}&locationSlug=${encodeURIComponent(locationSlug)}`;
         const scopedResponse = await fetch(scopedUrl, {
           method: "GET",
           signal: controller.signal,
@@ -151,6 +151,9 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
         setTheme(merged);
         setLogoUrl(merged.logoUrl ?? "");
         setPersistedTheme(merged);
+        updateBusiness(business.id, (draft) => {
+          draft.theme = merged;
+        });
       } catch {
         // no-op on load failure; keep local defaults
       } finally {
@@ -165,12 +168,12 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
       cancelled = true;
       controller.abort();
     };
-  }, [business.id, business.theme, businessId, hasLocationScope, locationSlug]);
+  }, [business.id, business.theme, businessSlug, hasLocationScope, locationSlug]);
 
   const handleThemeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!hasLocationScope || !businessId || savingTheme || loadingTheme) {
+    if (!hasLocationScope || !businessSlug || savingTheme || loadingTheme) {
       return;
     }
 
@@ -179,7 +182,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
     setSaveSuccess(null);
 
     try {
-      const response = await fetch(`/api/widget-theme?businessId=${encodeURIComponent(businessId)}&locationSlug=${encodeURIComponent(locationSlug)}`, {
+      const response = await fetch(`/api/widget-theme?businessSlug=${encodeURIComponent(businessSlug)}&locationSlug=${encodeURIComponent(locationSlug)}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",
@@ -200,7 +203,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
         draft.theme = draftTheme;
       });
       setPersistedTheme(draftTheme);
-      setSaveSuccess("Saved");
+      setSaveSuccess(`Saved ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save theme";
       setSaveError(message);

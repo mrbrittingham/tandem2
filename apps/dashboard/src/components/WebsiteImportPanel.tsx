@@ -160,6 +160,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   const [draft, setDraft] = useState<WebsiteImportDraft | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [hasPendingSave, setHasPendingSave] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -269,6 +271,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         setLastImportedUrl(latestUrl || null);
         setRun(payload.run ?? null);
         setDraft(payload.run?.result ?? null);
+        setHasPendingSave(false);
+        setLastSavedAt(payload.run?.appliedAt ?? null);
         if (payload.run?.id && (payload.run.status === "queued" || payload.run.status === "running")) {
           setActiveRunId(payload.run.id);
           setIsLoading(true);
@@ -398,8 +402,96 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     };
   }, [activeRunId]);
 
-  const applyImport = async () => {
-    if (!run?.id || !draft) {
+  useEffect(() => {
+    if (!hasPendingSave || typeof window === "undefined") {
+      return;
+    }
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [hasPendingSave]);
+
+  const stageImport = () => {
+    if (!draft) {
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+
+    updateBusiness(business.id, (record) => {
+      if (draft.businessProfile.name.value) {
+        record.businessName = draft.businessProfile.name.value;
+        record.name = draft.businessProfile.name.value;
+      }
+      if (draft.businessProfile.shortDescription.value) {
+        record.summary = draft.businessProfile.shortDescription.value;
+      }
+      if (draft.businessProfile.address.value) {
+        record.location = draft.businessProfile.address.value;
+      }
+
+      const theme = mergeThemeFromDraft(record.theme, draft);
+      record.theme = theme;
+
+      const importedFaqs = toFaqItems(draft);
+      if (importedFaqs.length > 0) {
+        record.faqs = importedFaqs;
+      }
+
+      const importedPolicies = toPolicyItems(draft);
+      if (importedPolicies.length > 0) {
+        record.policies = importedPolicies;
+      }
+
+      if (draft.businessProfile.phone.value) {
+        const existingPhone = record.contacts.find((entry) => entry.type === "phone");
+        if (existingPhone) {
+          existingPhone.value = draft.businessProfile.phone.value;
+          existingPhone.enabled = true;
+        } else {
+          record.contacts.unshift({
+            id: crypto.randomUUID(),
+            type: "phone",
+            label: "Phone",
+            value: draft.businessProfile.phone.value,
+            enabled: true,
+          });
+        }
+      }
+
+      if (draft.businessProfile.email.value) {
+        const existingEmail = record.contacts.find((entry) => entry.type === "email");
+        if (existingEmail) {
+          existingEmail.value = draft.businessProfile.email.value;
+          existingEmail.enabled = true;
+        } else {
+          record.contacts.push({
+            id: crypto.randomUUID(),
+            type: "email",
+            label: "Email",
+            value: draft.businessProfile.email.value,
+            enabled: true,
+          });
+        }
+      }
+
+      record.updatedAt = new Date().toISOString();
+    });
+
+    setHasPendingSave(true);
+    setSuccess("Import changes staged. Click Save changes to persist.");
+  };
+
+  const saveImport = async () => {
+    if (!run?.id || !draft || !hasPendingSave) {
       return;
     }
 
@@ -421,72 +513,15 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         throw new Error(getFriendlyImportError(payload.error, payload.code));
       }
 
-      updateBusiness(business.id, (record) => {
-        if (draft.businessProfile.name.value) {
-          record.businessName = draft.businessProfile.name.value;
-          record.name = draft.businessProfile.name.value;
-        }
-        if (draft.businessProfile.shortDescription.value) {
-          record.summary = draft.businessProfile.shortDescription.value;
-        }
-        if (draft.businessProfile.address.value) {
-          record.location = draft.businessProfile.address.value;
-        }
-
-        const theme = mergeThemeFromDraft(record.theme, draft);
-        record.theme = theme;
-
-        const importedFaqs = toFaqItems(draft);
-        if (importedFaqs.length > 0) {
-          record.faqs = importedFaqs;
-        }
-
-        const importedPolicies = toPolicyItems(draft);
-        if (importedPolicies.length > 0) {
-          record.policies = importedPolicies;
-        }
-
-        if (draft.businessProfile.phone.value) {
-          const existingPhone = record.contacts.find((entry) => entry.type === "phone");
-          if (existingPhone) {
-            existingPhone.value = draft.businessProfile.phone.value;
-            existingPhone.enabled = true;
-          } else {
-            record.contacts.unshift({
-              id: crypto.randomUUID(),
-              type: "phone",
-              label: "Phone",
-              value: draft.businessProfile.phone.value,
-              enabled: true,
-            });
-          }
-        }
-
-        if (draft.businessProfile.email.value) {
-          const existingEmail = record.contacts.find((entry) => entry.type === "email");
-          if (existingEmail) {
-            existingEmail.value = draft.businessProfile.email.value;
-            existingEmail.enabled = true;
-          } else {
-            record.contacts.push({
-              id: crypto.randomUUID(),
-              type: "email",
-              label: "Email",
-              value: draft.businessProfile.email.value,
-              enabled: true,
-            });
-          }
-        }
-
-        record.updatedAt = new Date().toISOString();
-      });
-
-      setSuccess("Import applied to knowledge and widget theme");
+      setHasPendingSave(false);
+      const nowIso = new Date().toISOString();
+      setLastSavedAt(nowIso);
+      setSuccess(`Saved ${new Date(nowIso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
       setRun((current) =>
         current
           ? {
               ...current,
-              appliedAt: new Date().toISOString(),
+              appliedAt: nowIso,
             }
           : current,
       );
@@ -499,9 +534,17 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   };
 
   const discardDraft = () => {
+    if (hasPendingSave && typeof window !== "undefined") {
+      const confirmed = window.confirm("Discard staged import changes? Unsaved changes will be lost.");
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setDraft(null);
     setSuccess(null);
     setError(null);
+    setHasPendingSave(false);
   };
 
   const profileRows = useMemo(() => {
@@ -534,7 +577,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         ) : null
       }
     >
-      <div className="space-y-5">
+      <div className="mx-auto w-full max-w-5xl space-y-5">
         <div className="grid gap-3 md:grid-cols-[minmax(0,26rem)_auto] md:items-end">
           <label className="block w-full text-sm">
             <span className="mb-1 block font-medium text-slate-700">Location</span>
@@ -560,7 +603,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           </a>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,36rem)_auto_auto] md:items-end">
           <TextInput
             label="Website URL"
             value={url}
@@ -603,7 +646,11 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {success ? <p className="text-sm text-emerald-600">{success}</p> : null}
-        {locationId ? <p className="text-xs text-slate-500">Location ID: {locationId}</p> : null}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          {locationId ? <p>Location ID: {locationId}</p> : null}
+          {lastSavedAt ? <p>Last saved {formatDate(lastSavedAt)}</p> : null}
+          {hasPendingSave ? <p className="font-medium text-amber-700">Unsaved staged changes</p> : null}
+        </div>
 
         {!reviewDraft ? (
           <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -673,6 +720,9 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
                           <a href={faq.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-slate-500 underline">
                             Source
                           </a>
+                        ) : null}
+                        {faq.lowConfidence ? (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Low confidence</span>
                         ) : null}
                       </div>
                       <TextInput
@@ -862,11 +912,18 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
               </button>
               <button
                 type="button"
-                onClick={applyImport}
-                disabled={isApplying}
+                onClick={stageImport}
+                className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+              >
+                Apply import to draft
+              </button>
+              <button
+                type="button"
+                onClick={saveImport}
+                disabled={isApplying || !hasPendingSave}
                 className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isApplying ? "Applying…" : "Apply import"}
+                {isApplying ? "Saving…" : "Save changes"}
               </button>
             </div>
           </div>

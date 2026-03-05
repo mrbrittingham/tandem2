@@ -10,6 +10,12 @@ import {
   useActiveLocation,
   useLocations,
 } from "@/lib/store-hooks";
+import {
+  composeLocationAddress,
+  inferTimezoneFromAddress,
+  parseLocationAddress,
+  validateLocationFields,
+} from "@/lib/location-utils";
 
 type LocationFormState = {
   locationName: string;
@@ -85,6 +91,9 @@ function regionOptions(country: string) {
 }
 
 function defaultRegion(country: string) {
+  if (country === "United States") {
+    return "";
+  }
   return regionOptions(country)[0] ?? "";
 }
 
@@ -115,45 +124,14 @@ function buildTimezoneOptions(...values: Array<string | undefined>) {
   return Array.from(merged.values()).sort((a, b) => a.localeCompare(b));
 }
 
-function parseAddress(value: string) {
-  const address = value.trim();
-  if (!address) {
-    return {
-      streetAddress: "",
-      city: "",
-      country: "United States",
-      state: "",
-      zip: "",
-    };
-  }
-
-  const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
-  const streetAddress = parts[0] ?? "";
-  const city = parts[1] ?? "";
-  const stateZip = parts[2] ?? "";
-  const country = parts[3] ?? "United States";
-  const stateZipParts = stateZip.split(/\s+/).filter(Boolean);
-  const state = stateZipParts[0] ?? "";
-  const zip = stateZipParts.slice(1).join(" ");
-
-  return {
-    streetAddress,
-    city,
-    country,
-    state,
-    zip,
-  };
-}
-
 function composeAddress(form: LocationFormState) {
-  const cityStateZip = [form.city.trim(), [form.state.trim(), form.zip.trim()].filter(Boolean).join(" ")]
-    .filter(Boolean)
-    .join(", ");
-
-  return [form.streetAddress.trim(), cityStateZip, form.country.trim()]
-    .filter(Boolean)
-    .join(", ")
-    .trim();
+  return composeLocationAddress({
+    streetAddress: form.streetAddress,
+    city: form.city,
+    state: form.state,
+    zip: form.zip,
+    country: form.country,
+  });
 }
 
 function readPhone(location?: BusinessProfile) {
@@ -211,7 +189,14 @@ function upsertPhone(location: BusinessProfile, phoneValue: string) {
 }
 
 function buildFormFromLocation(location?: BusinessProfile): LocationFormState {
-  const parsed = parseAddress(location?.location ?? "");
+  const parsed = parseLocationAddress(location?.location ?? "");
+  const inferredTimezone = inferTimezoneFromAddress({
+    country: parsed.country,
+    state: parsed.state,
+  });
+  const existingTimezone = (location?.timezone ?? "").trim();
+  const timezone = existingTimezone || inferredTimezone || "UTC";
+
   return {
     locationName: location?.locationName ?? "",
     streetAddress: parsed.streetAddress,
@@ -220,7 +205,7 @@ function buildFormFromLocation(location?: BusinessProfile): LocationFormState {
     state: parsed.state || defaultRegion(parsed.country || "United States"),
     zip: parsed.zip,
     phone: readPhone(location),
-    timezone: location?.timezone || "UTC",
+    timezone,
   };
 }
 
@@ -301,6 +286,10 @@ export default function LocationsPage() {
   const saveEdit = () => {
     const locationId = selectedLocation?.id;
     const composedAddress = composeAddress(editForm);
+    const inferredTimezone = inferTimezoneFromAddress({
+      country: editForm.country,
+      state: editForm.state,
+    });
 
     if (!locationId || !editForm.locationName.trim() || !composedAddress || !editForm.timezone.trim()) {
       return;
@@ -309,7 +298,7 @@ export default function LocationsPage() {
     updateBusiness(locationId, (draft) => {
       draft.locationName = editForm.locationName.trim();
       draft.location = composedAddress;
-      draft.timezone = editForm.timezone.trim() || "UTC";
+      draft.timezone = editForm.timezone.trim() || inferredTimezone || "UTC";
       upsertPhone(draft, editForm.phone);
     });
   };
@@ -323,7 +312,10 @@ export default function LocationsPage() {
   const handleAddLocation = () => {
     const locationName = createForm.locationName.trim();
     const address = composeAddress(createForm);
-    const timezone = createForm.timezone.trim();
+    const timezone = createForm.timezone.trim() || inferTimezoneFromAddress({
+      country: createForm.country,
+      state: createForm.state,
+    }) || "UTC";
     const phone = createForm.phone.trim();
 
     if (!locationName || !address || !timezone) {
@@ -395,6 +387,31 @@ export default function LocationsPage() {
     [activeLocation?.timezone, editForm.timezone, selectedLocation?.timezone],
   );
 
+  const createErrors = useMemo(
+    () => validateLocationFields({
+      streetAddress: createForm.streetAddress,
+      city: createForm.city,
+      state: createForm.state,
+      zip: createForm.zip,
+      country: createForm.country,
+    }),
+    [createForm],
+  );
+
+  const editErrors = useMemo(
+    () => validateLocationFields({
+      streetAddress: editForm.streetAddress,
+      city: editForm.city,
+      state: editForm.state,
+      zip: editForm.zip,
+      country: editForm.country,
+    }),
+    [editForm],
+  );
+
+  const hasCreateErrors = Object.keys(createErrors).length > 0;
+  const hasEditErrors = Object.keys(editErrors).length > 0;
+
   if (!locations.length) {
     return (
       <EmptyState
@@ -407,7 +424,7 @@ export default function LocationsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(300px,380px)_1fr]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3">
@@ -454,7 +471,7 @@ export default function LocationsPage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           {panelMode === "create" ? (
-            <div className="space-y-4">
+            <div className="mx-auto w-full max-w-3xl space-y-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Create location</h2>
                 <p className="mt-1 text-sm text-slate-600">Add a location with name, address, and timezone.</p>
@@ -487,6 +504,7 @@ export default function LocationsPage() {
                     placeholder="San Francisco"
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   />
+                  {createErrors.city ? <p className="mt-1 text-xs text-rose-600">{createErrors.city}</p> : null}
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Country</span>
@@ -514,10 +532,12 @@ export default function LocationsPage() {
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, state: event.target.value }))}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   >
+                    <option value="">Select state</option>
                     {regionOptions(createForm.country).map((region) => (
                       <option key={region} value={region}>{region}</option>
                     ))}
                   </select>
+                  {createErrors.state ? <p className="mt-1 text-xs text-rose-600">{createErrors.state}</p> : null}
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">ZIP code</span>
@@ -527,6 +547,7 @@ export default function LocationsPage() {
                     placeholder="94107"
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   />
+                  {createErrors.zip ? <p className="mt-1 text-xs text-rose-600">{createErrors.zip}</p> : null}
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Phone</span>
@@ -555,7 +576,7 @@ export default function LocationsPage() {
                 <button
                   type="button"
                   onClick={handleAddLocation}
-                  disabled={!canCreate}
+                  disabled={!canCreate || hasCreateErrors}
                   className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   Create
@@ -570,7 +591,7 @@ export default function LocationsPage() {
               </div>
             </div>
           ) : selectedLocation ? (
-            <div className="space-y-4">
+            <div className="mx-auto w-full max-w-3xl space-y-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Edit location</h2>
                 <p className="mt-1 text-sm text-slate-600">Update location details used throughout the console.</p>
@@ -600,6 +621,7 @@ export default function LocationsPage() {
                     onChange={(event) => setEditForm((prev) => ({ ...prev, city: event.target.value }))}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   />
+                  {editErrors.city ? <p className="mt-1 text-xs text-rose-600">{editErrors.city}</p> : null}
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Country</span>
@@ -627,10 +649,12 @@ export default function LocationsPage() {
                     onChange={(event) => setEditForm((prev) => ({ ...prev, state: event.target.value }))}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   >
+                    <option value="">Select state</option>
                     {regionOptions(editForm.country).map((region) => (
                       <option key={region} value={region}>{region}</option>
                     ))}
                   </select>
+                  {editErrors.state ? <p className="mt-1 text-xs text-rose-600">{editErrors.state}</p> : null}
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">ZIP code</span>
@@ -639,6 +663,7 @@ export default function LocationsPage() {
                     onChange={(event) => setEditForm((prev) => ({ ...prev, zip: event.target.value }))}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   />
+                  {editErrors.zip ? <p className="mt-1 text-xs text-rose-600">{editErrors.zip}</p> : null}
                 </label>
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Phone</span>
@@ -666,7 +691,7 @@ export default function LocationsPage() {
                 <button
                   type="button"
                   onClick={saveEdit}
-                  disabled={!canSaveEdit}
+                  disabled={!canSaveEdit || hasEditErrors}
                   className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   Save
