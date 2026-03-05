@@ -20,11 +20,10 @@ import type {
  type Listener = (snapshot: MockState) => void;
 
  const STORAGE_KEY = "tandem:mock-state";
+const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
 
  const listeners = new Set<Listener>();
  let state: MockState = initializeState();
-
-const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
 
  function initializeState(): MockState {
   if (typeof window !== "undefined") {
