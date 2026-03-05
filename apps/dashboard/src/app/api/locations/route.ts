@@ -5,6 +5,7 @@ import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import
 const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
 
 type CreateLocationBody = {
+  businessName?: string;
   name?: string;
   address?: string;
   mode?: "fresh" | "copy";
@@ -92,6 +93,35 @@ async function resolveSingleMembershipBusinessId(
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function slugify(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "business";
+}
+
+async function bootstrapMembershipForUser(args: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  preferredName: string;
+}): Promise<string | null> {
+  const base = slugify(args.preferredName);
+  const candidateId = `${base}-${args.userId.replace(/-/g, "").slice(0, 8)}`;
+
+  const { error } = await args.supabase.rpc("bootstrap_membership", {
+    business_id: candidateId,
+    role: "owner",
+  });
+
+  if (error) {
+    return null;
+  }
+
+  return candidateId;
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -177,6 +207,7 @@ export async function POST(request: Request) {
     }
 
     const name = (body.name ?? "").trim();
+    const businessName = (body.businessName ?? "").trim();
     const address = (body.address ?? "").trim() || null;
     const mode = body.mode ?? "fresh";
     const sourceLocationId = (body.sourceLocationId ?? "").trim() || null;
@@ -193,17 +224,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "sourceLocationId is required for copy mode" }, { status: 400 });
     }
 
-    const { data, error } = await supabase.rpc("create_business_location", {
+    const firstAttempt = await supabase.rpc("create_business_location", {
       p_name: name,
       p_address: address,
       p_copy_from_location_id: mode === "copy" ? sourceLocationId : null,
     });
 
-    if (error) {
-      return NextResponse.json({ error: error.message || "Failed to create location" }, { status: 500 });
+    if (firstAttempt.error) {
+      const message = firstAttempt.error.message || "Failed to create location";
+      const needsBootstrap = /no business membership found/i.test(message);
+
+      if (!needsBootstrap) {
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
+
+      const bootstrappedBusinessId = await bootstrapMembershipForUser({
+        supabase,
+        userId: user.id,
+        preferredName: businessName || name,
+      });
+
+      if (!bootstrappedBusinessId) {
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
+
+      const retry = await supabase.rpc("create_business_location", {
+        p_name: name,
+        p_address: address,
+        p_copy_from_location_id: mode === "copy" ? sourceLocationId : null,
+      });
+
+      if (retry.error) {
+        return NextResponse.json({ error: retry.error.message || "Failed to create location" }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        ok: true,
+        businessId: bootstrappedBusinessId,
+        location: retry.data?.[0] ?? null,
+      });
     }
 
-    return NextResponse.json({ ok: true, location: data?.[0] ?? null });
+    return NextResponse.json({ ok: true, location: firstAttempt.data?.[0] ?? null });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create location";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -341,7 +403,20 @@ export async function PATCH(request: Request) {
 
       const rows = candidates ?? [];
       if (!rows.length) {
-        return NextResponse.json({ error: "Location not found" }, { status: 404 });
+        const createFirst = await supabase.rpc("create_business_location", {
+          p_name: name,
+          p_address: address,
+          p_copy_from_location_id: null,
+        });
+
+        if (createFirst.error) {
+          return NextResponse.json({ error: createFirst.error.message || "Failed to create location" }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          ok: true,
+          location: createFirst.data?.[0] ?? null,
+        });
       }
 
       let target: LocationRow | undefined;
@@ -374,7 +449,37 @@ export async function PATCH(request: Request) {
         .maybeSingle<LocationRow>();
 
       if (retry.error) {
-        return NextResponse.json({ error: retry.error.message || "Failed to update location" }, { status: 500 });
+        const message = retry.error.message || "Failed to update location";
+        const needsBootstrap = /no business membership found/i.test(message);
+        if (!needsBootstrap) {
+          return NextResponse.json({ error: message }, { status: 500 });
+        }
+
+        const bootstrappedBusinessId = await bootstrapMembershipForUser({
+          supabase,
+          userId: user.id,
+          preferredName: name,
+        });
+
+        if (!bootstrappedBusinessId) {
+          return NextResponse.json({ error: message }, { status: 500 });
+        }
+
+        const createViaBootstrap = await supabase.rpc("create_business_location", {
+          p_name: name,
+          p_address: address,
+          p_copy_from_location_id: null,
+        });
+
+        if (createViaBootstrap.error) {
+          return NextResponse.json({ error: createViaBootstrap.error.message || "Failed to update location" }, { status: 500 });
+        }
+
+        return NextResponse.json({
+          ok: true,
+          businessId: bootstrappedBusinessId,
+          location: createViaBootstrap.data?.[0] ?? null,
+        });
       }
 
       if (!retry.data) {

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { refreshSupabaseSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_PATHS = new Set(["/login", "/api/health"]);
+const PUBLIC_PATHS = new Set(["/api/health"]);
 
 function isStaticAsset(pathname: string) {
   return (
@@ -26,10 +26,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { response, user } = await refreshSupabaseSession(request);
+  const { response, user, supabase } = await refreshSupabaseSession(request);
   const isApiRoute = pathname.startsWith("/api");
 
   if (!user) {
+    if (pathname === "/login") {
+      return response;
+    }
+
     if (isApiRoute) {
       return withResponseCookies(
         NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
@@ -43,7 +47,28 @@ export async function proxy(request: NextRequest) {
     return withResponseCookies(NextResponse.redirect(loginUrl), response);
   }
 
+  const membershipCheck = await supabase
+    .from("business_memberships")
+    .select("id", { head: true, count: "exact" })
+    .eq("user_id", user.id);
+
+  const hasMembership = !membershipCheck.error && (membershipCheck.count ?? 0) > 0;
+
+  if (!isApiRoute && !hasMembership && pathname !== "/onboarding") {
+    const onboardingUrl = request.nextUrl.clone();
+    onboardingUrl.pathname = "/onboarding";
+    onboardingUrl.search = "";
+    return withResponseCookies(NextResponse.redirect(onboardingUrl), response);
+  }
+
   if (pathname === "/login") {
+    const targetUrl = request.nextUrl.clone();
+    targetUrl.pathname = hasMembership ? "/overview" : "/onboarding";
+    targetUrl.search = "";
+    return withResponseCookies(NextResponse.redirect(targetUrl), response);
+  }
+
+  if (!isApiRoute && hasMembership && pathname === "/onboarding") {
     const targetUrl = request.nextUrl.clone();
     targetUrl.pathname = "/overview";
     targetUrl.search = "";
