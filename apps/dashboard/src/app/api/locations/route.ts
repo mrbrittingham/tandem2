@@ -345,10 +345,6 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (!canUseSlug) {
-      return NextResponse.json({ error: "Location not found" }, { status: 404 });
-    }
-
     let resolvedBusinessId: string;
     if (hasBusinessScope) {
       try {
@@ -377,13 +373,21 @@ export async function PATCH(request: Request) {
       resolvedBusinessId = fallback.businessId;
     }
 
-    const { data, error } = await supabase
-      .from("business_locations")
-      .update(updatePayload)
-      .eq("business_id", resolvedBusinessId)
-      .eq("slug", locationSlug)
-      .select("id,business_id,name,slug,address,created_at")
-      .maybeSingle<LocationRow>();
+    let data: LocationRow | null = null;
+    let error: { message?: string } | null = null;
+
+    if (canUseSlug) {
+      const updateBySlug = await supabase
+        .from("business_locations")
+        .update(updatePayload)
+        .eq("business_id", resolvedBusinessId)
+        .eq("slug", locationSlug)
+        .select("id,business_id,name,slug,address,created_at")
+        .maybeSingle<LocationRow>();
+
+      data = updateBySlug.data;
+      error = updateBySlug.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message || "Failed to update location" }, { status: 500 });
