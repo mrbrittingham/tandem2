@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.37",
+    "@supabase/supabase-js": "^2.98.0",
     "ai": "^6.0.105"
   },
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
     "./server": "./src/server/index.ts"
   },
   "license": "UNLICENSED"
