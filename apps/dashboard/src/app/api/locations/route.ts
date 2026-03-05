@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
+const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
+
 type CreateLocationBody = {
   name?: string;
   address?: string;
@@ -25,6 +27,30 @@ type LocationRow = {
   slug: string;
   address: string | null;
   created_at: string;
+};
+
+function isLegacyDemoLocation(row: LocationRow): boolean {
+  const slug = (row.slug ?? "").trim().toLowerCase();
+  const name = (row.name ?? "").trim().toLowerCase();
+  const address = (row.address ?? "").trim().toLowerCase();
+
+  if (slug === "valencia-st" || slug === "mission-bay") {
+    return true;
+  }
+
+  if (name === "valencia st" || name === "mission bay") {
+    return true;
+  }
+
+  if (address.includes("980 valencia st") || address.includes("500 terry francine st")) {
+    return true;
+  }
+
+  return false;
+}
+
+type MembershipRow = {
+  business_id: string;
 };
 
 const UUID_PATTERN =
@@ -71,8 +97,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message || "Failed to load locations" }, { status: 500 });
     }
 
+    const filtered = ENABLE_DEMO_DATA
+      ? (data ?? [])
+      : (data ?? []).filter((location) => !isLegacyDemoLocation(location));
+
     return NextResponse.json({
-      locations: (data ?? []).map((location) => ({
+      locations: filtered.map((location) => ({
         id: location.id,
         businessId: location.business_id,
         name: location.name,
@@ -175,13 +205,14 @@ export async function PATCH(request: Request) {
     }
 
     const canUseId = UUID_PATTERN.test(locationId);
-    const canUseSlug = Boolean(locationSlug && (businessIdParam || businessSlugParam));
+    const hasBusinessScope = Boolean(businessIdParam || businessSlugParam);
+    const canUseSlug = Boolean(locationSlug);
 
     if (!canUseId && !canUseSlug) {
       return NextResponse.json(
         {
           error:
-            "Provide a valid locationId UUID, or provide locationSlug with businessId/businessSlug",
+            "Provide a valid locationId UUID, or provide locationSlug",
         },
         { status: 400 },
       );
@@ -220,16 +251,43 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
 
-    const resolved = await resolveBusinessId({
-      supabase,
-      businessId: businessIdParam,
-      businessSlug: businessSlugParam,
-    });
+    let resolvedBusinessId: string;
+    if (hasBusinessScope) {
+      const resolved = await resolveBusinessId({
+        supabase,
+        businessId: businessIdParam,
+        businessSlug: businessSlugParam,
+      });
+      resolvedBusinessId = resolved.businessId;
+    } else {
+      const { data: memberships, error: membershipsError } = await supabase
+        .from("business_memberships")
+        .select("business_id")
+        .eq("user_id", user.id)
+        .returns<MembershipRow[]>();
+
+      if (membershipsError) {
+        return NextResponse.json(
+          { error: membershipsError.message || "Failed to resolve account business" },
+          { status: 500 },
+        );
+      }
+
+      const uniqueBusinessIds = Array.from(new Set((memberships ?? []).map((entry) => entry.business_id).filter(Boolean)));
+      if (uniqueBusinessIds.length !== 1) {
+        return NextResponse.json(
+          { error: "Business scope required when multiple businesses are available" },
+          { status: 400 },
+        );
+      }
+
+      resolvedBusinessId = uniqueBusinessIds[0];
+    }
 
     const { data, error } = await supabase
       .from("business_locations")
       .update(updatePayload)
-      .eq("business_id", resolved.businessId)
+      .eq("business_id", resolvedBusinessId)
       .eq("slug", locationSlug)
       .select("id,business_id,name,slug,address,created_at")
       .maybeSingle<LocationRow>();

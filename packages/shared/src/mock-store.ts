@@ -81,9 +81,20 @@ const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
 
 function isSeedDemoLocation(location: BusinessProfile): boolean {
   const slug = (location.businessSlug ?? location.slug ?? "").trim().toLowerCase();
+  const locationSlug = (location.locationSlug ?? "").trim().toLowerCase();
+  const locationName = (location.locationName ?? "").trim().toLowerCase();
   const name = (location.businessName ?? location.name ?? "").trim().toLowerCase();
+  const address = (location.location ?? "").trim().toLowerCase();
   const hasDemoContact = location.contacts.some((entry) => /cedarandsage\.com/i.test(entry.value));
-  return slug === "cedar-sage" || name === "cedar & sage" || hasDemoContact;
+  const isLegacyCedar = slug === "cedar-sage" || name === "cedar & sage" || hasDemoContact;
+  const isLegacyLocation = locationSlug === "valencia-st"
+    || locationSlug === "mission-bay"
+    || locationName === "valencia st"
+    || locationName === "mission bay"
+    || address.includes("980 valencia st")
+    || address.includes("500 terry francine st");
+
+  return isLegacyCedar || isLegacyLocation;
 }
 
 function removeSeedDemoLocations(locations: BusinessProfile[]): BusinessProfile[] {
