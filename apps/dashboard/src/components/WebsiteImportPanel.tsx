@@ -46,6 +46,20 @@ type ApplyResponse = {
   error?: string;
 };
 
+type LocationOption = {
+  id: string;
+  businessId: string;
+  name: string;
+  slug: string;
+  address?: string | null;
+  createdAt?: string;
+};
+
+type LocationsResponse = {
+  locations?: LocationOption[];
+  error?: string;
+};
+
 function getFriendlyImportError(error?: string, code?: string) {
   if (code === SCHEMA_OUT_OF_DATE_CODE) {
     return "Database schema not up to date. Run `npm run db:push`.";
@@ -134,9 +148,12 @@ function formatDate(value?: string | null): string {
 
 export function WebsiteImportPanel({ business }: { business: BusinessProfile }) {
   const businessSlug = (business.businessSlug ?? business.slug ?? "").trim();
-  const locationSlug = business.locationSlug ?? business.slug;
+  const initialLocationSlug = (business.locationSlug ?? business.slug ?? "").trim();
 
   const [locationId, setLocationId] = useState<string | null>(null);
+  const [locationOptions, setLocationOptions] = useState<LocationOption[]>([]);
+  const [selectedLocationSlug, setSelectedLocationSlug] = useState("");
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [url, setUrl] = useState("");
   const [run, setRun] = useState<WebsiteImportRunRecord | null>(null);
   const [draft, setDraft] = useState<WebsiteImportDraft | null>(null);
@@ -147,16 +164,87 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const reviewDraft = draft;
+  const selectedLocation = useMemo(
+    () => locationOptions.find((entry) => entry.slug === selectedLocationSlug),
+    [locationOptions, selectedLocationSlug],
+  );
+
+  const locationGuardError = useMemo(() => {
+    if (!businessSlug) {
+      return "Business slug missing. Select a valid business before importing.";
+    }
+    if (!locationOptions.length) {
+      return isLoadingLocations ? null : "No locations found for this business. Pick a location to continue.";
+    }
+    if (!selectedLocation) {
+      return "Selected location is invalid for this business. Pick a location to continue.";
+    }
+    return null;
+  }, [businessSlug, isLoadingLocations, locationOptions.length, selectedLocation]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLocations = async () => {
+      if (!businessSlug) {
+        setLocationOptions([]);
+        setSelectedLocationSlug("");
+        return;
+      }
+
+      setIsLoadingLocations(true);
+
+      try {
+        const params = new URLSearchParams();
+        params.set("businessSlug", businessSlug);
+
+        const response = await fetch(`/api/locations?${params.toString()}`, { method: "GET" });
+        const payload = (await response.json().catch(() => ({}))) as LocationsResponse;
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to load locations");
+        }
+
+        const options = payload.locations ?? [];
+        setLocationOptions(options);
+        const preferred = options.find((entry) => entry.slug === initialLocationSlug) ?? options[0];
+        setSelectedLocationSlug(preferred?.slug ?? "");
+      } catch {
+        if (!cancelled) {
+          setLocationOptions([]);
+          setSelectedLocationSlug("");
+          setError("Failed to load locations for website import");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingLocations(false);
+        }
+      }
+    };
+
+    void loadLocations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessSlug, initialLocationSlug]);
 
   useEffect(() => {
     let cancelled = false;
     const loadLatest = async () => {
+      if (locationGuardError || !selectedLocationSlug) {
+        return;
+      }
+
       try {
         const params = new URLSearchParams();
         if (businessSlug) {
           params.set("businessSlug", businessSlug);
         }
-        params.set("locationSlug", locationSlug);
+        params.set("locationSlug", selectedLocationSlug);
 
         const response = await fetch(
           `/api/website-import/latest?${params.toString()}`,
@@ -193,12 +281,17 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [businessSlug, locationSlug]);
+  }, [businessSlug, locationGuardError, selectedLocationSlug]);
 
   const runImport = async (nextUrl?: string) => {
     const targetUrl = (nextUrl ?? url).trim();
     if (!targetUrl) {
       setError("Website URL is required");
+      return;
+    }
+
+    if (locationGuardError || !selectedLocationSlug) {
+      setError(locationGuardError ?? "Pick a valid location before running import");
       return;
     }
 
@@ -215,7 +308,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         },
         body: JSON.stringify({
           businessSlug,
-          locationSlug,
+          locationSlug: selectedLocationSlug,
           url: targetUrl,
         }),
       });
@@ -439,6 +532,31 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
       }
     >
       <div className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Location</span>
+            <select
+              value={selectedLocationSlug}
+              onChange={(event) => setSelectedLocationSlug(event.target.value)}
+              disabled={isLoadingLocations || locationOptions.length === 0}
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900 focus:border-[var(--console-primary)] focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+            >
+              {locationOptions.length === 0 ? <option value="">No locations available</option> : null}
+              {locationOptions.map((location) => (
+                <option key={location.id} value={location.slug}>
+                  {location.name} ({location.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+          <a
+            href="/locations"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+          >
+            Pick a location
+          </a>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
           <TextInput
             label="Website URL"
@@ -449,7 +567,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           <button
             type="button"
             onClick={() => runImport()}
-            disabled={isLoading}
+            disabled={isLoading || Boolean(locationGuardError)}
             className="rounded-2xl bg-[var(--console-primary)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? "Running…" : "Run import"}
@@ -457,12 +575,16 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           <button
             type="button"
             onClick={refreshImport}
-            disabled={isLoading || !url.trim()}
+            disabled={isLoading || !url.trim() || Boolean(locationGuardError)}
             className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Refresh import
           </button>
         </div>
+
+        {locationGuardError ? (
+          <p className="text-sm text-amber-700">{locationGuardError}</p>
+        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {success ? <p className="text-sm text-emerald-600">{success}</p> : null}
