@@ -310,7 +310,6 @@ export default function LocationsPage() {
   const saveEdit = async () => {
     const locationId = selectedLocation?.id;
     const locationSlug = (selectedLocation?.locationSlug ?? selectedLocation?.slug ?? "").trim();
-    const businessSlug = (selectedLocation?.businessSlug ?? "").trim();
     const hasAddressInput = [
       editForm.streetAddress,
       editForm.city,
@@ -346,7 +345,6 @@ export default function LocationsPage() {
         body: JSON.stringify({
           locationId,
           locationSlug: locationSlug || undefined,
-          businessSlug: businessSlug || undefined,
           name: editForm.locationName.trim(),
           address: composedAddress || undefined,
         }),

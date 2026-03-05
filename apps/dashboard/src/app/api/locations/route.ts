@@ -53,6 +53,38 @@ type MembershipRow = {
   business_id: string;
 };
 
+async function resolveSingleMembershipBusinessId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+): Promise<{ businessId: string } | { error: NextResponse }> {
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("business_memberships")
+    .select("business_id")
+    .eq("user_id", userId)
+    .returns<MembershipRow[]>();
+
+  if (membershipsError) {
+    return {
+      error: NextResponse.json(
+        { error: membershipsError.message || "Failed to resolve account business" },
+        { status: 500 },
+      ),
+    };
+  }
+
+  const uniqueBusinessIds = Array.from(new Set((memberships ?? []).map((entry) => entry.business_id).filter(Boolean)));
+  if (uniqueBusinessIds.length !== 1) {
+    return {
+      error: NextResponse.json(
+        { error: "Business scope required when multiple businesses are available" },
+        { status: 400 },
+      ),
+    };
+  }
+
+  return { businessId: uniqueBusinessIds[0] };
+}
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -253,35 +285,30 @@ export async function PATCH(request: Request) {
 
     let resolvedBusinessId: string;
     if (hasBusinessScope) {
-      const resolved = await resolveBusinessId({
-        supabase,
-        businessId: businessIdParam,
-        businessSlug: businessSlugParam,
-      });
-      resolvedBusinessId = resolved.businessId;
+      try {
+        const resolved = await resolveBusinessId({
+          supabase,
+          businessId: businessIdParam,
+          businessSlug: businessSlugParam,
+        });
+        resolvedBusinessId = resolved.businessId;
+      } catch (error) {
+        if (error instanceof BusinessResolutionError) {
+          const fallback = await resolveSingleMembershipBusinessId(supabase, user.id);
+          if ("error" in fallback) {
+            return fallback.error;
+          }
+          resolvedBusinessId = fallback.businessId;
+        } else {
+          throw error;
+        }
+      }
     } else {
-      const { data: memberships, error: membershipsError } = await supabase
-        .from("business_memberships")
-        .select("business_id")
-        .eq("user_id", user.id)
-        .returns<MembershipRow[]>();
-
-      if (membershipsError) {
-        return NextResponse.json(
-          { error: membershipsError.message || "Failed to resolve account business" },
-          { status: 500 },
-        );
+      const fallback = await resolveSingleMembershipBusinessId(supabase, user.id);
+      if ("error" in fallback) {
+        return fallback.error;
       }
-
-      const uniqueBusinessIds = Array.from(new Set((memberships ?? []).map((entry) => entry.business_id).filter(Boolean)));
-      if (uniqueBusinessIds.length !== 1) {
-        return NextResponse.json(
-          { error: "Business scope required when multiple businesses are available" },
-          { status: 400 },
-        );
-      }
-
-      resolvedBusinessId = uniqueBusinessIds[0];
+      resolvedBusinessId = fallback.businessId;
     }
 
     const { data, error } = await supabase
