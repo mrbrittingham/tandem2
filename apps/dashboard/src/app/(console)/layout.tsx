@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ChatWidget, resolveWidgetRuntimeConfig } from "@tandem/ui-kit";
 import type { WidgetThemeSettings } from "@tandem/shared";
 import { ConsoleDialogProvider } from "@/components/ConsoleDialogContext";
@@ -11,7 +11,14 @@ import { LocationSwitcher } from "@/components/LocationSwitcher";
 import { PreviewDockProvider } from "@/components/PreviewDockContext";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveChatScope } from "@/lib/chat-scope";
-import { businessToWidgetConfig, useActiveLocation } from "@/lib/store-hooks";
+import {
+  businessToWidgetConfig,
+  createLocation,
+  selectActiveLocation,
+  updateBusiness,
+  useActiveLocation,
+  useLocations,
+} from "@/lib/store-hooks";
 import { widgetThemeToChatTheme } from "@/lib/widget-theme";
 
 const navItems = [
@@ -80,6 +87,8 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeBusiness = useActiveLocation();
+  const locations = useLocations();
+  const hydratedLocationsRef = useRef(false);
   const [createLocationOpen, setCreateLocationOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -102,6 +111,70 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
     }
     setHeaderSearch(searchParams.get("query") ?? "");
   }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (!isClientMounted || hydratedLocationsRef.current || locations.length > 0) {
+      return;
+    }
+
+    hydratedLocationsRef.current = true;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/locations", { method: "GET" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          locations?: Array<{
+            id?: string;
+            businessId?: string;
+            name?: string;
+            slug?: string;
+            address?: string | null;
+          }>;
+        };
+
+        const serverLocations = (payload.locations ?? [])
+          .map((entry) => ({
+            id: (entry.id ?? "").trim(),
+            businessId: (entry.businessId ?? "").trim(),
+            name: (entry.name ?? "").trim(),
+            slug: (entry.slug ?? "").trim(),
+            address: (entry.address ?? "").trim(),
+          }))
+          .filter((entry) => entry.id && entry.name);
+
+        if (!serverLocations.length) {
+          return;
+        }
+
+        serverLocations.forEach((serverLocation) => {
+          const created = createLocation({
+            name: serverLocation.name,
+            address: serverLocation.address,
+            mode: "fresh",
+          });
+
+          updateBusiness(created.id, (draft) => {
+            draft.id = serverLocation.id;
+            draft.locationName = serverLocation.name;
+            draft.location = serverLocation.address;
+            draft.locationSlug = serverLocation.slug || draft.locationSlug;
+            draft.slug = serverLocation.slug || draft.slug;
+            if (serverLocation.businessId) {
+              draft.businessSlug = serverLocation.businessId;
+            }
+          });
+        });
+
+        selectActiveLocation(serverLocations[0].id);
+      } catch {
+        // no-op; dashboard can continue with local state
+      }
+    })();
+  }, [isClientMounted, locations.length]);
 
   useEffect(() => {
     if (typeof window === "undefined" || pathname !== "/overview") {
