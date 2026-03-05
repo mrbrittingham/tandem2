@@ -9,6 +9,15 @@ type CreateLocationBody = {
   sourceLocationId?: string;
 };
 
+type PatchLocationBody = {
+  locationId?: string;
+  locationSlug?: string;
+  businessId?: string;
+  businessSlug?: string;
+  name?: string;
+  address?: string;
+};
+
 type LocationRow = {
   id: string;
   business_id: string;
@@ -17,6 +26,9 @@ type LocationRow = {
   address: string | null;
   created_at: string;
 };
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
   try {
@@ -128,6 +140,126 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, location: data?.[0] ?? null });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create location";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let body: PatchLocationBody;
+    try {
+      body = (await request.json()) as PatchLocationBody;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const locationId = (body.locationId ?? "").trim();
+    const locationSlug = (body.locationSlug ?? "").trim();
+    const businessIdParam = (body.businessId ?? "").trim();
+    const businessSlugParam = (body.businessSlug ?? "").trim();
+    const name = (body.name ?? "").trim();
+    const address = (body.address ?? "").trim() || null;
+
+    if (!name) {
+      return NextResponse.json({ error: "name is required" }, { status: 400 });
+    }
+
+    const canUseId = UUID_PATTERN.test(locationId);
+    const canUseSlug = Boolean(locationSlug && (businessIdParam || businessSlugParam));
+
+    if (!canUseId && !canUseSlug) {
+      return NextResponse.json(
+        {
+          error:
+            "Provide a valid locationId UUID, or provide locationSlug with businessId/businessSlug",
+        },
+        { status: 400 },
+      );
+    }
+
+    const updatePayload = {
+      name,
+      address,
+    };
+
+    if (canUseId) {
+      const { data, error } = await supabase
+        .from("business_locations")
+        .update(updatePayload)
+        .eq("id", locationId)
+        .select("id,business_id,name,slug,address,created_at")
+        .maybeSingle<LocationRow>();
+
+      if (!error && data) {
+        return NextResponse.json({
+          ok: true,
+          location: {
+            id: data.id,
+            businessId: data.business_id,
+            business_id: data.business_id,
+            name: data.name,
+            slug: data.slug,
+            address: data.address,
+            createdAt: data.created_at,
+          },
+        });
+      }
+    }
+
+    if (!canUseSlug) {
+      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    }
+
+    const resolved = await resolveBusinessId({
+      supabase,
+      businessId: businessIdParam,
+      businessSlug: businessSlugParam,
+    });
+
+    const { data, error } = await supabase
+      .from("business_locations")
+      .update(updatePayload)
+      .eq("business_id", resolved.businessId)
+      .eq("slug", locationSlug)
+      .select("id,business_id,name,slug,address,created_at")
+      .maybeSingle<LocationRow>();
+
+    if (error) {
+      return NextResponse.json({ error: error.message || "Failed to update location" }, { status: 500 });
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      location: {
+        id: data.id,
+        businessId: data.business_id,
+        business_id: data.business_id,
+        name: data.name,
+        slug: data.slug,
+        address: data.address,
+        createdAt: data.created_at,
+      },
+    });
+  } catch (error) {
+    if (error instanceof BusinessResolutionError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+
+    const message = error instanceof Error ? error.message : "Failed to update location";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -262,6 +262,10 @@ export default function LocationsPage() {
   const locations = useLocations();
   const activeLocation = useActiveLocation();
   const [panelMode, setPanelMode] = useState<"edit" | "create">("edit");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isCreatingLocation, setIsCreatingLocation] = useState(false);
+  const [editStatus, setEditStatus] = useState<string | null>(null);
+  const [createStatus, setCreateStatus] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<LocationFormState>(() => ({
     ...emptyForm,
     phone: readPhone(activeLocation),
@@ -303,8 +307,10 @@ export default function LocationsPage() {
     syncEditForm(locationId);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     const locationId = selectedLocation?.id;
+    const locationSlug = (selectedLocation?.locationSlug ?? selectedLocation?.slug ?? "").trim();
+    const businessSlug = (selectedLocation?.businessSlug ?? "").trim();
     const composedAddress = composeAddress(editForm);
     const inferredTimezone = inferTimezoneFromAddress({
       country: editForm.country,
@@ -315,12 +321,65 @@ export default function LocationsPage() {
       return;
     }
 
+    setEditStatus(null);
+    setIsSavingEdit(true);
+
     updateBusiness(locationId, (draft) => {
       draft.locationName = editForm.locationName.trim();
       draft.location = composedAddress;
       draft.timezone = editForm.timezone.trim() || inferredTimezone || "UTC";
       upsertPhone(draft, editForm.phone);
     });
+
+    try {
+      const response = await fetch("/api/locations", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          locationId,
+          locationSlug: locationSlug || undefined,
+          businessSlug: businessSlug || undefined,
+          name: editForm.locationName.trim(),
+          address: composedAddress,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        setEditStatus(payload.error ? `Saved locally only: ${payload.error}` : "Saved locally only.");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        location?: { id?: string; slug?: string; name?: string; address?: string | null };
+      };
+      const persistedId = (payload.location?.id ?? "").trim();
+      const persistedSlug = (payload.location?.slug ?? "").trim();
+
+      if (persistedId && persistedId !== locationId) {
+        updateBusiness(locationId, (draft) => {
+          draft.id = persistedId;
+          if (persistedSlug) {
+            draft.locationSlug = persistedSlug;
+            draft.slug = persistedSlug;
+          }
+        });
+        selectActiveLocation(persistedId);
+      } else if (persistedSlug) {
+        updateBusiness(locationId, (draft) => {
+          draft.locationSlug = persistedSlug;
+          draft.slug = persistedSlug;
+        });
+      }
+
+      setEditStatus("Location saved.");
+    } catch {
+      setEditStatus("Saved locally only.");
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const cancelEdit = () => {
@@ -329,7 +388,7 @@ export default function LocationsPage() {
     }
   };
 
-  const handleAddLocation = () => {
+  const handleAddLocation = async () => {
     const locationName = createForm.locationName.trim();
     const address = composeAddress(createForm);
     const timezone = createForm.timezone.trim() || inferTimezoneFromAddress({
@@ -341,6 +400,9 @@ export default function LocationsPage() {
     if (!locationName || !address || !timezone) {
       return;
     }
+
+    setCreateStatus(null);
+    setIsCreatingLocation(true);
 
     const created = createLocation({
       name: locationName,
@@ -367,6 +429,54 @@ export default function LocationsPage() {
       phone,
       timezone,
     });
+
+    try {
+      const response = await fetch("/api/locations", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: locationName,
+          address,
+          mode: "fresh",
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        setCreateStatus(payload.error ? `Created locally only: ${payload.error}` : "Created locally only.");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        location?: { id?: string; slug?: string; name?: string; address?: string | null };
+      };
+      const persistedId = (payload.location?.id ?? "").trim();
+      const persistedSlug = (payload.location?.slug ?? "").trim();
+
+      if (persistedId) {
+        updateBusiness(created.id, (draft) => {
+          draft.id = persistedId;
+          if (persistedSlug) {
+            draft.locationSlug = persistedSlug;
+            draft.slug = persistedSlug;
+          }
+        });
+        selectActiveLocation(persistedId);
+      } else if (persistedSlug) {
+        updateBusiness(created.id, (draft) => {
+          draft.locationSlug = persistedSlug;
+          draft.slug = persistedSlug;
+        });
+      }
+
+      setCreateStatus("Location created.");
+    } catch {
+      setCreateStatus("Created locally only.");
+    } finally {
+      setIsCreatingLocation(false);
+    }
   };
 
   const openCreateMode = () => {
@@ -596,10 +706,10 @@ export default function LocationsPage() {
                 <button
                   type="button"
                   onClick={handleAddLocation}
-                  disabled={!canCreate || hasCreateErrors}
+                  disabled={!canCreate || hasCreateErrors || isCreatingLocation}
                   className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  Create
+                  {isCreatingLocation ? "Creating…" : "Create"}
                 </button>
                 <button
                   type="button"
@@ -609,6 +719,7 @@ export default function LocationsPage() {
                   Cancel
                 </button>
               </div>
+              {createStatus ? <p className="text-xs text-slate-600">{createStatus}</p> : null}
             </div>
           ) : selectedLocation ? (
             <div className="mx-auto w-full max-w-3xl space-y-4">
@@ -712,10 +823,10 @@ export default function LocationsPage() {
                 <button
                   type="button"
                   onClick={saveEdit}
-                  disabled={!canSaveEdit || hasEditErrors}
+                  disabled={!canSaveEdit || hasEditErrors || isSavingEdit}
                   className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  Save
+                  {isSavingEdit ? "Saving…" : "Save"}
                 </button>
                 <button
                   type="button"
@@ -725,6 +836,7 @@ export default function LocationsPage() {
                   Cancel
                 </button>
               </div>
+              {editStatus ? <p className="text-xs text-slate-600">{editStatus}</p> : null}
             </div>
           ) : (
             <p className="text-sm text-slate-600">Select a location to edit details.</p>
