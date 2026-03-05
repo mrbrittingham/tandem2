@@ -14,6 +14,11 @@
     "build": "npm --workspace apps/dashboard run build",
     "clean": "node ./scripts/clean.mjs",
     "guard:migrations": "node ./scripts/guard-migrations.mjs",
+    "db:link": "node --env-file=.env.local ./scripts/supabase-link.mjs",
+    "db:push": "node --env-file=.env.local ./scripts/supabase-push.mjs",
+    "db:reset": "npx --yes supabase db reset",
+    "db:status": "node --env-file=.env.local ./scripts/supabase-status.mjs",
+    "worker:imports": "node --env-file=.env.local --import tsx ./scripts/worker/website-import-worker.ts",
     "verify:api": "bash ./scripts/verify-api.sh",
     "smoke:chat": "node ./scripts/smoke-chat.mjs",
     "smoke:chat:dev": "node ./scripts/smoke-chat-dev.mjs"
@@ -22,6 +27,7 @@
     "@ai-sdk/openai": "^3.0.37",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",
-    "ai": "^6.0.105"
+    "ai": "^6.0.105",
+    "tsx": "^4.20.5"
   }
 }

@@ -139,6 +139,7 @@ export type ChatWidgetProps = {
   businessId?: string;
   locationSlug?: string;
   apiBaseUrl?: string;
+  hydrateHistory?: boolean;
 };
 
 const defaultTheme: ThemeTokens = {
@@ -183,7 +184,7 @@ const defaultTheme: ThemeTokens = {
   buttonRadius: "12px",
   inputRadius: "12px",
   launcherRadius: "28px",
-  userBubbleBg: "#1A1A1A",
+  userBubbleBg: "var(--widget-primary)",
   userBubbleText: "#FFFFFF",
   assistantBubbleBg: "#F5F5F5",
   assistantBubbleText: "#1A1A1A",
@@ -368,7 +369,7 @@ const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-radius-button": tokens.buttonRadius,
   "--tandem-radius-input": tokens.inputRadius,
   "--tandem-radius-launcher": tokens.launcherRadius,
-  "--tandem-user-bg": tokens.userBubbleBg,
+  "--tandem-user-bg": tokens.sendButtonColor,
   "--tandem-user-text": tokens.userBubbleText,
   "--tandem-assistant-bg": tokens.assistantBubbleBg,
   "--tandem-assistant-text": tokens.assistantBubbleText,
@@ -406,6 +407,7 @@ export function ChatWidget({
   businessId,
   locationSlug,
   apiBaseUrl,
+  hydrateHistory = true,
 }: ChatWidgetProps) {
   const mergedTheme = useMemo(
     () => ({ ...defaultTheme, ...theme, brandName: config?.businessName ?? defaultTheme.brandName }),
@@ -474,6 +476,12 @@ export function ChatWidget({
   }, [initialMessages, runtimeConfig.businessId, runtimeConfig.locationSlug]);
 
   useEffect(() => {
+    if (!hydrateHistory) {
+      setIsHydratingHistory(false);
+      setHistoryLoaded(true);
+      return;
+    }
+
     if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
       setIsHydratingHistory(false);
       setHistoryLoaded(true);
@@ -563,7 +571,7 @@ export function ChatWidget({
       cancelled = true;
       controller.abort();
     };
-  }, [chatApiUrl, historyLoaded, runtimeConfig.businessId, runtimeConfig.isValid, runtimeConfig.locationSlug]);
+  }, [chatApiUrl, historyLoaded, hydrateHistory, runtimeConfig.businessId, runtimeConfig.isValid, runtimeConfig.locationSlug]);
 
   const closePanel = useCallback(() => {
     setIsOpen(false);

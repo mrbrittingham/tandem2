@@ -352,6 +352,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                   businessId={previewRuntimeConfig.businessId}
                   locationSlug={previewRuntimeConfig.locationSlug}
                   apiBaseUrl={previewRuntimeConfig.apiBaseUrl}
+                  hydrateHistory={false}
                   initiallyOpen={isPreviewOpen}
                   showLauncher={false}
                   onClose={() => setPreviewOpen(false)}

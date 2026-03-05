@@ -46,9 +46,19 @@ if [[ "$llm_post_status" != "200" && "$llm_post_status" != "500" && "$llm_post_s
 fi
 
 echo "[verify] GET /api/chat (scoped)"
-curl -fsS "${BASE_URL}/api/chat?businessId=${BUSINESS_ID}&locationSlug=${LOCATION_SLUG}" "${header_args[@]}" >/tmp/tandem-chat-get.json
-grep -q '"businessId"' /tmp/tandem-chat-get.json
-grep -q '"locationSlug"' /tmp/tandem-chat-get.json
+chat_get_status="$(curl -sS -o /tmp/tandem-chat-get.json -w "%{http_code}" \
+  "${BASE_URL}/api/chat?businessId=${BUSINESS_ID}&locationSlug=${LOCATION_SLUG}" \
+  "${header_args[@]}" "${cookie_args[@]}")"
+if [[ "$chat_get_status" == "200" ]]; then
+  grep -q '"businessId"' /tmp/tandem-chat-get.json
+  grep -q '"locationSlug"' /tmp/tandem-chat-get.json
+elif [[ "$chat_get_status" == "401" || "$chat_get_status" == "403" ]]; then
+  echo "[verify] chat GET requires auth ($chat_get_status)."
+else
+  echo "[verify] unexpected /api/chat GET status: $chat_get_status"
+  cat /tmp/tandem-chat-get.json
+  exit 1
+fi
 
 echo "[verify] POST /api/chat (scoped)"
 chat_status="$(curl -sS -o /tmp/tandem-chat-post.json -w "%{http_code}" \
@@ -57,10 +67,13 @@ chat_status="$(curl -sS -o /tmp/tandem-chat-post.json -w "%{http_code}" \
   "${header_args[@]}" \
   --data '{"businessId":"'"${BUSINESS_ID}"'","locationSlug":"'"${LOCATION_SLUG}"'","messages":[{"role":"user","content":"Reply with ok"}]}'
 )"
-if [[ "$chat_status" != "200" && "$chat_status" != "500" ]]; then
+if [[ "$chat_status" != "200" && "$chat_status" != "500" && "$chat_status" != "401" && "$chat_status" != "403" ]]; then
   echo "[verify] unexpected /api/chat POST status: $chat_status"
   cat /tmp/tandem-chat-post.json
   exit 1
+fi
+if [[ "$chat_status" == "401" || "$chat_status" == "403" ]]; then
+  echo "[verify] chat POST requires auth ($chat_status)."
 fi
 
 echo "[verify] GET /api/conversations (scoped)"

@@ -376,7 +376,7 @@
 
 .userBubble {
 	align-self: flex-end;
-	background: var(--tandem-user-bg, #1a1a1a);
+	background: var(--tandem-user-bg, var(--tandem-send-bg, var(--tandem-primary, #2563eb)));
 	color: var(--tandem-user-text, #ffffff);
 }
 

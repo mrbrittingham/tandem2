@@ -9,6 +9,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
 import { SaveBar } from "@/components/SaveBar";
+import { WebsiteImportPanel } from "@/components/WebsiteImportPanel";
 
 const defaultFaq: Pick<FAQItem, "question" | "answer" | "category" | "showInHelp"> = {
   question: "",
@@ -198,6 +199,8 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
 
   return (
     <div className="space-y-8">
+      <WebsiteImportPanel business={business} />
+
       <div className="grid gap-6 lg:grid-cols-2">
         <SectionCard
           title="FAQs"
