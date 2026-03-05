@@ -77,7 +77,7 @@ export async function GET(request: Request) {
         resolvedBusinessId: resolved.businessId,
         locationSlug,
       });
-      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+      return NextResponse.json({ error: "Invalid locationSlug for this business. Pick a valid location.", code: "INVALID_LOCATION_SLUG" }, { status: 400 });
     }
 
     console.info("[website-import/latest] location found", {
