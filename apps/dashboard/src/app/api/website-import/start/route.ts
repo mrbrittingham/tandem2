@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toApiError } from "@/lib/website-import/api-errors";
+import { BusinessResolutionError, isUuid, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
 type Body = {
   businessId?: string;
+  businessSlug?: string;
   locationSlug?: string;
   url?: string;
 };
@@ -31,12 +33,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const businessId = (body.businessId ?? "").trim();
+    const businessIdParam = (body.businessId ?? "").trim();
+    const businessSlugParam = (body.businessSlug ?? "").trim();
     const locationSlug = (body.locationSlug ?? "").trim();
     const url = (body.url ?? "").trim();
 
-    if (!businessId) {
-      return NextResponse.json({ error: "businessId required" }, { status: 400 });
+    if (!businessIdParam && !businessSlugParam) {
+      return NextResponse.json({ error: "businessSlug or businessId required" }, { status: 400 });
     }
     if (!locationSlug) {
       return NextResponse.json({ error: "locationSlug required" }, { status: 400 });
@@ -45,10 +48,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "url required" }, { status: 400 });
     }
 
+    console.info("[website-import/start] request", {
+      businessIdParam: businessIdParam || null,
+      businessSlugParam: businessSlugParam || null,
+      locationSlug,
+    });
+
+    const resolved = await resolveBusinessId({
+      supabase,
+      businessId: businessIdParam,
+      businessSlug: businessSlugParam,
+    });
+
+    console.info("[website-import/start] business resolved", {
+      resolvedBusinessId: resolved.businessId,
+      resolvedBusinessSlug: resolved.businessSlug,
+      inputMode: resolved.inputMode,
+    });
+
+    if (!isUuid(resolved.businessId)) {
+      throw new BusinessResolutionError("Resolved business id is invalid", 500, "INVALID_RESOLVED_BUSINESS_ID");
+    }
+
     const { data: memberships, error: membershipError } = await supabase
       .from("business_memberships")
       .select("id")
-      .eq("business_id", businessId)
+      .eq("business_id", resolved.businessId)
       .eq("user_id", user.id)
       .limit(1)
       .returns<Array<{ id: string }>>();
@@ -65,7 +90,7 @@ export async function POST(request: Request) {
     const { data: locations, error: locationError } = await supabase
       .from("business_locations")
       .select("id")
-      .eq("business_id", businessId)
+      .eq("business_id", resolved.businessId)
       .eq("slug", locationSlug)
       .limit(1)
       .returns<LocationRow[]>();
@@ -77,8 +102,14 @@ export async function POST(request: Request) {
 
     const locationId = locations?.[0]?.id;
     if (!locationId) {
+      console.warn("[website-import/start] location not found", {
+        resolvedBusinessId: resolved.businessId,
+        locationSlug,
+      });
       return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
+
+    console.info("[website-import/start] location found", { locationId, locationSlug });
 
     const importResponse = await fetch(new URL(`/api/location/${encodeURIComponent(locationId)}/website-import`, request.url), {
       method: "POST",
@@ -90,8 +121,15 @@ export async function POST(request: Request) {
     });
 
     const payload = await importResponse.json().catch(() => ({ error: "Import failed" }));
+    if (importResponse.ok) {
+      console.info("[website-import/start] import queued", { locationId, runId: payload.runId ?? null });
+    }
     return NextResponse.json(payload, { status: importResponse.status });
   } catch (error) {
+    if (error instanceof BusinessResolutionError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+
     const apiError = toApiError(error, "Failed to start import");
     return NextResponse.json({ error: apiError.message, code: apiError.code }, { status: apiError.status });
   }
