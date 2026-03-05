@@ -73,7 +73,9 @@ export async function POST(request: Request) {
       });
     }
 
-    assertDashboardEnv({ requireLLM: true });
+    // Keep baseline env checks, but allow chat handler to degrade gracefully
+    // when LLM credentials are absent.
+    assertDashboardEnv();
 
     const body = await request.clone().json().catch(() => null) as { businessId?: unknown; locationSlug?: unknown } | null;
     if (!body || !hasValidScope(body.businessId)) {
