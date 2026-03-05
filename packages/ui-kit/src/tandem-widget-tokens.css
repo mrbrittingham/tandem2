@@ -1,0 +1,95 @@
+/* ===== TANDEM WIDGET V2 - COMPLETE TOKEN SYSTEM ===== */
+/* Developer Handoff Specification */
+/* Aligned with Console Design System */
+
+:root {
+  --widget-primary: #3170FC;
+  --widget-primary-hover: #285ED3;
+  --widget-primary-pressed: #1F4CAB;
+  --widget-primary-light: #E9F0FF;
+
+  --widget-gradient-primary: linear-gradient(135deg, #3170FC 0%, #9E4770 100%);
+  --widget-gradient-header: linear-gradient(135deg, rgba(49, 112, 252, 0.94) 0%, rgba(10, 34, 57, 0.94) 100%);
+
+  --widget-bg-card: #FFFFFF;
+  --widget-bg-page: #F8FAFC;
+  --widget-bg-elevated: #FFFFFF;
+  --widget-bg-hover: #F1F5F9;
+  --widget-bg-frosted: rgba(135, 246, 255, 0.22);
+
+  --widget-text-primary: #0F172A;
+  --widget-text-secondary: #475569;
+  --widget-text-subtle: #334155;
+  --widget-text-tertiary: #94A3B8;
+  --widget-text-inverse: #FFFFFF;
+
+  --widget-border: #E2E8F0;
+  --widget-border-light: #F1F5F9;
+
+  --widget-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --widget-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --widget-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --widget-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --widget-shadow-launcher: 0 8px 24px 0 rgba(0, 0, 0, 0.16);
+  --widget-shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+
+  --widget-space-1: 8px;
+  --widget-space-2: 16px;
+  --widget-space-3: 24px;
+  --widget-space-4: 32px;
+
+  --widget-radius-sm: 8px;
+  --widget-radius-md: 10px;
+  --widget-radius-lg: 12px;
+  --widget-radius-xl: 14px;
+  --widget-radius-2xl: 16px;
+  --widget-radius-bubble: 16px;
+  --widget-radius-full: 9999px;
+
+  --widget-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --widget-text-xs: 11px;
+  --widget-text-sm: 13px;
+  --widget-text-base: 14px;
+  --widget-text-md: 15px;
+  --widget-text-lg: 17px;
+  --widget-text-xl: 26px;
+
+  --widget-weight-normal: 400;
+  --widget-weight-medium: 500;
+  --widget-weight-semibold: 600;
+  --widget-weight-bold: 700;
+
+  --widget-leading-tight: 1.2;
+  --widget-leading-normal: 1.4;
+  --widget-leading-relaxed: 1.5;
+
+  --widget-width-desktop: 400px;
+  --widget-max-height: 720px;
+  --widget-offset-x: 24px;
+  --widget-offset-y: 24px;
+  --widget-mobile-inset: 16px;
+  --widget-panel-viewport-offset: 24px;
+  --widget-panel-padding-x: 16px;
+  --widget-panel-padding-y: 16px;
+  --widget-header-height: 112px;
+  --widget-header-padding: 16px;
+  --widget-section-gap: 16px;
+  --widget-nav-height: 40px;
+  --widget-input-height: 44px;
+  --widget-composer-height: 64px;
+  --widget-card-radius: 12px;
+  --widget-card-padding: 16px;
+  --widget-card-shadow: var(--widget-shadow-sm);
+  --widget-launcher-size: 60px;
+}
+
+.theme-wine {
+  --widget-primary: #5C2E4A;
+  --widget-primary-hover: #4A2539;
+  --widget-primary-pressed: #3B1E2E;
+  --widget-primary-light: #F9E8EF;
+
+  --widget-gradient-primary: linear-gradient(135deg, #D4598B 0%, #5C2E4A 100%);
+  --widget-gradient-header: linear-gradient(135deg, rgba(212, 89, 139, 0.92) 0%, rgba(92, 46, 74, 0.92) 100%);
+}

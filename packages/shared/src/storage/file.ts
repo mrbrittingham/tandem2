@@ -7,6 +7,7 @@ import type {
   ChatMessage,
   ChatSession,
   ChatStore,
+  CreateSessionOptions,
   ListSessionsOptions,
   UpdateSessionInput,
 } from "./types";
@@ -107,12 +108,13 @@ class FileChatStore implements ChatStore {
     return next;
   }
 
-  async createSession(businessId: string): Promise<ChatSession> {
+  async createSession(businessId: string, options?: CreateSessionOptions): Promise<ChatSession> {
     return this.runExclusive(async () => {
       const timestamp = new Date().toISOString();
       const session: ChatSession = {
         id: createId(),
         businessId,
+        locationSlug: options?.locationSlug,
         createdAt: timestamp,
         updatedAt: timestamp,
       };

@@ -5,8 +5,8 @@ import { join } from "node:path";
 const projectRoot = process.cwd();
 
 const targets = [
-  "apps/chatbot/.next",
-  "apps/chatbot/tsconfig.tsbuildinfo",
+  "apps/dashboard/.next",
+  "apps/dashboard/tsconfig.tsbuildinfo",
   "packages/shared/tsconfig.tsbuildinfo",
   "packages/ui-kit/tsconfig.tsbuildinfo",
 ];

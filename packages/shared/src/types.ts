@@ -75,6 +75,23 @@ export type WidgetThemeSettings = {
   textSecondaryColor: string;
   fontFamily: string;
   logoUrl?: string;
+  headerBackground?: {
+    mode: "solid" | "gradient";
+    solidColor?: string;
+    gradient?: {
+      from?: string;
+      to?: string;
+      angle?: number;
+    };
+  };
+  quickActions?: {
+    color?: string;
+    variant?: "solid" | "outline";
+  };
+  sendButton?: {
+    color?: string;
+    textColor?: string;
+  };
 };
 
 export type HandoffConfig = {
@@ -90,6 +107,10 @@ export type BusinessProfile = {
   id: string;
   slug: string;
   name: string;
+  locationName?: string;
+  locationSlug?: string;
+  businessName?: string;
+  businessSlug?: string;
   industry: Industry;
   timezone: string;
   tagline: string;
@@ -109,6 +130,9 @@ export type BusinessProfile = {
 
 export type MockState = {
   businesses: BusinessProfile[];
+  accountBusinessName?: string;
+  accountBusinessSlug?: string;
+  activeLocationId?: string;
   activeBusinessId?: string;
 };
 
@@ -122,6 +146,13 @@ export type CreateBusinessPayload = {
   brandColor?: string;
   summary?: string;
   supportHoursLabel?: string;
+};
+
+export type CreateLocationPayload = {
+  name: string;
+  address?: string;
+  mode: "fresh" | "copy";
+  sourceLocationId?: string;
 };
 
 export type WidgetSuggestedIntent = {

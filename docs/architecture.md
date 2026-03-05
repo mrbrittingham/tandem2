@@ -1,14 +1,24 @@
 # Tandem Architecture Snapshot
 
+## Runtime boundaries
+
 | Layer | Location | Notes |
 | --- | --- | --- |
-| API surface | `apps/chatbot/app/api/*` | Only approved backend entry point. Route handlers talk to data sources (Supabase soon). |
-| Chat surfaces | `apps/chatbot` | Customer-facing UI that consumes shared types + UI kit. |
-| Future operator UI | `apps/dashboard` | Reserved for internal tooling; should use shared packages when ready. |
-| Shared types | `packages/shared` | Pure TypeScript definitions, no React dependencies. |
-| UI primitives | `packages/ui-kit` | React components rendered by apps; keep styling/theme tokens centralized here. |
+| API surface | `apps/dashboard/src/app/api/*` | Canonical backend surface for chat, conversations, bootstrap, health, and widget theme endpoints. |
+| Operator UI | `apps/dashboard/src/app/(console)/*` | Dashboard console for business/location setup, preview, and conversation operations. |
+| Shared domain + server utilities | `packages/shared` | Types, mock store, LLM clients, storage adapters, and server chat/auth helpers. |
+| Widget surface | `packages/ui-kit` | Embeddable `ChatWidget` and runtime config normalization. |
 
-Guidelines:
-- Add new cross-cutting logic to `packages/*` instead of duplicating it inside apps.
-- Keep package APIs small and typed; prefer `export type` + focused components.
-- When adding backend functionality, create a new route handler inside `apps/chatbot/app/api/*` and keep it stateless.
+## Key design constraints
+
+- Keep backend logic in App Router route handlers only.
+- Use `@tandem/shared/server` only in server contexts.
+- Keep chat request handling centralized through shared chat handlers.
+- Preserve business/location scoping for conversation and history retrieval paths.
+
+## Related docs
+
+- Full system map: `docs/system-map.md`
+- Current implementation status: `docs/current-status.md`
+- Operational procedures: `RUNBOOK.md`
+- Stabilization plan: `docs/stabilization-plan.md`

@@ -12,13 +12,13 @@ export function SaveBar({ visible, onSave, saving = false, label = "Unsaved chan
         visible ? "opacity-100" : "opacity-0"
       }`}
     >
-      <div className="pointer-events-auto flex items-center gap-4 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm text-slate-700 shadow-xl shadow-slate-900/10">
-        <span className="font-medium text-slate-900">{saving ? "Saving..." : label}</span>
+      <div className="pointer-events-auto flex items-center gap-4 rounded-[var(--console-radius-full)] border border-[var(--console-border)] bg-[var(--console-bg-card)] px-5 py-3 text-sm text-[var(--console-text-secondary)] shadow-[var(--console-shadow-lg)]">
+        <span className="font-medium text-[var(--console-text-primary)]">{saving ? "Saving..." : label}</span>
         <button
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-60"
+          className="rounded-[var(--console-radius-full)] bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:opacity-60"
         >
           {saving ? "Saving" : "Save"}
         </button>

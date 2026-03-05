@@ -1,29 +1,63 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
 import { ColorPicker } from "@/components/ColorPicker";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
 import { SaveBar } from "@/components/SaveBar";
-
-const initialBranding = {
-  businessName: "Tandem Concierge",
-  industry: "Hospitality",
-  logoLabel: "tandem-logo.png",
-  primaryColor: "#2563EB",
-  secondaryColor: "#0EA5E9",
-  welcomeMessage: "Ask about hours, menus, policies, or live concierge escalations.",
-  assistantName: "Tandem",
-  widgetPosition: "bottom-right" as "bottom-right" | "bottom-left",
-  prefersDark: true,
-};
+import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
+import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
 
 export default function BrandingPage() {
-  const [form, setForm] = useState(initialBranding);
+  const business = useActiveBusiness();
+  const { openCreateLocation } = useConsoleDialogs();
+  const [form, setForm] = useState(() => ({
+    businessName: business?.businessName ?? business?.name ?? "",
+    industry: business?.industry ?? "",
+    logoLabel: business?.theme.logoUrl ?? "",
+    primaryColor: business?.theme.primaryColor ?? "#2563EB",
+    secondaryColor: business?.theme.accentColor ?? "#0EA5E9",
+    welcomeMessage: business?.summary ?? "",
+    assistantName: business?.handoff.headline ?? "Assistant",
+    widgetPosition: "bottom-right" as "bottom-right" | "bottom-left",
+    prefersDark: true,
+  }));
   const [saving, setSaving] = useState(false);
+  const [initialSnapshot, setInitialSnapshot] = useState(() => JSON.stringify(form));
 
-  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialBranding), [form]);
+  useEffect(() => {
+    if (!business) {
+      return;
+    }
+    const next = {
+      businessName: business.businessName ?? business.name,
+      industry: business.industry,
+      logoLabel: business.theme.logoUrl ?? "",
+      primaryColor: business.theme.primaryColor,
+      secondaryColor: business.theme.accentColor,
+      welcomeMessage: business.summary,
+      assistantName: business.handoff.headline,
+      widgetPosition: "bottom-right" as const,
+      prefersDark: true,
+    };
+    setForm(next);
+    setInitialSnapshot(JSON.stringify(next));
+  }, [business]);
+
+  const isDirty = useMemo(() => JSON.stringify(form) !== initialSnapshot, [form, initialSnapshot]);
+
+  if (!business) {
+    return (
+      <EmptyState
+        title="No location selected"
+        description="Create a location to configure branding and assistant defaults."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
+      />
+    );
+  }
 
   const update = <Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -37,7 +71,14 @@ export default function BrandingPage() {
   const handleSave = () => {
     setSaving(true);
     setTimeout(() => {
-      Object.assign(initialBranding, form);
+      updateBusiness(business.id, (draft) => {
+        draft.theme.primaryColor = form.primaryColor;
+        draft.theme.accentColor = form.secondaryColor;
+        draft.theme.logoUrl = form.logoLabel || undefined;
+        draft.summary = form.welcomeMessage;
+        draft.handoff.headline = form.assistantName;
+      });
+      setInitialSnapshot(JSON.stringify(form));
       setSaving(false);
     }, 800);
   };

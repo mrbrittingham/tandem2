@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* dashboard config */
+  transpilePackages: ["@tandem/ui-kit", "@tandem/shared"],
 };
 
 export default nextConfig;

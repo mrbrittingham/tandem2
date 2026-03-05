@@ -1,33 +1,117 @@
 'use client';
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
-import { ChatWidget } from "@tandem/ui-kit";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { ChatWidget, resolveWidgetRuntimeConfig } from "@tandem/ui-kit";
+import type { WidgetThemeSettings } from "@tandem/shared";
 import { ConsoleDialogProvider } from "@/components/ConsoleDialogContext";
-import { CreateBusinessWizard } from "@/components/CreateBusinessWizard";
+import { CreateLocationDialog } from "@/components/CreateLocationDialog";
+import { LocationSwitcher } from "@/components/LocationSwitcher";
 import { PreviewDockProvider } from "@/components/PreviewDockContext";
-import { businessToWidgetConfig, useActiveBusiness } from "@/lib/store-hooks";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { resolveChatScope } from "@/lib/chat-scope";
+import { businessToWidgetConfig, useActiveLocation } from "@/lib/store-hooks";
+import { widgetThemeToChatTheme } from "@/lib/widget-theme";
 
 const navItems = [
-  { label: "Home", href: "/overview" },
-  { label: "Conversations", href: "/conversations" },
+  { label: "Overview", href: "/overview" },
+  { label: "Inbox", href: "/conversations" },
   { label: "Assistant", href: "/intents" },
-  { label: "FAQs & Policies", href: "/knowledge" },
-  { label: "Talk to a person", href: "/handoff" },
+  { label: "Knowledge", href: "/knowledge" },
+  { label: "Handoff", href: "/handoff" },
   { label: "Widget", href: "/widget" },
   { label: "Integrations", href: "/integrations" },
-  { label: "LLM status", href: "/llm" },
-  { label: "Reports", href: "/reports" },
+  { label: "Locations", href: "/locations" },
   { label: "Settings", href: "/branding" },
 ];
 
+type ConsolePageHeading = {
+  title: string;
+  description?: string;
+};
+
+const pageHeadingMap: Record<string, ConsolePageHeading> = {
+  "/overview": {
+    title: "Overview",
+    description: "Track readiness and recent activity.",
+  },
+  "/conversations": {
+    title: "Inbox",
+    description: "Review and respond to recent guest chats.",
+  },
+  "/intents": {
+    title: "Assistant",
+    description: "Manage suggested actions and assistant behavior.",
+  },
+  "/knowledge": {
+    title: "Knowledge",
+    description: "Maintain FAQs and policies your assistant can reference.",
+  },
+  "/handoff": {
+    title: "Handoff",
+    description: "Configure live support and contact methods.",
+  },
+  "/widget": {
+    title: "Widget",
+    description: "Install and customize the website chat widget.",
+  },
+  "/integrations": {
+    title: "Integrations",
+    description: "Connect systems that keep answers up to date.",
+  },
+  "/branding": {
+    title: "Settings",
+    description: "Business profile and defaults.",
+  },
+  "/locations": {
+    title: "Locations",
+    description: "Manage location names, addresses, and timezones.",
+  },
+};
+
+function resolvePageHeading(pathname: string) {
+  const matchedRoute = Object.keys(pageHeadingMap).find((route) => pathname === route || pathname.startsWith(`${route}/`));
+  return matchedRoute ? pageHeadingMap[matchedRoute] : undefined;
+}
+
 export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const activeBusiness = useActiveBusiness();
-  const [wizardOpen, setWizardOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const activeBusiness = useActiveLocation();
+  const [createLocationOpen, setCreateLocationOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [draftTheme, setDraftTheme] = useState<WidgetThemeSettings | undefined>(undefined);
+  const [isClientMounted, setIsClientMounted] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState("");
+  const [showPreviewCoachmark, setShowPreviewCoachmark] = useState(false);
   const isPreviewOpen = Boolean(activeBusiness) && previewOpen;
+  const currentPageHeading = useMemo(() => resolvePageHeading(pathname), [pathname]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsClientMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (pathname !== "/conversations") {
+      setHeaderSearch("");
+      return;
+    }
+    setHeaderSearch(searchParams.get("query") ?? "");
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || pathname !== "/overview") {
+      setShowPreviewCoachmark(false);
+      return;
+    }
+
+    const dismissed = window.localStorage.getItem("tandem:preview-coachmark-dismissed") === "1";
+    setShowPreviewCoachmark(!dismissed);
+  }, [pathname]);
 
   const widgetConfig = useMemo(
     () => (activeBusiness ? businessToWidgetConfig(activeBusiness) : undefined),
@@ -36,9 +120,10 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
 
   const providerValue = useMemo(
     () => ({
-      openCreateBusiness: () => setWizardOpen(true),
+      openCreateLocation: () => setCreateLocationOpen(true),
+      openCreateBusiness: () => setCreateLocationOpen(true),
     }),
-    [setWizardOpen],
+    [setCreateLocationOpen],
   );
 
   const previewContextValue = useMemo(
@@ -46,32 +131,63 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
       isOpen: previewOpen,
       open: () => setPreviewOpen(true),
       close: () => setPreviewOpen(false),
+      draftTheme,
+      setDraftTheme,
     }),
-    [previewOpen, setPreviewOpen],
+    [draftTheme, previewOpen, setPreviewOpen],
   );
 
-  const assistantSummary = activeBusiness
-    ? `${activeBusiness.industry} • ${activeBusiness.location || "Location coming soon"}`
-    : "Launch an assistant to unlock insights.";
+  const widgetTheme = useMemo(() => {
+    const themeSource = draftTheme ?? activeBusiness?.theme;
+    return themeSource ? widgetThemeToChatTheme(themeSource) : undefined;
+  }, [activeBusiness?.theme, draftTheme]);
+
+  const previewRuntimeConfig = useMemo(
+    () => {
+      const scope = resolveChatScope(activeBusiness);
+      return resolveWidgetRuntimeConfig({
+        businessId: scope.businessId,
+        locationSlug: scope.locationSlug,
+      });
+    },
+    [activeBusiness],
+  );
+
+  const handleSignOut = async () => {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  };
+
+  const handleHeaderSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const next = new URLSearchParams();
+    const trimmed = headerSearch.trim();
+    if (trimmed) {
+      next.set("query", trimmed);
+    }
+    router.push(`/conversations${next.toString() ? `?${next.toString()}` : ""}`);
+  };
+
+  const dismissPreviewCoachmark = () => {
+    setShowPreviewCoachmark(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("tandem:preview-coachmark-dismissed", "1");
+    }
+  };
 
   return (
     <ConsoleDialogProvider value={providerValue}>
       <PreviewDockProvider value={previewContextValue}>
         <div className="min-h-screen bg-[var(--bg)] text-slate-900">
           <div className="grid min-h-screen gap-0 lg:grid-cols-[260px_1fr]">
-            <aside className="flex flex-col border-r border-slate-200 bg-white/95 px-6 py-8">
+            <aside className="flex flex-col border-r border-[var(--console-sidebar-divider)] [background:var(--console-gradient-sidebar)] px-6 py-8">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Tandem</p>
-                <p className="mt-2 text-xl font-semibold text-slate-900">Client console</p>
-                <p className="text-sm text-slate-500">Guide your concierge setup in minutes.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.4em] [color:var(--console-sidebar-brand-title)]">Tandem</p>
+                <p className="mt-2 text-xl font-semibold [color:var(--console-sidebar-brand-subtitle)]">Client console</p>
+                <p className="text-sm [color:var(--console-sidebar-brand-caption)]">Guide your concierge setup in minutes.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setWizardOpen(true)}
-                className="mt-5 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
-              >
-                Add business
-              </button>
               <nav className="mt-8 flex flex-1 flex-col gap-1">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href;
@@ -81,8 +197,8 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
                       href={item.href}
                       className={`rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
                         isActive
-                          ? 'border border-blue-100 bg-blue-50 text-blue-700'
-                          : 'text-slate-600 hover:bg-slate-100'
+                          ? 'bg-[var(--console-sidebar-active-bg)] [color:var(--console-sidebar-text-active)] shadow-[var(--console-sidebar-active-glow)]'
+                          : '[color:var(--console-sidebar-text)] hover:bg-[var(--console-sidebar-hover-bg)] hover:[color:var(--console-sidebar-text-active)]'
                       }`}
                     >
                       {item.label}
@@ -92,31 +208,73 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
               </nav>
             </aside>
             <div className="flex flex-1 flex-col">
-              <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-slate-200 bg-white/90 px-8 py-5 text-sm text-slate-600 backdrop-blur supports-[backdrop-filter]:bg-white/75 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Active business</p>
-                  <p className="text-lg font-semibold text-slate-900">{activeBusiness?.name ?? 'No business yet'}</p>
-                  <p className="text-sm text-slate-500">{assistantSummary}</p>
+              <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-8 py-5 text-sm text-slate-600 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+                <div className="grid gap-4 md:grid-cols-[minmax(280px,360px)_1fr] md:items-center md:pr-14">
+                  <div>
+                    <LocationSwitcher onAddLocation={() => setCreateLocationOpen(true)} />
+                  </div>
+                  <div>
+                    <form onSubmit={handleHeaderSearchSubmit} className="mx-auto w-full max-w-xl">
+                      <label className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+                        <input
+                          type="search"
+                          value={headerSearch}
+                          onChange={(event) => setHeaderSearch(event.target.value)}
+                          placeholder="Search conversations (name, email, phone, keywords)..."
+                          aria-label="Search conversations"
+                          className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[var(--console-primary)] focus:outline-none"
+                        />
+                      </label>
+                    </form>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewOpen(true)}
-                    disabled={!widgetConfig}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWizardOpen(true)}
-                    className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-                  >
-                    New business
-                  </button>
+                <div className="absolute right-8 top-5">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-haspopup="menu"
+                      aria-expanded={accountMenuOpen}
+                      onClick={() => setAccountMenuOpen((prev) => !prev)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--console-primary)] text-xs font-semibold text-white"
+                    >
+                      TM
+                    </button>
+                    {accountMenuOpen ? (
+                      <div className="absolute right-0 top-full z-20 mt-2 min-w-[160px] rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                        <Link
+                          href="/account"
+                          onClick={() => setAccountMenuOpen(false)}
+                          className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          Account
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAccountMenuOpen(false);
+                            void handleSignOut();
+                          }}
+                          className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </header>
-              <main className="flex-1 bg-[var(--bg)] px-6 py-10 md:px-8">{children}</main>
+              <main className="flex-1 bg-[var(--bg)] px-6 py-10 md:px-8">
+                {currentPageHeading ? (
+                  <section className="mb-8">
+                    <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">{currentPageHeading.title}</h1>
+                    {currentPageHeading.description ? (
+                      <p className="mt-2 text-sm text-[var(--console-text-secondary)]">{currentPageHeading.description}</p>
+                    ) : null}
+                  </section>
+                ) : null}
+                {children}
+              </main>
             </div>
           </div>
         </div>
@@ -125,7 +283,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           type="button"
           onClick={() => setPreviewOpen(true)}
           disabled={!widgetConfig}
-          className="group fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xl shadow-blue-500/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="group fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--console-primary)] text-white shadow-2xl shadow-slate-900/30 transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <svg
             aria-hidden="true"
@@ -141,6 +299,28 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           </svg>
           <span className="sr-only">Open preview</span>
         </button>
+
+        {isClientMounted && pathname === "/overview" && showPreviewCoachmark ? (
+          <div className="fixed bottom-20 right-24 z-40">
+            <div className="flex items-end gap-2">
+              <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg shadow-slate-900/10">
+                Preview chatbot
+              </div>
+              <svg aria-hidden="true" className="h-8 w-10 text-slate-500" viewBox="0 0 40 32" fill="none">
+                <path d="M2 4c13 0 23 4 30 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M28 12l6 4-7 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <button
+                type="button"
+                onClick={dismissPreviewCoachmark}
+                className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-500 shadow-lg shadow-slate-900/10 hover:text-slate-700"
+                aria-label="Dismiss preview hint"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div
           className={`fixed inset-y-0 right-0 z-50 w-full max-w-md transform border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out ${
@@ -163,15 +343,25 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
               </svg>
             </button>
           </div>
-          <div className="flex h-full flex-col gap-4 overflow-y-auto bg-slate-50 px-4 py-6">
-            {widgetConfig ? (
-              <div className="mx-auto w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-900/10">
-                <ChatWidget config={widgetConfig} initiallyOpen />
+          <div className="flex h-full flex-col gap-4 overflow-hidden bg-slate-50 px-4 py-6">
+            {widgetConfig && isClientMounted ? (
+              <div className="mx-auto h-[var(--console-preview-widget-max-height)] w-full max-w-sm overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-lg shadow-slate-900/10">
+                <ChatWidget
+                  config={widgetConfig}
+                  theme={widgetTheme}
+                  businessId={previewRuntimeConfig.businessId}
+                  locationSlug={previewRuntimeConfig.locationSlug}
+                  apiBaseUrl={previewRuntimeConfig.apiBaseUrl}
+                  hydrateHistory={false}
+                  initiallyOpen={isPreviewOpen}
+                  showLauncher={false}
+                  onClose={() => setPreviewOpen(false)}
+                />
               </div>
+            ) : widgetConfig ? (
+              <p className="text-sm text-slate-500">Loading preview…</p>
             ) : (
-              <p className="text-sm text-slate-500">
-                Select or create a business to load a live preview of the assistant experience.
-              </p>
+              <p className="text-sm text-slate-500">Select or create a location to load a live preview of the assistant experience.</p>
             )}
           </div>
         </div>
@@ -183,8 +373,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
             className="fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-sm"
           />
         ) : null}
-
-        <CreateBusinessWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
+        <CreateLocationDialog open={createLocationOpen} onClose={() => setCreateLocationOpen(false)} />
       </PreviewDockProvider>
     </ConsoleDialogProvider>
   );

@@ -2,11 +2,10 @@ import type { LLMProvider, LLMRequest, LLMResponse, LLMStreamResponse } from "./
 import { generateWithOpenAI, streamWithOpenAI } from "./providers/openai";
 import { generateWithAnthropic, streamWithAnthropic } from "./providers/anthropic";
 import { generateWithGoogle, streamWithGoogle } from "./providers/google";
-
-const DEFAULT_PROVIDER: LLMProvider = "openai";
+import { getConfiguredLLMProvider } from "./config";
 
 export async function llmGenerate(request: LLMRequest): Promise<LLMResponse> {
-  const provider = (process.env.LLM_PROVIDER as LLMProvider | undefined) ?? DEFAULT_PROVIDER;
+  const provider = getConfiguredLLMProvider() as LLMProvider;
 
   switch (provider) {
     case "openai":
@@ -21,7 +20,7 @@ export async function llmGenerate(request: LLMRequest): Promise<LLMResponse> {
 }
 
 export async function llmStream(request: LLMRequest): Promise<LLMStreamResponse> {
-  const provider = (process.env.LLM_PROVIDER as LLMProvider | undefined) ?? DEFAULT_PROVIDER;
+  const provider = getConfiguredLLMProvider() as LLMProvider;
 
   switch (provider) {
     case "openai":

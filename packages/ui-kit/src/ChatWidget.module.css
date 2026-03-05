@@ -12,6 +12,15 @@
 	color: var(--tandem-text-primary, #1a1a1a);
 }
 
+.embeddedScope {
+	position: relative;
+	inset: auto;
+	width: 100%;
+	height: 100%;
+	align-items: stretch;
+	gap: 0;
+}
+
 .themeScope > * {
 	pointer-events: auto;
 }
@@ -67,6 +76,15 @@
 	animation: panelEnter 220ms ease;
 }
 
+.embeddedScope .panel {
+	position: relative;
+	bottom: auto;
+	right: auto;
+	width: 100%;
+	height: 100%;
+	max-height: 100%;
+}
+
 @keyframes panelEnter {
 	from {
 		opacity: 0;
@@ -80,12 +98,15 @@
 
 .header {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: space-between;
+	flex-wrap: wrap;
 	gap: var(--tandem-space-16, 16px);
 	padding: var(--tandem-space-20, 20px);
+	padding-right: 64px;
+	position: relative;
 	border-bottom: 1px solid var(--tandem-border, #e5e5e5);
-	background: var(--tandem-surface, #ffffff);
+	background: var(--tandem-header-bg, var(--tandem-primary, #4f46e5));
 }
 
 .brand {
@@ -114,21 +135,53 @@
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
-	color: var(--tandem-text-primary, #1a1a1a);
+	color: var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff));
 }
 
 .brandSubtitle {
 	margin: 0;
 	font-size: 0.85rem;
-	color: var(--tandem-text-secondary, #666666);
+	color: color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 86%, transparent);
 }
 
 .headerActions {
 	display: flex;
 	align-items: center;
 	gap: var(--tandem-space-12, 12px);
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	justify-content: flex-end;
+	position: absolute;
+	top: var(--tandem-space-16, 16px);
+	right: var(--tandem-space-16, 16px);
+}
+
+.quickActions {
+	display: flex;
+	align-items: center;
+	gap: var(--tandem-space-8, 8px);
+	width: 100%;
+	padding-top: var(--tandem-space-8, 8px);
+}
+
+.quickActionButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 10px;
+	border-radius: 999px;
+	border: 1px solid var(--tandem-quick-action-border, var(--tandem-primary, #2563eb));
+	background: var(--tandem-quick-action-bg, var(--tandem-accent-light, #eef2ff));
+	color: var(--tandem-quick-action-text, var(--tandem-text-primary, #1a1a1a));
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.quickActionButton:hover {
+	background: var(--tandem-quick-action-hover, var(--tandem-accent-light, #eef2ff));
+	border-color: var(--tandem-quick-action-border, var(--tandem-primary, #2563eb));
 }
 
 .viewSwitch {
@@ -166,14 +219,21 @@
 	height: 36px;
 	display: grid;
 	place-items: center;
-	background: var(--tandem-surface-elevated, #f7f7f7);
-	color: var(--tandem-text-secondary, #666666);
+	background: color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 12%, transparent);
+	color: var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff));
 	cursor: pointer;
 	transition: background-color 150ms ease;
 }
 
+.closeButton span {
+	font-size: 1.9rem;
+	line-height: 1;
+	font-weight: 500;
+	transform: translateY(-1px);
+}
+
 .closeButton:hover {
-	background: var(--tandem-surface-hover, #f1f1f1);
+	background: color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 20%, transparent);
 }
 
 .panelBody {
@@ -316,7 +376,7 @@
 
 .userBubble {
 	align-self: flex-end;
-	background: var(--tandem-user-bg, #1a1a1a);
+	background: var(--tandem-user-bg, var(--tandem-send-bg, var(--tandem-primary, #2563eb)));
 	color: var(--tandem-user-text, #ffffff);
 }
 
@@ -341,46 +401,55 @@
 
 .inputRow {
 	display: flex;
-	gap: var(--tandem-space-12, 12px);
-	padding: var(--tandem-space-16, 16px) var(--tandem-space-20, 20px);
+	gap: var(--tandem-space-8, 8px);
+	padding: 12px 16px;
 	border-top: 1px solid var(--tandem-border, #e5e5e5);
 	background: var(--tandem-surface, #ffffff);
-	align-items: center;
+	align-items: stretch;
 	flex: 0 0 auto;
 }
 
 .inputField {
 	flex: 1;
-	height: var(--tandem-input-height, 52px);
-	border-radius: var(--tandem-radius-input, 12px);
-	border: 1px solid var(--tandem-border-light, #f0f0f0);
-	padding: 0 var(--tandem-space-16, 16px);
-	font-size: 0.95rem;
-	background: var(--tandem-surface-elevated, #fafafa);
+	min-width: 0;
+	height: 44px;
+	border-radius: 14px;
+	border: 1px solid var(--tandem-border, #e5e5e5);
+	padding: 0 14px;
+	font-size: 0.92rem;
+	background: var(--tandem-surface, #ffffff);
 	color: var(--tandem-text-primary, #1a1a1a);
-	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 1px rgba(15, 23, 42, 0.02);
+}
+
+.inputField:focus {
+	outline: none;
+	border-color: color-mix(in srgb, var(--tandem-primary, #2563eb) 45%, var(--tandem-border, #e5e5e5));
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--tandem-primary, #2563eb) 18%, transparent);
 }
 
 .sendButton {
-	border-radius: var(--tandem-radius-button, 12px);
+	border-radius: 14px;
 	border: none;
-	padding: 0 var(--tandem-space-24, 24px);
-	height: var(--tandem-input-height, 52px);
+	padding: 0 18px;
+	min-width: 86px;
+	height: 44px;
+	flex-shrink: 0;
 	font-weight: 600;
-	font-size: 0.95rem;
-	background-color: var(--tandem-primary, #2563eb);
-	color: var(--tandem-text-on-primary, #ffffff);
+	font-size: 0.9rem;
+	background-color: var(--tandem-send-bg, var(--tandem-primary, #2563eb));
+	color: var(--tandem-send-text, var(--tandem-text-on-primary, #ffffff));
 	cursor: pointer;
-	box-shadow: var(--tandem-shadow-medium, 0 4px 6px rgba(15, 23, 42, 0.2));
+	box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--tandem-send-bg, var(--tandem-primary, #2563eb)) 65%, transparent);
 	transition: background-color 150ms ease, transform 100ms ease, opacity 150ms ease;
 }
 
 .sendButton:hover {
-	background-color: var(--tandem-primary-hover, #1d4ed8);
+	background-color: var(--tandem-send-hover, var(--tandem-primary-hover, #1d4ed8));
 }
 
 .sendButton:active {
-	background-color: var(--tandem-primary-pressed, #1e40af);
+	background-color: var(--tandem-send-pressed, var(--tandem-primary-pressed, #1e40af));
 	transform: scale(0.98);
 }
 
@@ -392,12 +461,14 @@
 }
 
 .stopButton {
-	border-radius: var(--tandem-radius-button, 12px);
+	border-radius: 14px;
 	border: 1px solid var(--tandem-border, #e5e5e5);
-	padding: 0 var(--tandem-space-16, 16px);
-	height: var(--tandem-input-height, 52px);
+	padding: 0 12px;
+	height: 44px;
+	min-width: 72px;
+	flex-shrink: 0;
 	font-weight: 600;
-	font-size: 0.9rem;
+	font-size: 0.82rem;
 	background: var(--tandem-secondary, #f5f5f5);
 	color: var(--tandem-secondary-text, #1a1a1a);
 	cursor: pointer;
@@ -431,6 +502,29 @@
 	margin: 0;
 	font-size: 0.8rem;
 	color: #b91c1c;
+}
+
+.errorRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.retryButton {
+	border: 1px solid var(--tandem-border, #e5e5e5);
+	background: var(--tandem-surface, #ffffff);
+	color: var(--tandem-text-primary, #1a1a1a);
+	border-radius: 999px;
+	padding: 2px 10px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.retryButton:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .helpView {

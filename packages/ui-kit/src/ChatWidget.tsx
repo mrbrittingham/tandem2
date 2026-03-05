@@ -12,11 +12,11 @@ import {
 import type { WidgetContentConfig } from "@tandem/shared";
 
 import styles from "./ChatWidget.module.css";
+import { resolveWidgetRuntimeConfig } from "./runtime-config";
 
 type CSSVarStyles = CSSProperties & Record<string, string>;
 
 type MessageRole = "user" | "assistant" | "system";
-type ViewState = "chat" | "help";
 
 export type MessageCTA = {
   label: string;
@@ -31,10 +31,12 @@ export type MessageDescriptor = {
 
 type Message = MessageDescriptor & { id: string };
 
-const VIEW_OPTIONS: Array<{ value: ViewState; label: string }> = [
-  { value: "chat", label: "Chat" },
-  { value: "help", label: "Help" },
-];
+type InlineComposerError = {
+  message: string;
+  devHint?: string;
+};
+
+type QuickAction = "hours" | "reservations" | "menu";
 
 const SCROLL_STICKY_THRESHOLD = 48;
 
@@ -79,6 +81,16 @@ export type ThemeTokens = {
   textSecondaryColor: string;
   textTertiaryColor: string;
   textOnPrimaryColor: string;
+  headerBackground: string;
+  headerTextColor: string;
+  quickActionColor: string;
+  quickActionTextColor: string;
+  quickActionBorderColor: string;
+  quickActionHoverColor: string;
+  sendButtonColor: string;
+  sendButtonHoverColor: string;
+  sendButtonPressedColor: string;
+  sendButtonTextColor: string;
   panelShadow: string;
   shadowSoft: string;
   shadowMedium: string;
@@ -122,32 +134,46 @@ export type ChatWidgetProps = {
   initialMessages?: MessageDescriptor[];
   config?: WidgetContentConfig;
   initiallyOpen?: boolean;
+  showLauncher?: boolean;
+  onClose?: () => void;
   businessId?: string;
+  locationSlug?: string;
   apiBaseUrl?: string;
+  hydrateHistory?: boolean;
 };
 
 const defaultTheme: ThemeTokens = {
   brandName: "Tandem",
   logoUrl: undefined,
-  primaryColor: "#2563EB",
-  primaryHoverColor: "#1D4ED8",
-  primaryPressedColor: "#1E40AF",
-  primaryTextColor: "#FFFFFF",
-  accentColor: "#3B82F6",
-  accentLightColor: "#DBEAFE",
+  primaryColor: "var(--widget-primary)",
+  primaryHoverColor: "var(--widget-primary-hover)",
+  primaryPressedColor: "var(--widget-primary-pressed)",
+  primaryTextColor: "var(--widget-text-inverse)",
+  accentColor: "var(--widget-primary)",
+  accentLightColor: "var(--widget-primary-light)",
   accentTextColor: "#1A1A1A",
-  surfaceColor: "#FFFFFF",
-  surfaceElevatedColor: "#FAFAFA",
-  surfaceHoverColor: "#F5F5F5",
-  surfaceMutedColor: "#FAFAFA",
+  surfaceColor: "var(--widget-bg-card)",
+  surfaceElevatedColor: "var(--widget-bg-elevated)",
+  surfaceHoverColor: "var(--widget-bg-hover)",
+  surfaceMutedColor: "var(--widget-bg-page)",
   surfaceContrastColor: "#1A1A1A",
-  borderColor: "#E5E5E5",
-  borderLightColor: "#F0F0F0",
+  borderColor: "var(--widget-border)",
+  borderLightColor: "var(--widget-border-light)",
   mutedColor: "#666666",
   textPrimaryColor: "#1A1A1A",
   textSecondaryColor: "#666666",
   textTertiaryColor: "#999999",
   textOnPrimaryColor: "#FFFFFF",
+  headerBackground: "var(--widget-primary)",
+  headerTextColor: "#FFFFFF",
+  quickActionColor: "var(--widget-primary-light)",
+  quickActionTextColor: "#0F172A",
+  quickActionBorderColor: "var(--widget-primary)",
+  quickActionHoverColor: "#DDE8FF",
+  sendButtonColor: "var(--widget-primary)",
+  sendButtonHoverColor: "var(--widget-primary-hover)",
+  sendButtonPressedColor: "var(--widget-primary-pressed)",
+  sendButtonTextColor: "#FFFFFF",
   panelShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
   shadowSoft: "0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 3px 0 rgba(0, 0, 0, 0.04)",
   shadowMedium: "0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04)",
@@ -158,7 +184,7 @@ const defaultTheme: ThemeTokens = {
   buttonRadius: "12px",
   inputRadius: "12px",
   launcherRadius: "28px",
-  userBubbleBg: "#1A1A1A",
+  userBubbleBg: "var(--widget-primary)",
   userBubbleText: "#FFFFFF",
   assistantBubbleBg: "#F5F5F5",
   assistantBubbleText: "#1A1A1A",
@@ -167,8 +193,8 @@ const defaultTheme: ThemeTokens = {
   secondaryColor: "#F5F5F5",
   secondaryHoverColor: "#E5E5E5",
   secondaryTextColor: "#1A1A1A",
-  ctaBg: "#2563EB",
-  ctaText: "#FFFFFF",
+  ctaBg: "var(--widget-primary)",
+  ctaText: "var(--widget-text-inverse)",
   space4: "4px",
   space8: "8px",
   space12: "12px",
@@ -253,6 +279,43 @@ const defaultContentConfig: WidgetContentConfig = {
   },
 };
 
+const RESERVATIONS_URL = "https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime";
+
+const WEEKDAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+const FALLBACK_HOURS: Record<(typeof WEEKDAY_ORDER)[number], string> = {
+  Sunday: "10:00 AM – 8:00 PM",
+  Monday: "11:00 AM – 9:00 PM",
+  Tuesday: "11:00 AM – 9:00 PM",
+  Wednesday: "11:00 AM – 9:00 PM",
+  Thursday: "11:00 AM – 10:00 PM",
+  Friday: "11:00 AM – 11:00 PM",
+  Saturday: "10:00 AM – 11:00 PM",
+};
+
+const MENU_OPTIONS = [
+  {
+    key: "1",
+    label: "Appetizers",
+    items: ["Crispy Calamari", "Truffle Fries", "Burrata & Tomato"],
+  },
+  {
+    key: "2",
+    label: "Sandwiches",
+    items: ["Steak Sandwich", "Cedar Chicken Club", "Roasted Veggie Panini"],
+  },
+  {
+    key: "3",
+    label: "Entrees",
+    items: ["Herb Salmon", "Braised Short Rib", "Wild Mushroom Risotto"],
+  },
+  {
+    key: "4",
+    label: "Desserts",
+    items: ["Basque Cheesecake", "Dark Chocolate Torte", "Seasonal Sorbet"],
+  },
+] as const;
+
 const createId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
@@ -285,6 +348,16 @@ const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-text-primary": tokens.textPrimaryColor,
   "--tandem-text-secondary": tokens.textSecondaryColor,
   "--tandem-text-tertiary": tokens.textTertiaryColor,
+  "--tandem-header-bg": tokens.headerBackground,
+  "--tandem-header-text": tokens.headerTextColor,
+  "--tandem-quick-action-bg": tokens.quickActionColor,
+  "--tandem-quick-action-text": tokens.quickActionTextColor,
+  "--tandem-quick-action-border": tokens.quickActionBorderColor,
+  "--tandem-quick-action-hover": tokens.quickActionHoverColor,
+  "--tandem-send-bg": tokens.sendButtonColor,
+  "--tandem-send-hover": tokens.sendButtonHoverColor,
+  "--tandem-send-pressed": tokens.sendButtonPressedColor,
+  "--tandem-send-text": tokens.sendButtonTextColor,
   "--tandem-shadow": tokens.shadowDeep,
   "--tandem-shadow-soft": tokens.shadowSoft,
   "--tandem-shadow-medium": tokens.shadowMedium,
@@ -296,7 +369,7 @@ const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-radius-button": tokens.buttonRadius,
   "--tandem-radius-input": tokens.inputRadius,
   "--tandem-radius-launcher": tokens.launcherRadius,
-  "--tandem-user-bg": tokens.userBubbleBg,
+  "--tandem-user-bg": tokens.sendButtonColor,
   "--tandem-user-text": tokens.userBubbleText,
   "--tandem-assistant-bg": tokens.assistantBubbleBg,
   "--tandem-assistant-text": tokens.assistantBubbleText,
@@ -329,8 +402,12 @@ export function ChatWidget({
   initialMessages,
   config,
   initiallyOpen = false,
+  showLauncher = true,
+  onClose,
   businessId,
+  locationSlug,
   apiBaseUrl,
+  hydrateHistory = true,
 }: ChatWidgetProps) {
   const mergedTheme = useMemo(
     () => ({ ...defaultTheme, ...theme, brandName: config?.businessName ?? defaultTheme.brandName }),
@@ -340,15 +417,11 @@ export function ChatWidget({
     () => themeToCSSVariables(mergedTheme),
     [mergedTheme]
   );
-  const resolvedBusinessId = businessId ?? "default";
-  const normalizedApiBaseUrl = useMemo(() => {
-    const trimmed = apiBaseUrl?.trim() ?? "";
-    if (!trimmed) {
-      return "";
-    }
-    return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
-  }, [apiBaseUrl]);
-  const chatApiUrl = `${normalizedApiBaseUrl}/api/chat`;
+  const runtimeConfig = useMemo(
+    () => resolveWidgetRuntimeConfig({ businessId, locationSlug, apiBaseUrl }),
+    [apiBaseUrl, businessId, locationSlug],
+  );
+  const chatApiUrl = `${runtimeConfig.apiBaseUrl}/api/chat`;
   const contentConfig = useMemo(() => {
     return {
       ...defaultContentConfig,
@@ -365,12 +438,11 @@ export function ChatWidget({
 
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [inputValue, setInputValue] = useState("");
-  const [view, setView] = useState<ViewState>("chat");
-  const [helpSearch, setHelpSearch] = useState("");
-  const [showAllFaqs, setShowAllFaqs] = useState(false);
+  const [awaitingMenuSelection, setAwaitingMenuSelection] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => hydrateMessages(initialMessages));
   const [isStreaming, setIsStreaming] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [composerError, setComposerError] = useState<InlineComposerError | null>(null);
+  const [lastSubmittedMessage, setLastSubmittedMessage] = useState<string | null>(null);
   const [isHydratingHistory, setIsHydratingHistory] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
@@ -378,13 +450,44 @@ export function ChatWidget({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const historyWarnedRef = useRef(false);
+
+  useEffect(() => {
+    setIsOpen(initiallyOpen);
+  }, [initiallyOpen]);
+
+  useEffect(() => {
+    if (runtimeConfig.isValid) {
+      return;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(runtimeConfig.error ?? "Invalid ChatWidget runtime config");
+    }
+    setComposerError({
+      message: "Chat is unavailable right now.",
+      devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
+    });
+  }, [runtimeConfig.error, runtimeConfig.isValid]);
 
   useEffect(() => {
     setMessages(hydrateMessages(initialMessages));
     setHistoryLoaded(false);
-  }, [initialMessages, resolvedBusinessId]);
+  }, [initialMessages, runtimeConfig.businessId, runtimeConfig.locationSlug]);
 
   useEffect(() => {
+    if (!hydrateHistory) {
+      setIsHydratingHistory(false);
+      setHistoryLoaded(true);
+      return;
+    }
+
+    if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+      setIsHydratingHistory(false);
+      setHistoryLoaded(true);
+      return;
+    }
+
     if (historyLoaded) {
       return;
     }
@@ -394,31 +497,65 @@ export function ChatWidget({
 
     const loadHistory = async () => {
       setIsHydratingHistory(true);
+
+      const warnHistoryFailure = (detail: { url: string; status: number; bodyPreview: string }) => {
+        if (historyWarnedRef.current) {
+          return;
+        }
+        historyWarnedRef.current = true;
+        console.warn("Failed to load conversation history", detail);
+      };
+
+      const getBodyPreview = async (response: Response) => {
+        try {
+          const text = await response.text();
+          return text.slice(0, 200);
+        } catch {
+          return "";
+        }
+      };
+
       try {
-        const params = new URLSearchParams({ businessId: resolvedBusinessId });
-        const response = await fetch(`${chatApiUrl}?${params.toString()}`, {
+        const params = new URLSearchParams();
+        params.set("businessId", runtimeConfig.businessId!);
+        if (runtimeConfig.locationSlug) {
+          params.set("locationSlug", runtimeConfig.locationSlug);
+        }
+        const historyUrl = `${chatApiUrl}?${params.toString()}`;
+        const response = await fetch(historyUrl, {
           method: "GET",
           signal: controller.signal,
         });
-        if (!response.ok) {
-          throw new Error("Failed to load conversation history");
-        }
-        const data = await response.json();
-        if (cancelled) {
-          return;
-        }
-        if (Array.isArray(data.messages) && data.messages.length) {
-          setMessages(
-            data.messages.map((message: { role: MessageRole; content: string }) => ({
-              id: createId(),
-              role: message.role,
-              text: message.content,
-            })),
-          );
+        if (response.ok) {
+          const data = await response.json();
+          if (cancelled) {
+            return;
+          }
+
+          if (Array.isArray(data.messages) && data.messages.length) {
+            setMessages(
+              data.messages.map((message: { role: MessageRole; content: string }) => ({
+                id: createId(),
+                role: message.role,
+                text: message.content,
+              })),
+            );
+            return;
+          }
+        } else {
+          const bodyPreview = await getBodyPreview(response);
+          warnHistoryFailure({
+            url: historyUrl,
+            status: response.status,
+            bodyPreview,
+          });
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("Failed to hydrate chat history", error);
+          if (!historyWarnedRef.current) {
+            historyWarnedRef.current = true;
+            console.warn("Failed to hydrate chat history", error);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -434,42 +571,12 @@ export function ChatWidget({
       cancelled = true;
       controller.abort();
     };
-  }, [chatApiUrl, historyLoaded, resolvedBusinessId]);
-
-  const handleViewChange = useCallback((next: ViewState) => {
-    setView(next);
-    if (next === "help") {
-      setShowAllFaqs(false);
-    }
-  }, []);
-  const isChatView = view === "chat";
-
-  const handlePromptInsert = useCallback((prompt: string) => {
-    setView("chat");
-    setInputValue(prompt);
-    if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
-    }
-  }, []);
-
-  const handleHandoffAction = useCallback(() => {
-    const value = contentConfig.handoff.actionValue;
-    if (value?.startsWith("http")) {
-      window.open(value, "_blank", "noopener");
-      return;
-    }
-    if (value?.includes("@")) {
-      window.location.href = `mailto:${value}`;
-      return;
-    }
-    handlePromptInsert("I'd like to talk to a person.");
-  }, [contentConfig.handoff.actionValue, handlePromptInsert]);
+  }, [chatApiUrl, historyLoaded, hydrateHistory, runtimeConfig.businessId, runtimeConfig.isValid, runtimeConfig.locationSlug]);
 
   const closePanel = useCallback(() => {
     setIsOpen(false);
-  }, []);
+    onClose?.();
+  }, [onClose]);
 
   useEffect(() => {
     return () => {
@@ -501,7 +608,7 @@ export function ChatWidget({
   }, [closePanel, isOpen]);
 
   useEffect(() => {
-    if (!isOpen || view !== "chat") {
+    if (!isOpen) {
       return;
     }
 
@@ -521,21 +628,102 @@ export function ChatWidget({
     handleScroll();
     node.addEventListener("scroll", handleScroll, { passive: true });
     return () => node.removeEventListener("scroll", handleScroll);
-  }, [isOpen, view]);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen || view !== "chat") {
+    if (!isOpen) {
       return;
     }
 
     if (shouldAutoScrollRef.current) {
       scrollToBottom(messagesRef.current, "smooth");
     }
-  }, [messages, isOpen, view]);
+  }, [messages, isOpen]);
+
+  const appendAssistantMessage = useCallback((text: string, cta?: MessageCTA) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: createId(),
+        role: "assistant",
+        text,
+        cta,
+      },
+    ]);
+  }, []);
+
+  const formatHoursMessage = useCallback(() => {
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
+    const orderedDays = WEEKDAY_ORDER.filter((day) => day === today).concat(
+      WEEKDAY_ORDER.filter((day) => day !== today),
+    );
+
+    const lines = orderedDays.map((day) => {
+      const value = FALLBACK_HOURS[day];
+      if (day === today) {
+        return `Today (${day}): ${value}`;
+      }
+      return `${day}: ${value}`;
+    });
+
+    return `Here are our hours:\n${lines.join("\n")}`;
+  }, []);
+
+  const menuPromptMessage = useMemo(
+    () =>
+      [
+        "Which menu would you like to view? Reply with a number:",
+        ...MENU_OPTIONS.map((option) => `${option.key}) ${option.label}`),
+      ].join("\n"),
+    [],
+  );
+
+  const resolveMenuOption = useCallback((value: string) => {
+    const normalized = value.trim().toLowerCase();
+    return MENU_OPTIONS.find(
+      (option) =>
+        option.key === normalized ||
+        option.label.toLowerCase() === normalized ||
+        normalized.includes(option.label.toLowerCase()),
+    );
+  }, []);
+
+  const handleQuickAction = useCallback(
+    (action: QuickAction) => {
+      setComposerError(null);
+
+      if (action === "hours") {
+        setAwaitingMenuSelection(false);
+        appendAssistantMessage(formatHoursMessage());
+        return;
+      }
+
+      if (action === "reservations") {
+        setAwaitingMenuSelection(false);
+        appendAssistantMessage("You can book a table here:", {
+          label: "Open reservations",
+          href: RESERVATIONS_URL,
+        });
+        return;
+      }
+
+      setAwaitingMenuSelection(true);
+      appendAssistantMessage(menuPromptMessage);
+    },
+    [appendAssistantMessage, formatHoursMessage, menuPromptMessage],
+  );
 
   const startAssistantResponse = useCallback(
     async (history: Message[], assistantMessageId: string) => {
-      setErrorMessage(null);
+      if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+        setComposerError({
+          message: "Chat is unavailable right now.",
+          devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
+        });
+        return;
+      }
+
+      setComposerError(null);
       setIsStreaming(true);
 
       const controller = new AbortController();
@@ -553,7 +741,8 @@ export function ChatWidget({
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            businessId: resolvedBusinessId,
+            businessId: runtimeConfig.businessId,
+            locationSlug: runtimeConfig.locationSlug,
             messages: [
               {
                 role: latestUserMessage.role,
@@ -565,8 +754,27 @@ export function ChatWidget({
         });
 
         if (!response.ok || !response.body) {
-          const errorText = await response.text().catch(() => "");
-          throw new Error(errorText || "Assistant failed to respond.");
+          const payload = await response
+            .json()
+            .catch(() => ({ error: "Assistant failed to respond." }));
+          const serverMessage =
+            typeof payload.error === "string" && payload.error.trim().length > 0
+              ? payload.error
+              : "Assistant failed to respond.";
+          const missingEnv = Array.isArray(payload.missingEnv)
+            ? payload.missingEnv.filter((entry: unknown) => typeof entry === "string")
+            : [];
+
+          const isConfigError = response.status >= 500 && /server not configured/i.test(serverMessage);
+
+          throw new Error(
+            JSON.stringify({
+              status: response.status,
+              serverMessage,
+              isConfigError,
+              missingEnv,
+            }),
+          );
         }
 
         const reader = response.body.getReader();
@@ -601,22 +809,37 @@ export function ChatWidget({
         }
       } catch (error) {
         const isAbort = error instanceof DOMException && error.name === "AbortError";
-        const fallback = isAbort
-          ? "Generation stopped."
-          : error instanceof Error
-            ? error.message
-            : "Something went wrong. Please try again.";
+        let friendlyMessage = "We couldn’t send that message. Please try again.";
+        let devHint: string | undefined;
 
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, role: "system", text: fallback }
-              : message,
-          ),
-        );
+        if (!isAbort && error instanceof Error) {
+          try {
+            const parsed = JSON.parse(error.message) as {
+              serverMessage?: string;
+              isConfigError?: boolean;
+              missingEnv?: string[];
+            };
+
+            if (parsed.isConfigError) {
+              friendlyMessage = "Chat is not configured yet. Ask an admin to set the API key.";
+              if (process.env.NODE_ENV !== "production") {
+                const hintFromArray = parsed.missingEnv?.[0];
+                const hintFromMessage = parsed.serverMessage?.match(/missing\s+([A-Z0-9_]+)/)?.[1];
+                const envName = hintFromArray || hintFromMessage;
+                if (envName && typeof window !== "undefined" && window.location.port === "3100") {
+                  devHint = `Missing ${envName}`;
+                }
+              }
+            }
+          } catch {
+            friendlyMessage = "We couldn’t send that message. Please try again.";
+          }
+        }
+
+        setMessages((prev) => prev.filter((message) => message.id !== assistantMessageId));
 
         if (!isAbort) {
-          setErrorMessage(fallback);
+          setComposerError({ message: friendlyMessage, devHint });
         }
       } finally {
         if (abortControllerRef.current === controller) {
@@ -625,7 +848,7 @@ export function ChatWidget({
         setIsStreaming(false);
       }
     },
-    [chatApiUrl, resolvedBusinessId],
+    [chatApiUrl, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, runtimeConfig.locationSlug],
   );
 
   const stopStreaming = useCallback(() => {
@@ -636,7 +859,44 @@ export function ChatWidget({
 
   const sendMessage = useCallback(async () => {
     const trimmed = inputValue.trim();
+    if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+      setComposerError({
+        message: "Chat is unavailable right now.",
+        devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
+      });
+      return;
+    }
+
     if (!trimmed || isStreaming || isHydratingHistory) {
+      return;
+    }
+
+    if (awaitingMenuSelection) {
+      const option = resolveMenuOption(trimmed);
+      const userMessage: Message = {
+        id: createId(),
+        role: "user",
+        text: trimmed,
+      };
+
+      const assistantMessage: Message = option
+        ? {
+            id: createId(),
+            role: "assistant",
+            text: `${option.label}:\n${option.items.map((item) => `• ${item}`).join("\n")}`,
+          }
+        : {
+            id: createId(),
+            role: "assistant",
+            text: "Please choose a menu by replying with 1, 2, 3, or 4.",
+          };
+
+      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      setInputValue("");
+      setLastSubmittedMessage(trimmed);
+      if (option) {
+        setAwaitingMenuSelection(false);
+      }
       return;
     }
 
@@ -656,9 +916,37 @@ export function ChatWidget({
     const conversationSnapshot = [...messages, userMessage];
     setMessages([...conversationSnapshot, assistantPlaceholder]);
     setInputValue("");
+    setLastSubmittedMessage(trimmed);
+    setAwaitingMenuSelection(false);
 
     await startAssistantResponse(conversationSnapshot, assistantMessageId);
-  }, [inputValue, isHydratingHistory, isStreaming, messages, startAssistantResponse]);
+  }, [awaitingMenuSelection, inputValue, isHydratingHistory, isStreaming, messages, resolveMenuOption, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, startAssistantResponse]);
+
+  const retryLastMessage = useCallback(async () => {
+    const retryText = lastSubmittedMessage?.trim();
+    if (!retryText || isStreaming || isHydratingHistory) {
+      return;
+    }
+
+    const userMessage: Message = {
+      id: createId(),
+      role: "user",
+      text: retryText,
+    };
+
+    const assistantMessageId = createId();
+    const assistantPlaceholder: Message = {
+      id: assistantMessageId,
+      role: "assistant",
+      text: "",
+    };
+
+    const conversationSnapshot = [...messages, userMessage];
+    setMessages([...conversationSnapshot, assistantPlaceholder]);
+    setComposerError(null);
+
+    await startAssistantResponse(conversationSnapshot, assistantMessageId);
+  }, [isHydratingHistory, isStreaming, lastSubmittedMessage, messages, startAssistantResponse]);
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -668,30 +956,20 @@ export function ChatWidget({
   };
 
   const isSendDisabled = inputValue.trim().length === 0 || isStreaming || isHydratingHistory;
-  const helpQuery = helpSearch.trim().toLowerCase();
-  const filteredFaqs = contentConfig.faqs.filter((faq) => {
-    if (!helpQuery) {
-      return true;
-    }
-    return (
-      faq.question.toLowerCase().includes(helpQuery) ||
-      faq.answer.toLowerCase().includes(helpQuery) ||
-      faq.category.toLowerCase().includes(helpQuery)
-    );
-  });
-  const visibleFaqs = (helpQuery || showAllFaqs ? filteredFaqs : filteredFaqs.slice(0, 4)).slice(0, 8);
 
   return (
-    <div className={styles.themeScope} style={cssVarStyle}>
-      <button
-        type="button"
-        aria-label={isOpen ? "Close chat" : `Open ${mergedTheme.brandName} chat`}
-        aria-haspopup="dialog"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className={styles.launcher}
-      >
-        <LauncherIcon />
-      </button>
+    <div className={`${styles.themeScope} ${!showLauncher ? styles.embeddedScope : ""}`} style={cssVarStyle}>
+      {showLauncher && !isOpen ? (
+        <button
+          type="button"
+          aria-label={isOpen ? "Close chat" : `Open ${mergedTheme.brandName} chat`}
+          aria-haspopup="dialog"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className={styles.launcher}
+        >
+          <LauncherIcon />
+        </button>
+      ) : null}
 
       {isOpen && (
         <div
@@ -714,33 +992,21 @@ export function ChatWidget({
                 <p className={styles.brandSubtitle}>{contentConfig.tagline ?? "Always-on concierge"}</p>
               </div>
             </div>
+            <div className={styles.quickActions} role="toolbar" aria-label="Quick actions">
+              <button type="button" className={styles.quickActionButton} onClick={() => handleQuickAction("hours")}>
+                <ClockIcon />
+                <span>Hours</span>
+              </button>
+              <button type="button" className={styles.quickActionButton} onClick={() => handleQuickAction("reservations")}>
+                <ReservationIcon />
+                <span>Reservations</span>
+              </button>
+              <button type="button" className={styles.quickActionButton} onClick={() => handleQuickAction("menu")}>
+                <MenuIcon />
+                <span>Menus</span>
+              </button>
+            </div>
             <div className={styles.headerActions}>
-              <div
-                className={styles.viewSwitch}
-                role="tablist"
-                aria-label="Chat views"
-              >
-                {VIEW_OPTIONS.map((option) => {
-                  const isActive = option.value === view;
-                  const classNames = [styles.viewSwitchButton];
-                  if (isActive) {
-                    classNames.push(styles.viewSwitchButtonActive);
-                  }
-
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      className={classNames.join(" ")}
-                      onClick={() => handleViewChange(option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
               <button
                 type="button"
                 onClick={closePanel}
@@ -753,38 +1019,9 @@ export function ChatWidget({
           </header>
 
           <div className={styles.panelBody}>
-            {isChatView ? (
-              <>
+            <>
                 <div className={styles.chatContent}>
                   <div ref={messagesRef} className={styles.chatScroller}>
-                    <section className={styles.chatIntro}>
-                      <p className={styles.chatEyebrow}>Live concierge</p>
-                      <h2 className={styles.chatTitle}>
-                        Hi, I'm the concierge for {contentConfig.businessName}.
-                      </h2>
-                      <p className={styles.chatSubtitle}>{contentConfig.welcomeMessage}</p>
-                      <div className={styles.intentChips}>
-                        {contentConfig.intents.map((intent) => (
-                          <button
-                            key={intent.id}
-                            type="button"
-                            className={styles.intentChip}
-                            onClick={() => handlePromptInsert(intent.prompt)}
-                          >
-                            <span className={styles.intentLabel}>{intent.label}</span>
-                            <span className={styles.intentDescription}>{intent.description}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.handoffButton}
-                        onClick={handleHandoffAction}
-                      >
-                        <span>{contentConfig.handoff.actionLabel}</span>
-                        <span className={styles.handoffStatus}>{contentConfig.handoff.detail}</span>
-                      </button>
-                    </section>
                     <div className={styles.messageList}>
                       {messages.map((message) => (
                         <MessageBubble key={message.id} message={message} />
@@ -826,85 +1063,32 @@ export function ChatWidget({
                     Send
                   </button>
                 </form>
-                {isStreaming || errorMessage ? (
+                {isStreaming || composerError ? (
                   <div className={styles.inputStatusRow} aria-live="polite">
                     {isStreaming ? (
                       <p className={styles.typingIndicator}>Assistant is responding...</p>
                     ) : null}
-                    {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}
+                    {composerError ? (
+                      <div className={styles.errorRow}>
+                        <p className={styles.errorText}>
+                          {composerError.message}
+                          {composerError.devHint ? ` (${composerError.devHint})` : ""}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void retryLastMessage();
+                          }}
+                          disabled={!lastSubmittedMessage || isStreaming || isHydratingHistory}
+                          className={styles.retryButton}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </>
-            ) : (
-              <div className={styles.helpView} role="region" aria-label="Help center">
-                <div className={styles.helpSearchRow}>
-                  <input
-                    type="search"
-                    value={helpSearch}
-                    onChange={(event) => setHelpSearch(event.target.value)}
-                    placeholder="Search policies, FAQs, menu notes"
-                    className={styles.helpSearchInput}
-                  />
-                  {helpQuery ? (
-                    <button
-                      type="button"
-                      className={styles.clearSearchButton}
-                      onClick={() => setHelpSearch("")}
-                    >
-                      Clear
-                    </button>
-                  ) : null}
-                </div>
-                <div className={styles.helpCategories}>
-                  {contentConfig.categories.map((category) => (
-                    <article key={category.id} className={styles.helpCategoryCard}>
-                      <div>
-                        <p className={styles.helpCategoryLabel}>{category.label}</p>
-                        <p className={styles.helpCategoryDescription}>{category.description}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.helpCategoryButton}
-                        onClick={() => handlePromptInsert(`Tell me about ${category.label}.`)}
-                      >
-                        Ask
-                      </button>
-                    </article>
-                  ))}
-                </div>
-                <div className={styles.helpFaqList}>
-                  {visibleFaqs.length ? (
-                    visibleFaqs.map((faq) => (
-                      <article key={faq.id} className={styles.faqCard}>
-                        <div>
-                          <p className={styles.faqCategory}>{faq.category}</p>
-                          <h4 className={styles.faqQuestion}>{faq.question}</h4>
-                          <p className={styles.faqAnswer}>{faq.answer}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className={styles.faqActionButton}
-                          onClick={() => handlePromptInsert(faq.question)}
-                        >
-                          Ask about this
-                        </button>
-                      </article>
-                    ))
-                  ) : (
-                    <p className={styles.emptyHelpMessage}>No articles match your search.</p>
-                  )}
-                </div>
-                {filteredFaqs.length > 4 && !helpQuery ? (
-                  <button
-                    type="button"
-                    className={styles.showAllButton}
-                    onClick={() => setShowAllFaqs((prev) => !prev)}
-                  >
-                    {showAllFaqs ? "Show fewer" : "View all"}
-                  </button>
-                ) : null}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -962,6 +1146,32 @@ function LauncherIcon() {
       <circle cx="8" cy="10.5" r="1" fill="currentColor" />
       <circle cx="12" cy="10.5" r="1" fill="currentColor" />
       <circle cx="16" cy="10.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ReservationIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <rect x="4" y="5" width="16" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <path d="M6 7h12M6 12h12M6 17h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

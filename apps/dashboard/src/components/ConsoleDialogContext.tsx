@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 
 export type ConsoleDialogContextValue = {
+  openCreateLocation: () => void;
   openCreateBusiness: () => void;
 };
 

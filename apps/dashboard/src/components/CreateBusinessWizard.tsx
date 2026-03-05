@@ -241,7 +241,7 @@ export function CreateBusinessWizard({ open, onClose }: Props) {
                   {copied ? 'Copied' : 'Copy snippet'}
                 </button>
                 <Link
-                  href="http://localhost:3000"
+                  href="/overview"
                   target="_blank"
                   className="rounded-2xl border border-white/30 px-4 py-2 text-sm font-semibold text-white/90 transition hover:border-white"
                 >

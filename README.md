@@ -1,31 +1,61 @@
-# Tandem 2.0 Monorepo
+# Tandem Monorepo
 
-Tandem 2.0 houses the concierge chatbot experience (and the shared UI kit that powers it) inside a single npm workspaces repository. The goal is to iterate quickly on the embedded widget while guaranteeing that every server interaction still runs through the Next.js App Router.
+Tandem is an npm workspaces monorepo for the operator dashboard, embeddable chat widget, and shared server/domain modules.
 
-## Structure
+## Workspace layout
+
 | Path | Purpose |
 | --- | --- |
-| `apps/chatbot` | Next.js surface that hosts the widget preview and API routes |
-| `packages/ui-kit` | Themeable React components consumed by the chatbot |
-| `packages/shared` | Cross-cutting TypeScript contracts/utilities |
+| `apps/dashboard` | Next.js App Router app (operator console + API routes, port 3100) |
+| `packages/ui-kit` | `ChatWidget` and widget runtime config helpers |
+| `packages/shared` | Shared types, mock store, LLM/provider routing, storage adapters, server helpers |
+| `supabase` | Active Supabase CLI config + migration path used by `supabase db push` |
 
-## Commands (run from repo root)
+## Core architecture rules
+
+- Backend logic stays in Next.js route handlers under `apps/dashboard/src/app/api/**`.
+- Use `@tandem/shared` for client-safe imports and `@tandem/shared/server` for server-only code.
+- Keep chat behavior aligned with the shared handlers used by `apps/dashboard/src/app/api/chat/route.ts`.
+- Prefer shared domain logic in `packages/shared` and shared presentation logic in `packages/ui-kit`.
+
+## Development commands
+
+Run from repo root:
+
 | Command | Description |
 | --- | --- |
 | `npm install` | Install workspace dependencies |
-| `npm run dev` | Start `apps/chatbot` on http://localhost:3000 |
-| `npm run lint` | Lint the chatbot workspace |
-| `npm run typecheck` | Type-check shared, UI kit, and chatbot packages |
-| `npm run build` | Production build of the chatbot app |
-| `npm run clean` | Remove `.next` output and stray `*.tsbuildinfo` files |
+| `npm run dev` | Start dashboard app on `http://localhost:3100` |
+| `npm run lint` | Lint dashboard workspace |
+| `npm run typecheck` | Type-check shared, ui-kit, and dashboard |
+| `npm run build` | Build dashboard app |
+| `npm run clean` | Remove stale `.next` and tsbuildinfo artifacts |
 
-If the dev server refuses to start or Turbopack leaves a stale lock behind, run `npm run clean` and re-run `npm run dev`.
+## Environment quick reference
 
-## Backend guardrails
-All backend logic must live inside Next.js route handlers at `apps/chatbot/src/app/api/*`. No standalone servers or background workers are allowed.
+Required for authenticated dashboard flows:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-## Widget preview surfaces
-- `http://localhost:3000/` renders the default Tandem widget in the shell.
-- `http://localhost:3000/demo` toggles between Tandem’s default tokens and a sample client theme with CTA-rich messages.
+Required for LLM generation:
+- `OPENAI_API_KEY`
 
-Favor small, verifiable changes: share primitives through `packages/ui-kit`, common types through `packages/shared`, and keep backend work in the App Router.
+Optional:
+- `LLM_PROVIDER` (default `openai`)
+- `LLM_MODEL` (default `gpt-5.2`)
+- `TANDEM_DATA_DIR`
+- `TANDEM_API_KEY`
+- `TANDEM_ALLOWED_BUSINESS_IDS`
+
+## Documentation index
+
+- System map: `docs/system-map.md`
+- Current audit status: `docs/current-status.md`
+- Stabilization priorities: `docs/stabilization-plan.md`
+- Operational setup/run guide: `RUNBOOK.md`
+- Migration reconciliation: `docs/migration-reconciliation.md`
+
+## Migration guardrail
+
+- Run `npm run guard:migrations` before pushing schema changes.
+- New production migrations must exist only in `supabase/migrations/*`.

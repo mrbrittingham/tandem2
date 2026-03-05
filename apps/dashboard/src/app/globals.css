@@ -1,16 +1,17 @@
 @import "tailwindcss";
+@import "./tandem-console-tokens.css";
 
 :root {
-  --bg: #f8fafc;
-  --panel: #ffffff;
-  --panel-muted: #f1f5f9;
-  --text: #0f172a;
-  --muted: #64748b;
-  --accent: #2563eb;
-  --accent-soft: rgba(37, 99, 235, 0.12);
-  --border: #e2e8f0;
-  --radius-large: 24px;
-  --radius-medium: 16px;
+  --bg: var(--console-bg-page);
+  --panel: var(--console-bg-card);
+  --panel-muted: var(--console-bg-hover);
+  --text: var(--console-text-primary);
+  --muted: var(--console-text-secondary);
+  --accent: var(--console-primary);
+  --accent-soft: var(--console-sidebar-item-active-bg);
+  --border: var(--console-border);
+  --radius-large: var(--console-radius-lg);
+  --radius-medium: var(--console-radius-md);
 }
 
 @theme inline {
@@ -19,17 +20,25 @@
   --color-dashboard-text: var(--text);
   --color-dashboard-muted: var(--muted);
   --color-dashboard-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--console-font-family);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--console-bg-page);
+  color: var(--console-text-primary);
+  font-family: var(--console-font-family);
 }
 
 * {
   box-sizing: border-box;
+}
+
+[class*="bg-[var(--console-primary)]"],
+[class*="bg-[var(--console-secondary)]"],
+[class*="bg-indigo-"],
+[class*="bg-violet-"],
+[class*="bg-blue-"] {
+  color: #fff;
 }

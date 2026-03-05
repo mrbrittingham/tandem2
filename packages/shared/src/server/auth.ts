@@ -11,8 +11,12 @@ export function requireApiKey(req: Request): void {
   }
 
   const providedApiKey = req.headers.get(API_KEY_HEADER)?.trim();
-  if (!providedApiKey || providedApiKey !== configuredApiKey) {
-    throw jsonError(401, "missing or invalid API key");
+  if (!providedApiKey) {
+    throw jsonError(401, "missing API key");
+  }
+
+  if (providedApiKey !== configuredApiKey) {
+    throw jsonError(403, "invalid API key");
   }
 }
 
