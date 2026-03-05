@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createLocation } from "@/lib/store-hooks";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function CreateLocationDialog({ open, onClose }: Props) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
@@ -97,20 +99,55 @@ export function CreateLocationDialog({ open, onClose }: Props) {
                 });
 
                 const website = websiteUrl.trim();
+                const addressText = address.trim();
+                let createdBusinessId: string | null = null;
+                let createdLocationSlug: string | null = null;
+
+                try {
+                  const createResponse = await fetch("/api/locations", {
+                    method: "POST",
+                    headers: {
+                      "content-type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      name: name.trim(),
+                      address: addressText || undefined,
+                      mode: "fresh",
+                    }),
+                  });
+
+                  if (createResponse.ok) {
+                    const payload = (await createResponse.json().catch(() => ({}))) as {
+                      location?: { slug?: string; business_id?: string; businessId?: string };
+                    };
+                    createdBusinessId = payload.location?.business_id ?? payload.location?.businessId ?? null;
+                    createdLocationSlug = payload.location?.slug ?? null;
+                  }
+                } catch {
+                  // local location is already created; this best-effort API sync can fail safely
+                }
+
                 if (website) {
                   try {
                     setStatus("Location created. Starting initial website crawl…");
-                    await fetch("/api/website-import/start", {
+                    const importResponse = await fetch("/api/website-import/start", {
                       method: "POST",
                       headers: {
                         "content-type": "application/json",
                       },
                       body: JSON.stringify({
+                        businessId: createdBusinessId,
                         businessSlug: location.businessSlug ?? location.slug,
-                        locationSlug: location.locationSlug ?? location.slug,
+                        locationSlug: createdLocationSlug ?? location.locationSlug ?? location.slug,
                         url: website,
                       }),
                     });
+
+                    if (importResponse.ok) {
+                      setStatus("Initial website crawl started.");
+                    } else {
+                      setStatus("Location created. Initial crawl could not be started.");
+                    }
                   } catch {
                     setStatus("Location created. Initial crawl could not be started.");
                   }
@@ -118,6 +155,7 @@ export function CreateLocationDialog({ open, onClose }: Props) {
 
                 reset();
                 onClose();
+                router.push("/locations");
               }}
               className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >

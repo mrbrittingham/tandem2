@@ -147,7 +147,6 @@ function formatDate(value?: string | null): string {
 }
 
 export function WebsiteImportPanel({ business }: { business: BusinessProfile }) {
-  const businessSlug = (business.businessSlug ?? business.slug ?? "").trim();
   const initialLocationSlug = (business.locationSlug ?? business.slug ?? "").trim();
 
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -173,35 +172,23 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   );
 
   const locationGuardError = useMemo(() => {
-    if (!businessSlug) {
-      return "Business slug missing. Select a valid business before importing.";
-    }
     if (!locationOptions.length) {
-      return isLoadingLocations ? null : "No locations found for this business. Pick a location to continue.";
+      return isLoadingLocations ? null : "No locations found. Pick a location to continue.";
     }
     if (!selectedLocation) {
-      return "Selected location is invalid for this business. Pick a location to continue.";
+      return "Selected location is invalid. Pick a location to continue.";
     }
     return null;
-  }, [businessSlug, isLoadingLocations, locationOptions.length, selectedLocation]);
+  }, [isLoadingLocations, locationOptions.length, selectedLocation]);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadLocations = async () => {
-      if (!businessSlug) {
-        setLocationOptions([]);
-        setSelectedLocationSlug("");
-        return;
-      }
-
       setIsLoadingLocations(true);
 
       try {
-        const params = new URLSearchParams();
-        params.set("businessSlug", businessSlug);
-
-        const response = await fetch(`/api/locations?${params.toString()}`, { method: "GET" });
+        const response = await fetch("/api/locations", { method: "GET" });
         const payload = (await response.json().catch(() => ({}))) as LocationsResponse;
         if (cancelled) {
           return;
@@ -233,7 +220,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [businessSlug, initialLocationSlug]);
+  }, [initialLocationSlug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -246,8 +233,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
 
       try {
         const params = new URLSearchParams();
-        if (businessSlug) {
-          params.set("businessSlug", businessSlug);
+        if (selectedLocation?.businessId) {
+          params.set("businessId", selectedLocation.businessId);
         }
         params.set("locationSlug", selectedLocationSlug);
 
@@ -289,7 +276,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [businessSlug, locationGuardError, selectedLocationSlug]);
+  }, [locationGuardError, selectedLocation?.businessId, selectedLocationSlug]);
 
   const runImport = async (nextUrl?: string) => {
     const targetUrl = (nextUrl ?? url).trim();
@@ -315,7 +302,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          businessSlug,
+          businessId: selectedLocation?.businessId,
           locationSlug: selectedLocationSlug,
           url: targetUrl,
         }),
