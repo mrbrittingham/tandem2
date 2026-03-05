@@ -133,7 +133,9 @@ function formatDate(value?: string | null): string {
 }
 
 export function WebsiteImportPanel({ business }: { business: BusinessProfile }) {
-  const businessId = business.businessSlug ?? business.slug;
+  const businessSlug = (business.businessSlug ?? business.slug ?? "").trim();
+  const businessId = (business.id ?? "").trim();
+  const hasUuidBusinessId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(businessId);
   const locationSlug = business.locationSlug ?? business.slug;
 
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -152,8 +154,17 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     let cancelled = false;
     const loadLatest = async () => {
       try {
+        const params = new URLSearchParams();
+        if (businessSlug) {
+          params.set("businessSlug", businessSlug);
+        }
+        if (hasUuidBusinessId) {
+          params.set("businessId", businessId);
+        }
+        params.set("locationSlug", locationSlug);
+
         const response = await fetch(
-          `/api/website-import/latest?businessId=${encodeURIComponent(businessId)}&locationSlug=${encodeURIComponent(locationSlug)}`,
+          `/api/website-import/latest?${params.toString()}`,
           { method: "GET" },
         );
 
@@ -187,7 +198,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [businessId, locationSlug]);
+  }, [businessId, businessSlug, hasUuidBusinessId, locationSlug]);
 
   const runImport = async (nextUrl?: string) => {
     const targetUrl = (nextUrl ?? url).trim();
@@ -208,7 +219,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          businessId,
+          businessSlug,
+          ...(hasUuidBusinessId ? { businessId } : {}),
           locationSlug,
           url: targetUrl,
         }),
