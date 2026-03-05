@@ -1,5 +1,6 @@
 import { llmGenerate, validateLLMServerConfig } from "@tandem/shared/server";
 import type { CrawledPage, ImportSignals, WebsiteImportDraft, WebsiteImportResult } from "./types";
+import { isLikelyFaqPage, normalizeFaqCandidate } from "./faq-heuristics";
 import { createId, normalizeHexColor, pickReadableTextColor } from "./utils";
 
 type RawFaq = {
@@ -49,22 +50,57 @@ function asNullableUrl(value: string | null): string | null {
 
 function extractFallbackFaqs(pages: CrawledPage[]) {
   const out: WebsiteImportDraft["faqs"] = [];
-  const qaPattern = /([^\n?.!]{8,140}\?)\s+([^\n]{20,280})/g;
+  const seenQuestions = new Set<string>();
+  const questionPattern = /([^?.!\n]{8,140}\?)/g;
 
   for (const page of pages) {
+    const faqPageHint = isLikelyFaqPage(page.url, page.title);
+    const questions: Array<{ text: string; start: number; end: number }> = [];
+
     let match: RegExpExecArray | null;
-    while ((match = qaPattern.exec(page.textExcerpt)) !== null && out.length < 20) {
+    while ((match = questionPattern.exec(page.textExcerpt)) !== null && questions.length < 30) {
       const question = (match[1] ?? "").trim();
-      const answer = (match[2] ?? "").trim();
-      if (question.length < 8 || answer.length < 16) {
+      questions.push({
+        text: question,
+        start: match.index,
+        end: match.index + question.length,
+      });
+    }
+
+    for (let index = 0; index < questions.length && out.length < 20; index += 1) {
+      const question = questions[index];
+      const nextQuestion = questions[index + 1];
+      const answerStart = question.end;
+      const answerEnd = nextQuestion ? nextQuestion.start : Math.min(page.textExcerpt.length, answerStart + 420);
+      const answer = page.textExcerpt.slice(answerStart, answerEnd).trim();
+
+      const candidate = normalizeFaqCandidate(
+        {
+          question: question.text,
+          answer: answer.slice(0, 420),
+          sourceUrl: asNullableUrl(page.url),
+        },
+        {
+          faqPageHint,
+          minScore: faqPageHint ? 3 : 5,
+        },
+      );
+
+      if (!candidate) {
         continue;
       }
 
+      const key = candidate.question.toLowerCase();
+      if (seenQuestions.has(key)) {
+        continue;
+      }
+      seenQuestions.add(key);
+
       out.push({
         id: createId("faq"),
-        question,
-        answer: answer.slice(0, 320),
-        sourceUrl: asNullableUrl(page.url),
+        question: candidate.question,
+        answer: candidate.answer,
+        sourceUrl: candidate.sourceUrl,
         include: true,
       });
     }
@@ -342,15 +378,35 @@ function parseLlmDraft(input: {
         if (!question || !answer || !sourceUrl) {
           return null;
         }
+
+        const candidate = normalizeFaqCandidate(
+          {
+            question,
+            answer,
+            sourceUrl,
+          },
+          {
+            faqPageHint: isLikelyFaqPage(sourceUrl),
+            minScore: 4,
+          },
+        );
+
+        if (!candidate) {
+          return null;
+        }
+
         return {
           id: createId("faq"),
-          question,
-          answer,
-          sourceUrl,
+          question: candidate.question,
+          answer: candidate.answer,
+          sourceUrl: candidate.sourceUrl,
           include: true,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .filter((entry, index, list) =>
+        list.findIndex((candidate) => candidate.question.toLowerCase() === entry.question.toLowerCase()) === index,
+      )
       .slice(0, 20)
     : [];
 

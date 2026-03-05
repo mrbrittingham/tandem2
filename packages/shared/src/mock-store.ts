@@ -260,7 +260,7 @@ export function createLocation(payload: CreateLocationPayload): BusinessProfile 
 
   return {
     businessName: business.businessName ?? business.name,
-    tagline: business.tagline,
+    tagline: buildWidgetLocationSubtitle(business),
     welcomeMessage: business.summary,
     intents: business.intents.map((intent) => ({
       id: intent.id,
@@ -281,6 +281,50 @@ export function createLocation(payload: CreateLocationPayload): BusinessProfile 
     },
   };
  }
+
+function buildWidgetLocationSubtitle(business: BusinessProfile): string {
+  const cityState = extractCityState(business.location);
+  if (cityState) {
+    return cityState;
+  }
+
+  const locationName = (business.locationName ?? "").trim();
+  if (locationName) {
+    return locationName;
+  }
+
+  return "Location details";
+}
+
+function extractCityState(address: string): string | null {
+  const normalized = address.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const usCityStateMatch = normalized.match(/,\s*([^,]+),\s*([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?(?:,\s*(?:US|USA|United States))?\s*$/i);
+  if (usCityStateMatch) {
+    const city = usCityStateMatch[1].trim();
+    const state = usCityStateMatch[2].trim().toUpperCase();
+    if (city && state) {
+      return `${city}, ${state}`;
+    }
+  }
+
+  const parts = normalized
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  if (parts.length >= 2) {
+    const city = parts[parts.length - 1];
+    if (city) {
+      return city;
+    }
+  }
+
+  return null;
+}
 
  function mapFaqToWidget(faq: FAQItem): WidgetFaq {
   return {

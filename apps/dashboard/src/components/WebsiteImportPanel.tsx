@@ -155,6 +155,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   const [selectedLocationSlug, setSelectedLocationSlug] = useState("");
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [url, setUrl] = useState("");
+  const [lastImportedUrl, setLastImportedUrl] = useState<string | null>(null);
   const [run, setRun] = useState<WebsiteImportRunRecord | null>(null);
   const [draft, setDraft] = useState<WebsiteImportDraft | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -239,6 +240,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         return;
       }
 
+      setLastImportedUrl(null);
+
       try {
         const params = new URLSearchParams();
         if (businessSlug) {
@@ -262,7 +265,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         }
 
         setLocationId(payload.location?.id ?? null);
-        setUrl((payload.location?.websiteUrl ?? payload.run?.url ?? "").trim());
+        const latestUrl = (payload.location?.websiteUrl ?? payload.run?.url ?? "").trim();
+        setLastImportedUrl(latestUrl || null);
         setRun(payload.run ?? null);
         setDraft(payload.run?.result ?? null);
         if (payload.run?.id && (payload.run.status === "queued" || payload.run.status === "running")) {
@@ -424,7 +428,6 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         }
         if (draft.businessProfile.shortDescription.value) {
           record.summary = draft.businessProfile.shortDescription.value;
-          record.tagline = draft.businessProfile.shortDescription.value;
         }
         if (draft.businessProfile.address.value) {
           record.location = draft.businessProfile.address.value;
@@ -532,8 +535,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
       }
     >
       <div className="space-y-5">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          <label className="block text-sm">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,26rem)_auto] md:items-end">
+          <label className="block w-full text-sm">
             <span className="mb-1 block font-medium text-slate-700">Location</span>
             <select
               value={selectedLocationSlug}
@@ -581,6 +584,18 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
             Refresh import
           </button>
         </div>
+
+        {lastImportedUrl && !url.trim() ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => setUrl(lastImportedUrl)}
+              className="text-xs font-medium text-slate-600 underline hover:text-slate-800"
+            >
+              Resume last URL ({lastImportedUrl})
+            </button>
+          </div>
+        ) : null}
 
         {locationGuardError ? (
           <p className="text-sm text-amber-700">{locationGuardError}</p>
