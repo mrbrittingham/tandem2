@@ -5,16 +5,15 @@
 - `main` = production branch.
    - Vercel production deploys from `main`.
    - Railway production worker deploys from `main`.
-- `wip/desktop-sync` = development/staging branch.
-   - Vercel preview/staging should track `wip/desktop-sync`.
-   - Railway staging worker should track `wip/desktop-sync`.
-- Do not commit directly to `main`. Use PRs and merge into `main`.
+- `wip/desktop-sync` is optional and used only for large/unsafe work or when Mike explicitly requests it.
+   - If used, Vercel preview/staging and Railway staging can track `wip/desktop-sync`.
+- Standard day-to-day flow can commit/push directly on `main`.
 - If a PR adds a file in `supabase/migrations/`, apply that migration to the correct Supabase project as part of deploy.
 
 Deploy sequence (copy/paste checklist):
-1. Merge PR into `main`.
-2. Confirm Vercel and Railway auto-deploy from `main` completed successfully.
-3. Apply required Supabase migrations for that environment.
+1. Push/merge changes to `main`.
+2. Confirm Vercel and Railway deploys from `main` completed successfully.
+3. If migrations were added, run `npm run db:status` then `npm run db:push` (or confirm already applied for the target project).
 4. Run post-deploy verification (`/api/health`, import/chat happy path).
 
 ## Prerequisites

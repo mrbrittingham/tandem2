@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toApiError } from "@/lib/website-import/api-errors";
-import { BusinessResolutionError, isUuid, resolveBusinessId } from "@/lib/website-import/business-resolver";
+import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
 type Body = {
   businessId?: string;
@@ -65,10 +65,6 @@ export async function POST(request: Request) {
       resolvedBusinessSlug: resolved.businessSlug,
       inputMode: resolved.inputMode,
     });
-
-    if (!isUuid(resolved.businessId)) {
-      throw new BusinessResolutionError("Resolved business id is invalid", 500, "INVALID_RESOLVED_BUSINESS_ID");
-    }
 
     const { data: memberships, error: membershipError } = await supabase
       .from("business_memberships")

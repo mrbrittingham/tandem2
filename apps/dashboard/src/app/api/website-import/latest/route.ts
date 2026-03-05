@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toApiError } from "@/lib/website-import/api-errors";
 import { assertMembership, getImportRunById, mapImportRunRow } from "@/lib/website-import/store";
-import { BusinessResolutionError, isUuid, resolveBusinessId } from "@/lib/website-import/business-resolver";
+import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
 type LocationRow = {
   id: string;
@@ -55,10 +55,6 @@ export async function GET(request: Request) {
       resolvedBusinessSlug: resolved.businessSlug,
       inputMode: resolved.inputMode,
     });
-
-    if (!isUuid(resolved.businessId)) {
-      throw new BusinessResolutionError("Resolved business id is invalid", 500, "INVALID_RESOLVED_BUSINESS_ID");
-    }
 
     await assertMembership(supabase, resolved.businessId, user.id);
 

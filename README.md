@@ -31,6 +31,16 @@ Run from repo root:
 | `npm run build` | Build dashboard app |
 | `npm run clean` | Remove stale `.next` and tsbuildinfo artifacts |
 
+## Branch and deploy workflow
+
+- `main` is production and the default branch for normal work.
+- Pushes to `main` drive production deploys (Vercel app + Railway worker when configured).
+- Use `wip/desktop-sync` only for large/unsafe changes or when explicitly requested.
+- If a change adds `supabase/migrations/*`, run `npm run db:status` and `npm run db:push` for the target environment.
+
+Website import identifier note:
+- Website import routes accept `businessSlug` or opaque text `businessId` values (no UUID requirement).
+
 ## Environment quick reference
 
 Required for authenticated dashboard flows:
