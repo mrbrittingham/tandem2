@@ -10,6 +10,7 @@ import { TextInput } from "@/components/TextInput";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
 import { SaveBar } from "@/components/SaveBar";
 import { WebsiteImportPanel } from "@/components/WebsiteImportPanel";
+import { saveLocationConfig } from "@/lib/location-config-client";
 
 const defaultFaq: Pick<FAQItem, "question" | "answer" | "category" | "showInHelp"> = {
   question: "",
@@ -174,20 +175,30 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!business) {
       return;
     }
     setSaving(true);
-    setTimeout(() => {
+    try {
       updateBusiness(business.id, (draft) => {
         draft.faqs = faqs;
         draft.policies = policies;
         draft.updatedAt = new Date().toISOString();
       });
+
+      await saveLocationConfig({
+        location: business,
+        knowledgeConfig: {
+          faqs,
+          policies,
+        },
+      });
+
       setInitialSnapshot(JSON.stringify({ faqs, policies }));
+    } finally {
       setSaving(false);
-    }, 600);
+    }
   };
 
   const sortedFaqs = [...faqs].sort(

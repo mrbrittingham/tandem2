@@ -11,6 +11,7 @@ import { LocationSwitcher } from "@/components/LocationSwitcher";
 import { PreviewDockProvider } from "@/components/PreviewDockContext";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveChatScope } from "@/lib/chat-scope";
+import { parseLocationConfigForHydration } from "@/lib/location-config-client";
 import {
   businessToWidgetConfig,
   createLocation,
@@ -113,7 +114,7 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!isClientMounted || hydratedLocationsRef.current || locations.length > 0) {
+    if (!isClientMounted || hydratedLocationsRef.current) {
       return;
     }
 
@@ -150,14 +151,32 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        serverLocations.forEach((serverLocation) => {
-          const created = createLocation({
+        for (const serverLocation of serverLocations) {
+          let hydration = parseLocationConfigForHydration({});
+
+          try {
+            const configResponse = await fetch(`/api/location-config?locationId=${encodeURIComponent(serverLocation.id)}`, {
+              method: "GET",
+            });
+            if (configResponse.ok) {
+              const configPayload = (await configResponse.json().catch(() => ({}))) as { config?: unknown };
+              hydration = parseLocationConfigForHydration(configPayload.config);
+            }
+          } catch {
+            // continue with location-only hydration
+          }
+
+          const existing = locations.find(
+            (entry) => entry.id === serverLocation.id || entry.locationSlug === serverLocation.slug || entry.slug === serverLocation.slug,
+          );
+
+          const targetId = existing?.id ?? createLocation({
             name: serverLocation.name,
             address: serverLocation.address,
             mode: "fresh",
-          });
+          }).id;
 
-          updateBusiness(created.id, (draft) => {
+          updateBusiness(targetId, (draft) => {
             draft.id = serverLocation.id;
             draft.locationName = serverLocation.name;
             draft.location = serverLocation.address;
@@ -166,15 +185,42 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
             if (serverLocation.businessId) {
               draft.businessSlug = serverLocation.businessId;
             }
+
+            if (hydration.widgetTheme) {
+              draft.theme = {
+                ...draft.theme,
+                ...hydration.widgetTheme,
+              };
+            }
+
+            if (hydration.faqs && hydration.faqs.length > 0) {
+              draft.faqs = hydration.faqs;
+            }
+
+            if (hydration.policies && hydration.policies.length > 0) {
+              draft.policies = hydration.policies;
+            }
+
+            if (hydration.handoff) {
+              draft.handoff = hydration.handoff;
+            }
+
+            if (hydration.intents && hydration.intents.length > 0) {
+              draft.intents = hydration.intents;
+            }
+
+            if (hydration.integrations && hydration.integrations.length > 0) {
+              draft.integrations = hydration.integrations;
+            }
           });
-        });
+        }
 
         selectActiveLocation(serverLocations[0].id);
       } catch {
         // no-op; dashboard can continue with local state
       }
     })();
-  }, [isClientMounted, locations.length]);
+  }, [isClientMounted, locations]);
 
   useEffect(() => {
     if (typeof window === "undefined" || pathname !== "/overview") {

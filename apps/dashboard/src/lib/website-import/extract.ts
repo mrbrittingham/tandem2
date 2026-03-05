@@ -32,6 +32,44 @@ type RawDraft = {
   brand?: unknown;
 };
 
+const POLICY_HINT_REGEX = /(policy|policies|terms|privacy|return|refund|shipping|reservation|booking|cancellation|cancel)/i;
+const POLICY_NOISE_REGEX = /(skip\s+to\s+content|main\s+menu|see\s+more|share\b|comments?|likes?|copy\s+link|facebook|instagram|x\.com|twitter|pinterest|utm_|cookie\s+policy|newsletter)/i;
+
+function scorePolicyCandidate(title: string, summary: string, sourceUrl: string | null): number {
+  let score = 0;
+  const normalizedTitle = title.trim().toLowerCase();
+  const normalizedSummary = summary.trim().toLowerCase();
+  const source = (sourceUrl ?? "").toLowerCase();
+
+  if (POLICY_HINT_REGEX.test(normalizedTitle)) {
+    score += 3;
+  }
+
+  if (POLICY_HINT_REGEX.test(normalizedSummary)) {
+    score += 2;
+  }
+
+  if (source && POLICY_HINT_REGEX.test(source)) {
+    score += 2;
+  }
+
+  if (summary.length >= 40 && summary.length <= 360) {
+    score += 2;
+  } else {
+    score -= 2;
+  }
+
+  if (sentenceCount(summary) >= 1) {
+    score += 1;
+  }
+
+  if (POLICY_NOISE_REGEX.test(normalizedTitle) || POLICY_NOISE_REGEX.test(normalizedSummary)) {
+    score -= 6;
+  }
+
+  return score;
+}
+
 function asNullableUrl(value: string | null): string | null {
   if (!value) {
     return null;
@@ -155,11 +193,18 @@ function extractFallbackPolicies(pages: CrawledPage[]) {
       continue;
     }
 
+    const summary = page.textExcerpt.slice(0, 360).replace(/\s+/g, " ").trim();
+    const sourceUrl = asNullableUrl(page.url);
+    const score = scorePolicyCandidate(hint.title, summary, sourceUrl);
+    if (score < 5) {
+      continue;
+    }
+
     out.push({
       id: createId("policy"),
       title: hint.title,
-      summary: page.textExcerpt.slice(0, 360),
-      sourceUrl: asNullableUrl(page.url),
+      summary,
+      sourceUrl,
       include: true,
     });
 
@@ -440,6 +485,12 @@ function parseLlmDraft(input: {
         if (!title || !summary || !sourceUrl) {
           return null;
         }
+
+        const score = scorePolicyCandidate(title, summary, sourceUrl);
+        if (score < 6) {
+          return null;
+        }
+
         return {
           id: createId("policy"),
           title,

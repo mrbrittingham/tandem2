@@ -7,6 +7,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
+import { saveLocationConfig } from "@/lib/location-config-client";
 
 const routeOptions = [
   { label: "Answer with FAQs & policies", value: "knowledge" },
@@ -47,8 +48,20 @@ export default function IntentsPage() {
     );
   }
 
+  const persistIntents = (nextIntents: Intent[]) => {
+    void saveLocationConfig({
+      location: business,
+      assistantConfig: {
+        intents: nextIntents,
+      },
+    }).catch(() => {
+      // keep local state if remote save fails
+    });
+  };
+
   const handleSaveIntent = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    let updatedIntents: Intent[] = [];
     updateBusiness(business.id, (draft) => {
       if (editingIntentId) {
         const target = draft.intents.find((intent) => intent.id === editingIntentId);
@@ -69,15 +82,20 @@ export default function IntentsPage() {
           lastUpdated: new Date().toISOString(),
         });
       }
+      updatedIntents = [...draft.intents];
     });
+    persistIntents(updatedIntents);
     setIntentForm(defaultIntent);
     setEditingIntentId(null);
   };
 
   const removeIntent = (id: string) => {
+    let updatedIntents: Intent[] = [];
     updateBusiness(business.id, (draft) => {
       draft.intents = draft.intents.filter((intent) => intent.id !== id);
+      updatedIntents = [...draft.intents];
     });
+    persistIntents(updatedIntents);
     if (editingIntentId === id) {
       setEditingIntentId(null);
       setIntentForm(defaultIntent);
@@ -96,6 +114,7 @@ export default function IntentsPage() {
   };
 
   const moveIntent = (index: number, direction: -1 | 1) => {
+    let updatedIntents: Intent[] = [];
     updateBusiness(business.id, (draft) => {
       const targetIndex = index + direction;
       if (targetIndex < 0 || targetIndex >= draft.intents.length) {
@@ -103,7 +122,11 @@ export default function IntentsPage() {
       }
       const [removed] = draft.intents.splice(index, 1);
       draft.intents.splice(targetIndex, 0, removed);
+      updatedIntents = [...draft.intents];
     });
+    if (updatedIntents.length) {
+      persistIntents(updatedIntents);
+    }
   };
 
   return (

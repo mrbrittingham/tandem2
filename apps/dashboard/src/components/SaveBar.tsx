@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 type SaveBarProps = {
   visible: boolean;
   onSave: () => void;
@@ -6,6 +8,40 @@ type SaveBarProps = {
 };
 
 export function SaveBar({ visible, onSave, saving = false, label = "Unsaved changes" }: SaveBarProps) {
+  useEffect(() => {
+    if (!visible || saving || typeof window === "undefined") {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        return;
+      }
+
+      const tagName = target.tagName.toLowerCase();
+      const isTextarea = tagName === "textarea";
+      const isContentEditable = target.isContentEditable;
+      const insideForm = Boolean(target.closest("form"));
+
+      if (isTextarea || isContentEditable || insideForm) {
+        return;
+      }
+
+      event.preventDefault();
+      onSave();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onSave, saving, visible]);
+
   return (
     <div
       className={`pointer-events-none fixed inset-x-0 bottom-6 flex justify-center transition-opacity ${

@@ -8,6 +8,7 @@ import { TextInput } from "@/components/TextInput";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
+import { saveLocationConfig } from "@/lib/location-config-client";
 
 export default function HandoffPage() {
   const business = useActiveBusiness();
@@ -80,11 +81,20 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
     );
   };
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     updateBusiness(business.id, (draft) => {
       draft.handoff = handoff;
     });
+
+    try {
+      await saveLocationConfig({
+        location: business,
+        handoffConfig: handoff as unknown as Record<string, unknown>,
+      });
+    } catch {
+      // local save still applies if server persistence fails
+    }
   };
 
   return (

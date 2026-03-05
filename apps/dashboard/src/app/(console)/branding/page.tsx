@@ -9,6 +9,7 @@ import { ToggleSwitch } from "@/components/ToggleSwitch";
 import { SaveBar } from "@/components/SaveBar";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
+import { saveLocationConfig } from "@/lib/location-config-client";
 
 export default function BrandingPage() {
   const business = useActiveBusiness();
@@ -68,19 +69,42 @@ export default function BrandingPage() {
     update("logoLabel", `uploaded-logo-${timestamp}.png`);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    setTimeout(() => {
+    try {
       updateBusiness(business.id, (draft) => {
+        draft.businessName = form.businessName;
+        draft.name = form.businessName;
         draft.theme.primaryColor = form.primaryColor;
         draft.theme.accentColor = form.secondaryColor;
         draft.theme.logoUrl = form.logoLabel || undefined;
         draft.summary = form.welcomeMessage;
         draft.handoff.headline = form.assistantName;
       });
+
+      await saveLocationConfig({
+        location: business,
+        widgetConfig: {
+          theme: {
+            ...business.theme,
+            primaryColor: form.primaryColor,
+            accentColor: form.secondaryColor,
+            logoUrl: form.logoLabel || undefined,
+          },
+        },
+        handoffConfig: {
+          headline: form.assistantName,
+        },
+        assistantConfig: {
+          businessName: form.businessName,
+          welcomeMessage: form.welcomeMessage,
+        },
+      });
+
       setInitialSnapshot(JSON.stringify(form));
+    } finally {
       setSaving(false);
-    }, 800);
+    }
   };
 
   return (

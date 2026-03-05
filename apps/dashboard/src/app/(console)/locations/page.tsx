@@ -601,7 +601,13 @@ export default function LocationsPage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           {panelMode === "create" ? (
-            <div className="mx-auto w-full max-w-3xl space-y-4">
+            <form
+              className="mx-auto w-full max-w-3xl space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleAddLocation();
+              }}
+            >
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Create location</h2>
                 <p className="mt-1 text-sm text-slate-600">Add a location with name, address, and timezone.</p>
@@ -704,8 +710,7 @@ export default function LocationsPage() {
 
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={handleAddLocation}
+                  type="submit"
                   disabled={!canCreate || hasCreateErrors || isCreatingLocation}
                   className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
@@ -720,9 +725,15 @@ export default function LocationsPage() {
                 </button>
               </div>
               {createStatus ? <p className="text-xs text-slate-600">{createStatus}</p> : null}
-            </div>
+            </form>
           ) : selectedLocation ? (
-            <div className="mx-auto w-full max-w-3xl space-y-4">
+            <form
+              className="mx-auto w-full max-w-3xl space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveEdit();
+              }}
+            >
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Edit location</h2>
                 <p className="mt-1 text-sm text-slate-600">Update location details used throughout the console.</p>
@@ -821,8 +832,7 @@ export default function LocationsPage() {
 
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={saveEdit}
+                  type="submit"
                   disabled={!canSaveEdit || hasEditErrors || isSavingEdit}
                   className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
@@ -837,7 +847,7 @@ export default function LocationsPage() {
                 </button>
               </div>
               {editStatus ? <p className="text-xs text-slate-600">{editStatus}</p> : null}
-            </div>
+            </form>
           ) : (
             <p className="text-sm text-slate-600">Select a location to edit details.</p>
           )}

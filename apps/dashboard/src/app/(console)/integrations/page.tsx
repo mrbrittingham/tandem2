@@ -4,6 +4,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
+import { saveLocationConfig } from "@/lib/location-config-client";
 
 export default function IntegrationsPage() {
   const business = useActiveBusiness();
@@ -21,31 +22,51 @@ export default function IntegrationsPage() {
     );
   }
 
+  const persistIntegrations = (nextIntegrations: typeof business.integrations) => {
+    void saveLocationConfig({
+      location: business,
+      integrationsConfig: {
+        integrations: nextIntegrations,
+      },
+    }).catch(() => {
+      // keep local state when remote save fails
+    });
+  };
+
   const handleConnect = (id: string) => {
+    let updatedIntegrations = business.integrations;
     updateBusiness(business.id, (draft) => {
       const integration = draft.integrations.find((entry) => entry.id === id);
       if (!integration) return;
       integration.status = 'connected';
       integration.lastSynced = new Date().toISOString();
       integration.notes = credentials[id] || integration.notes;
+      updatedIntegrations = [...draft.integrations];
     });
+    persistIntegrations(updatedIntegrations);
   };
 
   const handleSync = (id: string) => {
+    let updatedIntegrations = business.integrations;
     updateBusiness(business.id, (draft) => {
       const integration = draft.integrations.find((entry) => entry.id === id);
       if (!integration) return;
       integration.lastSynced = new Date().toISOString();
       integration.status = 'syncing';
+      updatedIntegrations = [...draft.integrations];
       setTimeout(() => {
+        let delayedIntegrations = updatedIntegrations;
         updateBusiness(business.id, (innerDraft) => {
           const again = innerDraft.integrations.find((entry) => entry.id === id);
           if (again) {
             again.status = 'connected';
           }
+          delayedIntegrations = [...innerDraft.integrations];
         });
+        persistIntegrations(delayedIntegrations);
       }, 1000);
     });
+    persistIntegrations(updatedIntegrations);
   };
 
   return (

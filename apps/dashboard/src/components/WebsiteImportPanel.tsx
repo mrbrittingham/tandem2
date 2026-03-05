@@ -62,7 +62,7 @@ type LocationsResponse = {
 
 function getFriendlyImportError(error?: string, code?: string) {
   if (code === SCHEMA_OUT_OF_DATE_CODE) {
-    return "Database schema not up to date. Run `npm run db:push`.";
+    return "This feature is being updated right now. Please try again in a moment.";
   }
 
   const message = (error ?? "").toLowerCase();
@@ -71,7 +71,7 @@ function getFriendlyImportError(error?: string, code?: string) {
     || (message.includes("onboarding_import_runs") && message.includes("does not exist"))
     || (message.includes("business_locations") && message.includes("website_url") && message.includes("does not exist"))
   ) {
-    return "Database schema not up to date. Run `npm run db:push`.";
+    return "This feature is being updated right now. Please try again in a moment.";
   }
 
   return error ?? "Something went wrong. Please try again.";
@@ -474,7 +474,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     });
 
     setHasPendingSave(true);
-    setSuccess("Import changes staged. Click Save changes to persist.");
+    setSuccess("Suggestions are ready. Click Save changes to keep them.");
   };
 
   const saveImport = async () => {
@@ -522,7 +522,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
 
   const discardDraft = () => {
     if (hasPendingSave && typeof window !== "undefined") {
-      const confirmed = window.confirm("Discard staged import changes? Unsaved changes will be lost.");
+      const confirmed = window.confirm("Discard imported suggestions? Unsaved changes will be lost.");
       if (!confirmed) {
         return;
       }
@@ -557,7 +557,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   return (
     <SectionCard
       title="Import from Website"
-      description="Run a one-time website import, review suggested knowledge and branding, then apply when ready."
+      description="Import your website once, review suggested updates, then save what you want to keep."
       actions={
         run ? (
           <span className="text-xs text-slate-500">Last import {formatDate(run.finishedAt ?? run.createdAt)} ({run.status})</span>
@@ -590,7 +590,13 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           </a>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,36rem)_auto_auto] md:items-end">
+        <form
+          className="grid gap-3 md:grid-cols-[minmax(0,36rem)_auto_auto] md:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runImport();
+          }}
+        >
           <TextInput
             label="Website URL"
             value={url}
@@ -598,8 +604,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
             placeholder="https://example.com"
           />
           <button
-            type="button"
-            onClick={() => runImport()}
+            type="submit"
             disabled={isLoading || Boolean(locationGuardError)}
             className="rounded-2xl bg-[var(--console-primary)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -613,7 +618,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           >
             Refresh import
           </button>
-        </div>
+        </form>
 
         {lastImportedUrl && !url.trim() ? (
           <div>
@@ -636,7 +641,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
           {locationId ? <p>Location ID: {locationId}</p> : null}
           {lastSavedAt ? <p>Last saved {formatDate(lastSavedAt)}</p> : null}
-          {hasPendingSave ? <p className="font-medium text-amber-700">Unsaved staged changes</p> : null}
+          {hasPendingSave ? <p className="font-medium text-amber-700">Unsaved imported changes</p> : null}
         </div>
 
         {!reviewDraft ? (
@@ -902,7 +907,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
                 onClick={stageImport}
                 className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
               >
-                Apply import to draft
+                Review suggested changes
               </button>
               <button
                 type="button"
