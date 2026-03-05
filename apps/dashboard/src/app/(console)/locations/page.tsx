@@ -311,13 +311,19 @@ export default function LocationsPage() {
     const locationId = selectedLocation?.id;
     const locationSlug = (selectedLocation?.locationSlug ?? selectedLocation?.slug ?? "").trim();
     const businessSlug = (selectedLocation?.businessSlug ?? "").trim();
-    const composedAddress = composeAddress(editForm);
+    const hasAddressInput = [
+      editForm.streetAddress,
+      editForm.city,
+      editForm.state,
+      editForm.zip,
+    ].some((value) => value.trim().length > 0);
+    const composedAddress = hasAddressInput ? composeAddress(editForm) : "";
     const inferredTimezone = inferTimezoneFromAddress({
       country: editForm.country,
       state: editForm.state,
     });
 
-    if (!locationId || !editForm.locationName.trim() || !composedAddress || !editForm.timezone.trim()) {
+    if (!locationId || !editForm.locationName.trim() || !editForm.timezone.trim()) {
       return;
     }
 
@@ -342,7 +348,7 @@ export default function LocationsPage() {
           locationSlug: locationSlug || undefined,
           businessSlug: businessSlug || undefined,
           name: editForm.locationName.trim(),
-          address: composedAddress,
+          address: composedAddress || undefined,
         }),
       });
 
@@ -500,10 +506,6 @@ export default function LocationsPage() {
 
   const canSaveEdit = Boolean(
     editForm.locationName.trim()
-      && editForm.streetAddress.trim()
-      && editForm.city.trim()
-      && editForm.state.trim()
-      && editForm.zip.trim()
       && editForm.timezone.trim(),
   );
 

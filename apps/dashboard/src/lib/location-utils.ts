@@ -163,16 +163,20 @@ export function inferTimezoneFromAddress(input: Pick<ParsedLocationAddress, "cou
 export function validateLocationFields(input: ParsedLocationAddress): Partial<Record<keyof ParsedLocationAddress, string>> {
   const errors: Partial<Record<keyof ParsedLocationAddress, string>> = {};
 
-  if (/\b\d{5}(?:-\d{4})?\b/.test(input.city)) {
+  const city = input.city.trim();
+  const state = input.state.trim();
+  const zip = input.zip.trim();
+
+  if (city && /\b\d{5}(?:-\d{4})?\b/.test(city)) {
     errors.city = "City should not include ZIP code";
   }
 
   if (normalizeCountry(input.country) === "United States") {
-    if (!/^[A-Za-z]{2}$/.test(input.state.trim())) {
+    if (state && !/^[A-Za-z]{2}$/.test(state)) {
       errors.state = "State must be a 2-letter code";
     }
 
-    if (!/^\d{5}$/.test(input.zip.trim())) {
+    if (zip && !/^\d{5}$/.test(zip)) {
       errors.zip = "ZIP must be 5 digits";
     }
   }
