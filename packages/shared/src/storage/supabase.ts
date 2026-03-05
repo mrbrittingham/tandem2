@@ -38,12 +38,29 @@ type MessageRow = {
 type BusinessRow = {
   id: string;
   name: string;
+  slug?: string;
   created_at: string;
 };
 
 const BUSINESSES_TABLE = "businesses";
 const SESSIONS_TABLE = "chat_sessions";
 const MESSAGES_TABLE = "chat_messages";
+
+function toBusinessSlug(input: string): string {
+  const normalized = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  // Keep a deterministic fallback slug when businessId has no slug-safe chars.
+  const compact = input.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  return `business-${(compact || "id").slice(0, 12)}`;
+}
 
 function asSession(row: SessionRow): ChatSession {
   return {
@@ -86,14 +103,38 @@ export function createSupabaseChatStore(): ChatStore {
     const payload = {
       id: businessId,
       name: businessId,
+      slug: toBusinessSlug(businessId),
     } satisfies Omit<BusinessRow, "created_at">;
 
-    const { error } = await supabase
+    const withSlugUpsert = await supabase
       .from(BUSINESSES_TABLE)
       .upsert(payload, { onConflict: "id", ignoreDuplicates: true });
 
-    if (error) {
-      toError("upsert", BUSINESSES_TABLE, error);
+    if (withSlugUpsert.error && isMissingColumnError(withSlugUpsert.error, "slug")) {
+      recordScopeFallback({
+        source: "storage:supabase:ensureBusinessExists",
+        businessId,
+        detail: "businesses.slug is unavailable; using legacy upsert shape",
+      });
+
+      const fallbackPayload = {
+        id: businessId,
+        name: businessId,
+      } satisfies Omit<BusinessRow, "created_at">;
+
+      const fallbackUpsert = await supabase
+        .from(BUSINESSES_TABLE)
+        .upsert(fallbackPayload, { onConflict: "id", ignoreDuplicates: true });
+
+      if (fallbackUpsert.error) {
+        toError("upsert", BUSINESSES_TABLE, fallbackUpsert.error);
+      }
+
+      return;
+    }
+
+    if (withSlugUpsert.error) {
+      toError("upsert", BUSINESSES_TABLE, withSlugUpsert.error);
     }
   };
 
