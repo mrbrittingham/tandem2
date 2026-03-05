@@ -216,16 +216,39 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
       content: message.content,
     }));
 
-    const { response: baseResponse } = await llmStream({
-      messages: recentHistory,
-      system: body.system,
-      temperature: body.temperature,
-      maxTokens: body.maxTokens,
-      stream: true,
-    });
+    const lastUserText = userMessages[userMessages.length - 1]?.content ?? "";
 
-    if (!baseResponse.body) {
-      throw new Error("LLM stream unavailable");
+    let baseResponse: Response;
+    try {
+      const streamResult = await llmStream({
+        messages: recentHistory,
+        system: body.system,
+        temperature: body.temperature,
+        maxTokens: body.maxTokens,
+        stream: true,
+      });
+
+      baseResponse = streamResult.response;
+      if (!baseResponse.body) {
+        throw new Error("LLM stream unavailable");
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("LLM streaming failed, returning fallback response", error);
+      }
+
+      const fallbackText = buildFallbackReply(lastUserText);
+      await store.appendMessage(session.id, {
+        role: "assistant",
+        content: fallbackText,
+      });
+
+      const headers = new Headers({ "content-type": "text/plain; charset=utf-8" });
+      if (created) {
+        headers.append("Set-Cookie", buildSessionCookie(session.id));
+      }
+
+      return new Response(fallbackText, { status: 200, headers });
     }
 
     const reader = baseResponse.body.getReader();

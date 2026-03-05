@@ -1,4 +1,4 @@
-import { assertDashboardEnv, getChatStore, handleChatGet, handleChatPost, isDevSmokeBypass } from "@tandem/shared/server";
+import { getChatStore, handleChatGet, handleChatPost, isDevSmokeBypass } from "@tandem/shared/server";
 
 export const runtime = "nodejs";
 
@@ -8,8 +8,6 @@ function hasValidScope(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    assertDashboardEnv();
-
     const url = new URL(request.url);
     if (!hasValidScope(url.searchParams.get("businessId"))) {
       return Response.json({ error: "businessId required" }, { status: 400 });
@@ -28,8 +26,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     if (isDevSmokeBypass(request)) {
-      assertDashboardEnv();
-
       const body = await request.clone().json().catch(() => null) as {
         businessId?: unknown;
         locationSlug?: unknown;
@@ -72,10 +68,6 @@ export async function POST(request: Request) {
         locationSlug: session.locationSlug ?? null,
       });
     }
-
-    // Keep baseline env checks, but allow chat handler to degrade gracefully
-    // when LLM credentials are absent.
-    assertDashboardEnv();
 
     const body = await request.clone().json().catch(() => null) as { businessId?: unknown; locationSlug?: unknown } | null;
     if (!body || !hasValidScope(body.businessId)) {
