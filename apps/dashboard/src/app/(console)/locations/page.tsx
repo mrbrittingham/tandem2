@@ -87,7 +87,17 @@ const REGION_OPTIONS_BY_COUNTRY: Record<string, string[]> = {
 };
 
 function regionOptions(country: string) {
-  return REGION_OPTIONS_BY_COUNTRY[country] ?? ["N/A", "Other"];
+  const normalized = country.trim().toLowerCase();
+  const exact = Object.keys(REGION_OPTIONS_BY_COUNTRY).find((entry) => entry.toLowerCase() === normalized);
+  if (exact) {
+    return REGION_OPTIONS_BY_COUNTRY[exact] ?? REGION_OPTIONS_BY_COUNTRY["United States"];
+  }
+
+  if (normalized === "us" || normalized === "usa" || normalized === "united states") {
+    return REGION_OPTIONS_BY_COUNTRY["United States"];
+  }
+
+  return REGION_OPTIONS_BY_COUNTRY["United States"];
 }
 
 function defaultRegion(country: string) {
@@ -140,11 +150,21 @@ function readPhone(location?: BusinessProfile) {
   }
 
   const contactPhone = location.contacts.find((contact) => contact.type === "phone")?.value?.trim();
+  const isSeedPhone = (value?: string) => [
+    "+1 (415) 555-0198",
+    "+1 (212) 555-0142",
+    "+1 (303) 555-0158",
+  ].includes((value ?? "").trim());
+
   if (contactPhone) {
-    return contactPhone;
+    return isSeedPhone(contactPhone) ? "" : contactPhone;
   }
 
   const handoffPhone = location.handoff.contactMethods.find((method) => method.type === "phone")?.value?.trim();
+  if (isSeedPhone(handoffPhone)) {
+    return "";
+  }
+
   return handoffPhone ?? "";
 }
 
@@ -195,7 +215,7 @@ function buildFormFromLocation(location?: BusinessProfile): LocationFormState {
     state: parsed.state,
   });
   const existingTimezone = (location?.timezone ?? "").trim();
-  const timezone = existingTimezone || inferredTimezone || "UTC";
+  const timezone = inferredTimezone || existingTimezone || "UTC";
 
   return {
     locationName: location?.locationName ?? "",
@@ -554,7 +574,7 @@ export default function LocationsPage() {
                   <input
                     value={createForm.phone}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, phone: event.target.value }))}
-                    placeholder="(415) 555-0144"
+                    placeholder="(410) 555-0123"
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   />
                 </label>
@@ -670,6 +690,7 @@ export default function LocationsPage() {
                   <input
                     value={editForm.phone}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
+                    placeholder="(410) 555-0123"
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
                   />
                 </label>

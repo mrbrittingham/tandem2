@@ -18,6 +18,15 @@ type ChatHandlerOptions = {
   requireRequestApiKey?: boolean;
 };
 
+function buildFallbackReply(userText: string): string {
+  const trimmed = userText.trim();
+  if (!trimmed) {
+    return "I can help once you share a question.";
+  }
+
+  return "Thanks — I received your message. Live AI responses are temporarily unavailable for this environment, but your conversation has been saved.";
+}
+
 const sanitizeBusinessId = (value?: string) => {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
@@ -159,17 +168,6 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
 
     requireBusinessAllowed(businessId);
 
-    const llmConfig = validateLLMServerConfig();
-    if (!llmConfig.ok) {
-      return Response.json(
-        {
-          error: llmConfig.message,
-          missingEnv: llmConfig.missingEnv,
-        },
-        { status: 500 },
-      );
-    }
-
     const userMessages = (body.messages ?? []).filter(
       (message) => message.role === "user" && typeof message.content === "string" && message.content.trim().length > 0,
     );
@@ -177,6 +175,8 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
     if (!userMessages.length) {
       return Response.json({ error: "messages are required" }, { status: 400 });
     }
+
+    const llmConfig = validateLLMServerConfig();
 
     const { session, store, created } = await ensureSession(req, businessId, locationSlug);
 
@@ -193,6 +193,21 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
           session.title = snippet;
         }
       }
+    }
+
+    if (!llmConfig.ok) {
+      const fallbackText = buildFallbackReply(userMessages[userMessages.length - 1]?.content ?? "");
+      await store.appendMessage(session.id, {
+        role: "assistant",
+        content: fallbackText,
+      });
+
+      const headers = new Headers({ "content-type": "text/plain; charset=utf-8" });
+      if (created) {
+        headers.append("Set-Cookie", buildSessionCookie(session.id));
+      }
+
+      return new Response(fallbackText, { status: 200, headers });
     }
 
     const history = await store.listMessages(session.id);

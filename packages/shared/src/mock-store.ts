@@ -43,7 +43,7 @@ const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
     }
     const parsed = JSON.parse(raw) as MockState;
     if (parsed && Array.isArray(parsed.businesses)) {
-      parsed.businesses = removeSeedDemoLocations(parsed.businesses);
+      parsed.businesses = removeSeedDemoLocations(parsed.businesses).map(sanitizeLegacySeededLocation);
       if (!parsed.accountBusinessName && parsed.businesses[0]) {
         parsed.accountBusinessName = parsed.businesses[0].businessName ?? parsed.businesses[0].name;
       }
@@ -93,6 +93,47 @@ function removeSeedDemoLocations(locations: BusinessProfile[]): BusinessProfile[
 
   const filtered = locations.filter((location) => !isSeedDemoLocation(location));
   return filtered;
+}
+
+function sanitizeLegacySeededLocation(location: BusinessProfile): BusinessProfile {
+  const next = JSON.parse(JSON.stringify(location)) as BusinessProfile;
+  const isLegacyCedar = (next.businessName ?? next.name ?? "").trim().toLowerCase() === "cedar & sage"
+    || (next.summary ?? "").toLowerCase().includes("cedar & sage");
+
+  if (isLegacyCedar) {
+    const fallbackName = (next.locationName ?? "").trim() || "Location";
+    next.businessName = fallbackName;
+    next.name = fallbackName;
+    next.tagline = "";
+    next.summary = "";
+  }
+
+  const hasLegacyTheme = next.theme.primaryColor === "#7C3AED" && next.theme.accentColor === "#F97316";
+  if (hasLegacyTheme) {
+    next.theme = {
+      ...next.theme,
+      primaryColor: "#3170FC",
+      accentColor: "#9E4770",
+      surfaceColor: "#FFFFFF",
+      textPrimaryColor: "#0F172A",
+      textSecondaryColor: "#475569",
+      fontFamily: "'Inter', sans-serif",
+      logoUrl: undefined,
+    };
+  }
+
+  const seedContacts = new Set([
+    "+1 (415) 555-0198",
+    "+1 (212) 555-0142",
+    "+1 (303) 555-0158",
+    "concierge@cedarandsage.com",
+    "hello@cedarandsage.com",
+  ]);
+
+  next.contacts = next.contacts.filter((entry) => !seedContacts.has(entry.value.trim()));
+  next.handoff.contactMethods = next.handoff.contactMethods.filter((entry) => !seedContacts.has(entry.value.trim()));
+
+  return next;
 }
 
  function cloneState(): MockState {
@@ -154,11 +195,12 @@ export function createLocation(payload: CreateLocationPayload): BusinessProfile 
   const source = payload.mode === "copy"
     ? getLocations().find((entry) => entry.id === payload.sourceLocationId)
     : undefined;
-  const template = source ? cloneLocation(source) : buildIndustryTemplate(getAccountIndustry());
+  const template = source ? cloneLocation(source) : createEmptyLocationTemplate(getAccountIndustry());
   const timestamp = new Date().toISOString();
-  const businessName = state.accountBusinessName ?? template.businessName ?? template.name;
+  const requestedName = payload.name.trim() || "New location";
+  const businessName = state.accountBusinessName ?? source?.businessName ?? requestedName;
   const businessSlug = state.accountBusinessSlug ?? template.businessSlug ?? slugify(businessName);
-  const locationName = payload.name.trim() || "New location";
+  const locationName = requestedName;
 
   const location: BusinessProfile = {
     ...template,
@@ -183,6 +225,46 @@ export function createLocation(payload: CreateLocationPayload): BusinessProfile 
   });
 
   return location;
+}
+
+function createEmptyLocationTemplate(industry: Industry): BusinessProfile {
+  const timestamp = new Date().toISOString();
+  const defaultTheme = {
+    primaryColor: "#3170FC",
+    accentColor: "#9E4770",
+    surfaceColor: "#FFFFFF",
+    textPrimaryColor: "#0F172A",
+    textSecondaryColor: "#475569",
+    fontFamily: "'Inter', sans-serif",
+  };
+
+  return {
+    id: createId(),
+    slug: "location",
+    name: "Location",
+    industry,
+    timezone: "UTC",
+    tagline: "",
+    summary: "",
+    location: "",
+    contacts: [],
+    hours: [],
+    intents: [],
+    faqs: [],
+    policies: [],
+    integrations: [],
+    theme: defaultTheme,
+    handoff: {
+      headline: "Support",
+      status: "offline",
+      statusDetail: "",
+      supportHoursLabel: "",
+      contactMethods: [],
+      offlineMessage: "",
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
 }
 
  export function createBusiness(payload: CreateBusinessPayload): BusinessProfile {
