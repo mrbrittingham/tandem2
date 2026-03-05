@@ -1,5 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { runWebsiteImport } from "../../apps/dashboard/src/lib/website-import/run";
+
+type WorkerSupabaseClient = SupabaseClient<any, "public", any>;
 
 type QueuedRun = {
   id: string;
@@ -84,7 +86,7 @@ function classifyImportError(error: unknown): ClassifiedError {
   return { code: "unknown", message };
 }
 
-async function listQueuedRuns(client: ReturnType<typeof createClient>) {
+async function listQueuedRuns(client: WorkerSupabaseClient) {
   const { data, error } = await client
     .from("onboarding_import_runs")
     .select("id")
@@ -100,7 +102,7 @@ async function listQueuedRuns(client: ReturnType<typeof createClient>) {
   return data ?? [];
 }
 
-async function claimRun(client: ReturnType<typeof createClient>, runId: string): Promise<ClaimedRun | null> {
+async function claimRun(client: WorkerSupabaseClient, runId: string): Promise<ClaimedRun | null> {
   const nowIso = new Date().toISOString();
 
   const { data, error } = await client
@@ -126,7 +128,7 @@ async function claimRun(client: ReturnType<typeof createClient>, runId: string):
 }
 
 async function markRunSucceeded(
-  client: ReturnType<typeof createClient>,
+  client: WorkerSupabaseClient,
   run: ClaimedRun,
   result: Awaited<ReturnType<typeof runWebsiteImport>>,
 ) {
@@ -157,7 +159,7 @@ async function markRunSucceeded(
     .eq("id", run.location_id);
 }
 
-async function markRunFailed(client: ReturnType<typeof createClient>, runId: string, errorInfo: ClassifiedError) {
+async function markRunFailed(client: WorkerSupabaseClient, runId: string, errorInfo: ClassifiedError) {
   const { error } = await client
     .from("onboarding_import_runs")
     .update({
@@ -173,7 +175,7 @@ async function markRunFailed(client: ReturnType<typeof createClient>, runId: str
   }
 }
 
-async function processRun(client: ReturnType<typeof createClient>, run: ClaimedRun) {
+async function processRun(client: WorkerSupabaseClient, run: ClaimedRun) {
   try {
     const result = await runWebsiteImport(run.url);
     await markRunSucceeded(client, run, result);
@@ -199,7 +201,7 @@ async function processRun(client: ReturnType<typeof createClient>, run: ClaimedR
   }
 }
 
-async function processBatch(client: ReturnType<typeof createClient>) {
+async function processBatch(client: WorkerSupabaseClient) {
   const queued = await listQueuedRuns(client);
   if (queued.length === 0) {
     return 0;
