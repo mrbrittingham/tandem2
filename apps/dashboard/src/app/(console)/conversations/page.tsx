@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { resolveChatScope, resolveLocationLabel } from "@/lib/chat-scope";
 import { useActiveLocation } from "@/lib/store-hooks";
@@ -51,7 +51,7 @@ type ConversationDetail = {
   updatedAt: string;
 };
 
-export default function ConversationsPage() {
+function ConversationsPageClient() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -132,6 +132,14 @@ export default function ConversationsPage() {
       initialQuery={queryFromUrl}
       onSessionChange={onSessionChange}
     />
+  );
+}
+
+export default function ConversationsPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <ConversationsPageClient />
+    </Suspense>
   );
 }
 

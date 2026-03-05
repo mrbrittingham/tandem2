@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ChatWidget, resolveWidgetRuntimeConfig } from "@tandem/ui-kit";
 import type { WidgetThemeSettings } from "@tandem/shared";
 import { ConsoleDialogProvider } from "@/components/ConsoleDialogContext";
@@ -75,7 +75,7 @@ function resolvePageHeading(pathname: string) {
   return matchedRoute ? pageHeadingMap[matchedRoute] : undefined;
 }
 
-export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
+function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -376,5 +376,13 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
         <CreateLocationDialog open={createLocationOpen} onClose={() => setCreateLocationOpen(false)} />
       </PreviewDockProvider>
     </ConsoleDialogProvider>
+  );
+}
+
+export default function ConsoleLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div />}>
+      <ConsoleLayoutClient>{children}</ConsoleLayoutClient>
+    </Suspense>
   );
 }
