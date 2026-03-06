@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import type { BusinessProfile } from "@tandem/shared";
+import { saveLocationConfig } from "@/lib/location-config-client";
 import {
   createLocation,
   selectActiveLocation,
@@ -310,6 +311,7 @@ export default function LocationsPage() {
   const saveEdit = async () => {
     const locationId = selectedLocation?.id;
     const locationSlug = (selectedLocation?.locationSlug ?? selectedLocation?.slug ?? "").trim();
+    const businessSlug = (selectedLocation?.businessSlug ?? "").trim();
     const hasAddressInput = [
       editForm.streetAddress,
       editForm.city,
@@ -326,14 +328,18 @@ export default function LocationsPage() {
       return;
     }
 
+    const nextLocationName = editForm.locationName.trim();
+    const nextTimezone = editForm.timezone.trim() || inferredTimezone || "UTC";
+    const nextPhone = editForm.phone.trim();
+
     setEditStatus(null);
     setIsSavingEdit(true);
 
     updateBusiness(locationId, (draft) => {
-      draft.locationName = editForm.locationName.trim();
+      draft.locationName = nextLocationName;
       draft.location = composedAddress;
-      draft.timezone = editForm.timezone.trim() || inferredTimezone || "UTC";
-      upsertPhone(draft, editForm.phone);
+      draft.timezone = nextTimezone;
+      upsertPhone(draft, nextPhone);
     });
 
     try {
@@ -345,7 +351,8 @@ export default function LocationsPage() {
         body: JSON.stringify({
           locationId,
           locationSlug: locationSlug || undefined,
-          name: editForm.locationName.trim(),
+          businessSlug: businessSlug || undefined,
+          name: nextLocationName,
           address: composedAddress || undefined,
         }),
       });
@@ -377,6 +384,27 @@ export default function LocationsPage() {
           draft.slug = persistedSlug;
         });
       }
+
+      // Persist profile fields that are not part of business_locations columns.
+      await saveLocationConfig({
+        location: {
+          ...(selectedLocation as BusinessProfile),
+          id: persistedId || locationId,
+          locationSlug: persistedSlug || locationSlug || selectedLocation?.locationSlug,
+          slug: persistedSlug || selectedLocation?.slug || locationSlug || selectedLocation?.slug,
+          locationName: nextLocationName,
+          location: composedAddress,
+          timezone: nextTimezone,
+        },
+        knowledgeConfig: {
+          businessProfile: {
+            locationName: nextLocationName,
+            address: composedAddress,
+            phone: nextPhone,
+            timezone: nextTimezone,
+          },
+        },
+      });
 
       setEditStatus("Location saved.");
     } catch {
