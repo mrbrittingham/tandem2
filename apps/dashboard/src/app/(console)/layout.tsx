@@ -11,7 +11,7 @@ import { LocationSwitcher } from "@/components/LocationSwitcher";
 import { PreviewDockProvider } from "@/components/PreviewDockContext";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveChatScope } from "@/lib/chat-scope";
-import { businessToWidgetConfig, useActiveLocation } from "@/lib/store-hooks";
+import { businessToWidgetConfig, syncLocationsFromServer, useActiveLocation } from "@/lib/store-hooks";
 import { widgetThemeToChatTheme } from "@/lib/widget-theme";
 
 const navItems = [
@@ -75,6 +75,36 @@ function resolvePageHeading(pathname: string) {
   return matchedRoute ? pageHeadingMap[matchedRoute] : undefined;
 }
 
+function readBusinessProfile(value: unknown): { phone?: string; timezone?: string; legacyLocationName?: string; legacyAddress?: string } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  const root = value as Record<string, unknown>;
+  const knowledgeConfig = root.knowledgeConfig;
+  if (typeof knowledgeConfig !== "object" || knowledgeConfig === null || Array.isArray(knowledgeConfig)) {
+    return {};
+  }
+
+  const businessProfile = (knowledgeConfig as Record<string, unknown>).businessProfile;
+  if (typeof businessProfile !== "object" || businessProfile === null || Array.isArray(businessProfile)) {
+    return {};
+  }
+
+  const profile = businessProfile as Record<string, unknown>;
+  const toString = (key: string) => {
+    const value = profile[key];
+    return typeof value === "string" && value.trim().length ? value.trim() : undefined;
+  };
+
+  return {
+    phone: toString("phone"),
+    timezone: toString("timezone"),
+    legacyLocationName: toString("locationName"),
+    legacyAddress: toString("address"),
+  };
+}
+
 function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -112,6 +142,98 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
     const dismissed = window.localStorage.getItem("tandem:preview-coachmark-dismissed") === "1";
     setShowPreviewCoachmark(!dismissed);
   }, [pathname]);
+
+  useEffect(() => {
+    const debugLocation = searchParams.get("debugLocation") === "1";
+    let cancelled = false;
+
+    const hydrateLocations = async () => {
+      try {
+        const response = await fetch("/api/locations", { method: "GET" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          locations?: Array<{
+            id?: string;
+            businessId?: string;
+            slug?: string;
+            name?: string;
+            address?: string | null;
+            createdAt?: string;
+          }>;
+        };
+
+        const serverLocations = payload.locations ?? [];
+        const snapshots = await Promise.all(serverLocations.map(async (location) => {
+          const locationId = (location.id ?? "").trim();
+          const locationSlug = (location.slug ?? "").trim();
+          const query = new URLSearchParams();
+          if (locationId) {
+            query.set("locationId", locationId);
+          }
+          if (locationSlug) {
+            query.set("locationSlug", locationSlug);
+          }
+
+          let businessProfile: { phone?: string; timezone?: string; legacyLocationName?: string; legacyAddress?: string } = {};
+          try {
+            const cfgResponse = await fetch(`/api/location-config?${query.toString()}`, { method: "GET" });
+            if (cfgResponse.ok) {
+              const cfgPayload = (await cfgResponse.json().catch(() => ({}))) as { config?: Record<string, unknown> };
+              businessProfile = readBusinessProfile(cfgPayload.config);
+            }
+          } catch {
+            // Keep hydration best-effort and continue.
+          }
+
+          return {
+            id: locationId,
+            businessId: (location.businessId ?? "").trim(),
+            slug: locationSlug,
+            name: (location.name ?? "").trim() || (businessProfile.legacyLocationName ?? ""),
+            address: (location.address ?? "").trim() || (businessProfile.legacyAddress ?? ""),
+            createdAt: location.createdAt,
+            phone: businessProfile.phone,
+            timezone: businessProfile.timezone,
+          };
+        }));
+
+        if (cancelled) {
+          return;
+        }
+
+        syncLocationsFromServer(
+          snapshots.filter((entry) => entry.id && entry.slug && entry.name).map((entry) => ({
+            id: entry.id,
+            businessId: entry.businessId,
+            slug: entry.slug,
+            name: entry.name,
+            address: entry.address,
+            createdAt: entry.createdAt,
+            phone: entry.phone,
+            timezone: entry.timezone,
+          })),
+        );
+
+        if (debugLocation) {
+          console.info("[location-debug] canonical hydration", {
+            canonicalLocations: snapshots,
+            activeLocationId: activeBusiness?.id ?? null,
+            localStorageUsed: typeof window !== "undefined" ? window.localStorage.getItem("tandem:mock-state")?.length ?? 0 : 0,
+          });
+        }
+      } catch {
+        // Ignore hydration errors at layout level.
+      }
+    };
+
+    void hydrateLocations();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, activeBusiness?.id]);
 
   const widgetConfig = useMemo(
     () => (activeBusiness ? businessToWidgetConfig(activeBusiness) : undefined),

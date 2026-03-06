@@ -110,6 +110,15 @@ async function resolveLocationId(args: {
     }
   }
 
+  if (!locationId && !locationSlug) {
+    return {
+      error: NextResponse.json(
+        { error: "locationId or locationSlug is required" },
+        { status: 400 },
+      ),
+    };
+  }
+
   let resolvedBusinessId: string;
   if (businessIdParam || businessSlugParam) {
     try {
@@ -147,22 +156,7 @@ async function resolveLocationId(args: {
     }
   }
 
-  const rows = await args.supabase
-    .from("business_locations")
-    .select("id")
-    .eq("business_id", resolvedBusinessId)
-    .order("created_at", { ascending: false })
-    .returns<Array<{ id: string }>>();
-
-  if (rows.error) {
-    return { error: NextResponse.json({ error: rows.error.message || "Failed to resolve location" }, { status: 500 }) };
-  }
-
-  if (!rows.data?.[0]?.id) {
-    return { error: NextResponse.json({ error: "Location not found" }, { status: 404 }) };
-  }
-
-  return { locationId: rows.data[0].id };
+  return { error: NextResponse.json({ error: "Location not found" }, { status: 404 }) };
 }
 
 export async function GET(request: Request) {

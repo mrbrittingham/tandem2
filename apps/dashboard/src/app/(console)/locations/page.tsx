@@ -333,9 +333,6 @@ export default function LocationsPage() {
     const businessSlug = (location.businessSlug ?? "").trim();
     const query = new URLSearchParams();
     query.set("locationId", location.id);
-    if (locationSlug) {
-      query.set("locationSlug", locationSlug);
-    }
     if (businessSlug) {
       query.set("businessSlug", businessSlug);
     }
@@ -354,7 +351,7 @@ export default function LocationsPage() {
     };
 
     const matchedLocation = (locationPayload.locations ?? []).find(
-      (entry) => (entry.id ?? "").trim() === location.id || (entry.slug ?? "").trim() === locationSlug,
+      (entry) => (entry.id ?? "").trim() === location.id,
     );
 
     const configPayload = configResponse.ok

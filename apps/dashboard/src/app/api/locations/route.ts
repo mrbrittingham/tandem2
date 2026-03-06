@@ -3,6 +3,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
 const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type CreateLocationBody = {
   businessName?: string;
@@ -39,17 +41,9 @@ type LocationConfigRow = {
   integrations_config: unknown;
 };
 
-function toLocationResponse(row: LocationRow) {
-  return {
-    id: row.id,
-    businessId: row.business_id,
-    business_id: row.business_id,
-    name: row.name,
-    slug: row.slug,
-    address: row.address,
-    createdAt: row.created_at,
-  };
-}
+type MembershipRow = {
+  business_id: string;
+};
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
@@ -75,9 +69,26 @@ function isLegacyDemoLocation(row: LocationRow): boolean {
   return false;
 }
 
-type MembershipRow = {
-  business_id: string;
-};
+function toLocationResponse(row: LocationRow) {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    business_id: row.business_id,
+    name: row.name,
+    slug: row.slug,
+    address: row.address,
+    createdAt: row.created_at,
+  };
+}
+
+function slugify(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "business";
+}
 
 async function resolveSingleMembershipBusinessId(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -111,16 +122,40 @@ async function resolveSingleMembershipBusinessId(
   return { businessId: uniqueBusinessIds[0] };
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+async function resolveBusinessScope(args: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  businessId?: string;
+  businessSlug?: string;
+}): Promise<{ businessId: string | null } | { error: NextResponse }> {
+  const businessIdParam = (args.businessId ?? "").trim();
+  const businessSlugParam = (args.businessSlug ?? "").trim();
 
-function slugify(value: string): string {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return normalized || "business";
+  if (businessIdParam || businessSlugParam) {
+    try {
+      const resolved = await resolveBusinessId({
+        supabase: args.supabase,
+        businessId: businessIdParam,
+        businessSlug: businessSlugParam,
+      });
+      return { businessId: resolved.businessId };
+    } catch (error) {
+      if (error instanceof BusinessResolutionError) {
+        const fallback = await resolveSingleMembershipBusinessId(args.supabase, args.userId);
+        if ("error" in fallback) {
+          return fallback;
+        }
+        return { businessId: fallback.businessId };
+      }
+      throw error;
+    }
+  }
+
+  const singleMembership = await resolveSingleMembershipBusinessId(args.supabase, args.userId);
+  if ("error" in singleMembership) {
+    return { businessId: null };
+  }
+  return { businessId: singleMembership.businessId };
 }
 
 async function bootstrapMembershipForUser(args: {
@@ -229,14 +264,15 @@ export async function GET(request: Request) {
     const locationIdParam = (url.searchParams.get("locationId") ?? "").trim();
     const locationSlugParam = (url.searchParams.get("locationSlug") ?? "").trim();
 
-    let resolvedBusinessId: string | null = null;
-    if (businessIdParam || businessSlugParam) {
-      const resolved = await resolveBusinessId({
-        supabase,
-        businessId: businessIdParam,
-        businessSlug: businessSlugParam,
-      });
-      resolvedBusinessId = resolved.businessId;
+    const resolvedScope = await resolveBusinessScope({
+      supabase,
+      userId: user.id,
+      businessId: businessIdParam,
+      businessSlug: businessSlugParam,
+    });
+
+    if ("error" in resolvedScope) {
+      return resolvedScope.error;
     }
 
     let query = supabase
@@ -244,8 +280,8 @@ export async function GET(request: Request) {
       .select("id,business_id,name,slug,address,created_at")
       .order("created_at", { ascending: true });
 
-    if (resolvedBusinessId) {
-      query = query.eq("business_id", resolvedBusinessId);
+    if (resolvedScope.businessId) {
+      query = query.eq("business_id", resolvedScope.businessId);
     }
 
     if (UUID_PATTERN.test(locationIdParam)) {
@@ -257,7 +293,6 @@ export async function GET(request: Request) {
     }
 
     const { data, error } = await query.returns<LocationRow[]>();
-
     if (error) {
       return NextResponse.json({ error: error.message || "Failed to load locations" }, { status: 500 });
     }
@@ -270,9 +305,11 @@ export async function GET(request: Request) {
     const resolvedLocation = locations[0];
 
     console.info("[locations/get]", {
+      requestedBusinessId: businessIdParam || null,
+      requestedBusinessSlug: businessSlugParam || null,
       requestedLocationId: locationIdParam || null,
       requestedLocationSlug: locationSlugParam || null,
-      resolvedBusinessId,
+      resolvedBusinessId: resolvedScope.businessId,
       resolvedLocationId: resolvedLocation?.id ?? null,
       resolvedLocationSlug: resolvedLocation?.slug ?? null,
       readValues: locations.slice(0, 5).map((entry) => ({
@@ -362,7 +399,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: created.error || "Failed to create location" }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, businessId: businessIdForCreate, location: created.data });
+    const location = toLocationResponse(created.data);
+    console.info("[locations/post]", {
+      resolvedBusinessId: businessIdForCreate,
+      resolvedLocationId: location.id,
+      resolvedLocationSlug: location.slug,
+      writtenValues: {
+        name: location.name,
+        address: location.address,
+      },
+    });
+
+    return NextResponse.json({ ok: true, businessId: businessIdForCreate, location });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create location";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -411,232 +459,77 @@ export async function PATCH(request: Request) {
     }
 
     const canUseId = UUID_PATTERN.test(locationId);
-    const hasBusinessScope = Boolean(businessIdParam || businessSlugParam);
-    const canUseSlug = Boolean(locationSlug);
-
-    if (!canUseId && !canUseSlug) {
+    if (!canUseId && !locationSlug) {
       return NextResponse.json(
-        {
-          error:
-            "Provide a valid locationId UUID, or provide locationSlug",
-        },
+        { error: "Provide a valid locationId UUID, or provide locationSlug" },
         { status: 400 },
       );
     }
 
-    const updatePayload = {
-      name,
-      address,
-    };
+    const resolvedScope = await resolveBusinessScope({
+      supabase,
+      userId: user.id,
+      businessId: businessIdParam,
+      businessSlug: businessSlugParam,
+    });
+    if ("error" in resolvedScope) {
+      return resolvedScope.error;
+    }
 
+    let target: { id: string } | null = null;
     if (canUseId) {
-      const { data, error } = await supabase
+      const byId = await supabase
         .from("business_locations")
-        .update(updatePayload)
+        .select("id")
         .eq("id", locationId)
-        .select("id,business_id,name,slug,address,created_at")
-        .maybeSingle<LocationRow>();
-
-      if (!error && data) {
-        const location = toLocationResponse(data);
-        console.info("[locations/patch] updated-by-id", {
-          resolvedLocationId: location.id,
-          resolvedLocationSlug: location.slug,
-          writtenValues: {
-            name: location.name,
-            address: location.address,
-          },
-        });
-        return NextResponse.json({
-          ok: true,
-          location,
-        });
+        .maybeSingle<{ id: string }>();
+      if (!byId.error && byId.data?.id) {
+        target = { id: byId.data.id };
       }
     }
 
-    let resolvedBusinessId: string;
-    if (hasBusinessScope) {
-      try {
-        const resolved = await resolveBusinessId({
-          supabase,
-          businessId: businessIdParam,
-          businessSlug: businessSlugParam,
-        });
-        resolvedBusinessId = resolved.businessId;
-      } catch (error) {
-        if (error instanceof BusinessResolutionError) {
-          const fallback = await resolveSingleMembershipBusinessId(supabase, user.id);
-          if ("error" in fallback) {
-            return fallback.error;
-          }
-          resolvedBusinessId = fallback.businessId;
-        } else {
-          throw error;
-        }
+    if (!target && locationSlug) {
+      if (!resolvedScope.businessId) {
+        return NextResponse.json(
+          { error: "Business scope required to resolve locationSlug" },
+          { status: 400 },
+        );
       }
-    } else {
-      const fallback = await resolveSingleMembershipBusinessId(supabase, user.id);
-      if ("error" in fallback) {
-        return fallback.error;
-      }
-      resolvedBusinessId = fallback.businessId;
-    }
 
-    let data: LocationRow | null = null;
-    let error: { message?: string } | null = null;
-
-    if (canUseSlug) {
-      const updateBySlug = await supabase
+      const bySlug = await supabase
         .from("business_locations")
-        .update(updatePayload)
-        .eq("business_id", resolvedBusinessId)
+        .select("id")
+        .eq("business_id", resolvedScope.businessId)
         .eq("slug", locationSlug)
-        .select("id,business_id,name,slug,address,created_at")
-        .maybeSingle<LocationRow>();
+        .maybeSingle<{ id: string }>();
 
-      data = updateBySlug.data;
-      error = updateBySlug.error;
+      if (!bySlug.error && bySlug.data?.id) {
+        target = { id: bySlug.data.id };
+      }
     }
+
+    if (!target) {
+      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    }
+
+    const { data, error } = await supabase
+      .from("business_locations")
+      .update({ name, address })
+      .eq("id", target.id)
+      .select("id,business_id,name,slug,address,created_at")
+      .maybeSingle<LocationRow>();
 
     if (error) {
       return NextResponse.json({ error: error.message || "Failed to update location" }, { status: 500 });
     }
 
     if (!data) {
-      const { data: candidates, error: candidatesError } = await supabase
-        .from("business_locations")
-        .select("id,business_id,name,slug,address,created_at")
-        .eq("business_id", resolvedBusinessId)
-        .order("created_at", { ascending: false })
-        .returns<LocationRow[]>();
-
-      if (candidatesError) {
-        return NextResponse.json({ error: candidatesError.message || "Failed to resolve location" }, { status: 500 });
-      }
-
-      const rows = candidates ?? [];
-      if (!rows.length) {
-        const createFirst = await createLocationDirect({
-          supabase,
-          userId: user.id,
-          businessId: resolvedBusinessId,
-          name,
-          address,
-          sourceLocationId: null,
-        });
-
-        if (createFirst.error || !createFirst.data) {
-          return NextResponse.json({ error: createFirst.error || "Failed to create location" }, { status: 500 });
-        }
-
-        return NextResponse.json({
-          ok: true,
-          location: createFirst.data,
-        });
-      }
-
-      let target: LocationRow | undefined;
-
-      const normalizedSlug = normalizeText(locationSlug);
-      if (normalizedSlug) {
-        target = rows.find((entry) => normalizeText(entry.slug) === normalizedSlug);
-      }
-
-      if (!target) {
-        const normalizedName = normalizeText(name);
-        if (normalizedName) {
-          target = rows.find((entry) => normalizeText(entry.name) === normalizedName);
-        }
-      }
-
-      if (!target && rows.length === 1) {
-        target = rows[0];
-      }
-
-      if (!target) {
-        target = rows[0];
-      }
-
-      const retry = await supabase
-        .from("business_locations")
-        .update(updatePayload)
-        .eq("id", target.id)
-        .select("id,business_id,name,slug,address,created_at")
-        .maybeSingle<LocationRow>();
-
-      if (retry.error) {
-        const message = retry.error.message || "Failed to update location";
-        const needsBootstrap = /no business membership found/i.test(message);
-        if (!needsBootstrap) {
-          return NextResponse.json({ error: message }, { status: 500 });
-        }
-
-        const bootstrappedBusinessId = await bootstrapMembershipForUser({
-          supabase,
-          userId: user.id,
-          preferredName: name,
-        });
-
-        if (!bootstrappedBusinessId) {
-          return NextResponse.json({ error: message }, { status: 500 });
-        }
-
-        const createViaBootstrap = await supabase.rpc("create_business_location", {
-          p_name: name,
-          p_address: address,
-          p_copy_from_location_id: null,
-        });
-
-        if (createViaBootstrap.error) {
-          const createFallback = await createLocationDirect({
-            supabase,
-            userId: user.id,
-            businessId: bootstrappedBusinessId,
-            name,
-            address,
-            sourceLocationId: null,
-          });
-
-          if (createFallback.error || !createFallback.data) {
-            return NextResponse.json({ error: createFallback.error || "Failed to update location" }, { status: 500 });
-          }
-
-          return NextResponse.json({
-            ok: true,
-            businessId: bootstrappedBusinessId,
-            location: createFallback.data,
-          });
-        }
-
-        return NextResponse.json({
-          ok: true,
-          businessId: bootstrappedBusinessId,
-          location: createViaBootstrap.data?.[0] ?? null,
-        });
-      }
-
-      if (!retry.data) {
-        return NextResponse.json({ error: "Location not found" }, { status: 404 });
-      }
-
-      const location = toLocationResponse(retry.data);
-      console.info("[locations/patch] updated-fallback", {
-        resolvedLocationId: location.id,
-        resolvedLocationSlug: location.slug,
-        writtenValues: {
-          name: location.name,
-          address: location.address,
-        },
-      });
-
-      return NextResponse.json({
-        ok: true,
-        location,
-      });
+      return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
 
     const location = toLocationResponse(data);
-    console.info("[locations/patch] updated-by-slug", {
+    console.info("[locations/patch] updated", {
+      resolvedBusinessId: resolvedScope.businessId,
       resolvedLocationId: location.id,
       resolvedLocationSlug: location.slug,
       writtenValues: {
@@ -645,10 +538,7 @@ export async function PATCH(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      ok: true,
-      location,
-    });
+    return NextResponse.json({ ok: true, location });
   } catch (error) {
     if (error instanceof BusinessResolutionError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });

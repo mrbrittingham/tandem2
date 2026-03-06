@@ -22,6 +22,13 @@ import type {
  const STORAGE_KEY = "tandem:mock-state";
 const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
 
+function isLocationDebugEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return new URLSearchParams(window.location.search).get("debugLocation") === "1";
+}
+
  const listeners = new Set<Listener>();
  let state: MockState = initializeState();
 
@@ -56,6 +63,23 @@ const ENABLE_DEMO_DATA = process.env.NEXT_PUBLIC_ENABLE_DEMO_DATA === "1";
       if (!parsed.activeBusinessId) {
         parsed.activeBusinessId = parsed.activeLocationId;
       }
+
+      if (isLocationDebugEnabled()) {
+        console.info("[location-debug] localStorage hydrate", {
+          storageKey: STORAGE_KEY,
+          businessesCount: parsed.businesses.length,
+          activeLocationId: parsed.activeLocationId ?? null,
+          sample: parsed.businesses.slice(0, 5).map((entry) => ({
+            id: entry.id,
+            slug: entry.locationSlug ?? entry.slug,
+            name: entry.name,
+            locationName: entry.locationName,
+            address: entry.location,
+            timezone: entry.timezone,
+          })),
+        });
+      }
+
       return parsed;
     }
   } catch (error) {
