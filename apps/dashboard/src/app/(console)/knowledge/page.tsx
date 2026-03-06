@@ -9,6 +9,7 @@ import { TextInput } from "@/components/TextInput";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
 import { WebsiteImportPanel, type ImportedKnowledgePayload } from "@/components/WebsiteImportPanel";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
+import { saveLocationConfig } from "@/lib/location-config-client";
 
 type ContentTab = "questions" | "policies";
 
@@ -126,10 +127,10 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
     [policies],
   );
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
 
-    setTimeout(() => {
+    try {
       updateBusiness(business.id, (draft) => {
         const phoneValue = businessInfo.phone.trim();
         const emailValue = businessInfo.email.trim();
@@ -183,9 +184,31 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
         draft.updatedAt = new Date().toISOString();
       });
 
+      // Persist knowledge and core business profile hints so refreshes stay in sync with server-backed data.
+      try {
+        await saveLocationConfig({
+          location: business,
+          knowledgeConfig: {
+            faqs,
+            policies,
+            businessProfile: {
+              businessName: businessInfo.businessName,
+              shortDescription: businessInfo.shortDescription,
+              phone: businessInfo.phone,
+              email: businessInfo.email,
+              address: businessInfo.address,
+              hours: businessInfo.hours,
+            },
+          },
+        });
+      } catch {
+        // Keep local save even if remote sync fails.
+      }
+
       setInitialSnapshot(JSON.stringify({ businessInfo, faqs, policies }));
+    } finally {
       setSaving(false);
-    }, 500);
+    }
   };
 
   const handleFaqSubmit = (event: React.FormEvent<HTMLFormElement>) => {
