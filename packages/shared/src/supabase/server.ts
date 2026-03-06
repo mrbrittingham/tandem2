@@ -11,5 +11,16 @@ export function getServerSupabaseClient(): SupabaseClient {
     );
   }
 
-  return createClient(url, serviceRoleKey);
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        "x-tandem-client": "shared-server-service-role",
+      },
+    },
+  });
 }

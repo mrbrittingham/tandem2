@@ -78,8 +78,26 @@ This repo uses `supabase/migrations/*` as the migration source used by CLI push 
 ### Check migration status
 - `npm run db:status`
 
+### Pull remote schema snapshot (read)
+- `npm run db:pull -- <migration_name>`
+- Example: `npm run db:pull -- 20260306120000_remote_snapshot`
+
+### Create a new migration file (write authoring)
+- `npm run migration:new -- <migration_name>`
+- Example: `npm run migration:new -- add_chat_index`
+
 ### Local reset (local dev only)
 - `npm run db:reset`
+
+### Remote-only fallback (no local Docker/Supabase stack required)
+If `supabase start` is unavailable in your environment, you can still run linked remote operations:
+1. `npm run db:link`
+2. `npm run db:status`
+3. `npm run db:pull -- <migration_name>`
+4. `npm run migration:new -- <migration_name>`
+5. `npm run db:push`
+
+These commands operate against the linked remote project (or `DATABASE_URL` when provided) and do not require `supabase start`.
 
 ### Migration guard (required)
 - `npm run guard:migrations`
@@ -100,6 +118,9 @@ This repo uses `supabase/migrations/*` as the migration source used by CLI push 
    - `SUPABASE_DB_PASSWORD=...`
 5. Run migration push:
    - `npm run db:link`
+   - `npm run db:status`
+   - `npm run db:pull -- <migration_name>` (optional, for read/snapshot)
+   - `npm run migration:new -- <migration_name>` (for new SQL files)
    - `npm run db:push`
 
 ### GitHub Actions secret setup (for automatic migration push)
@@ -274,3 +295,15 @@ Optional one-command flow (starts/stops dev server automatically):
 - Anthropic and Google provider adapters are currently placeholders and throw at runtime.
 - Conversations average-response-time metric is not implemented yet.
 - No automated test suite is currently configured; rely on lint/typecheck plus targeted API/page verification.
+
+## Supabase client safety model
+
+- Browser/client code must only use `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   - Client helper: `apps/dashboard/src/lib/supabase/client.ts`
+- User-scoped API routes should use cookie-bound server client with anon key + RLS.
+   - Server helper: `apps/dashboard/src/lib/supabase/server.ts`
+- Trusted backend-only write paths use service role key from server-only modules.
+   - Shared helper: `packages/shared/src/supabase/server.ts`
+   - Current trusted write path: chat store in `packages/shared/src/storage/supabase.ts`
+   - Worker path: `scripts/worker/website-import-worker.ts`
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` to browser bundles or public env vars.
