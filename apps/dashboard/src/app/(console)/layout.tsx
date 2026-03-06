@@ -45,8 +45,8 @@ const pageHeadingMap: Record<string, ConsolePageHeading> = {
     description: "Manage suggested actions and assistant behavior.",
   },
   "/knowledge": {
-    title: "Knowledge",
-    description: "Maintain FAQs and policies your assistant can reference.",
+    title: "Knowledge Base",
+    description: "Manage the information your assistant uses to answer customer questions.",
   },
   "/handoff": {
     title: "Handoff",

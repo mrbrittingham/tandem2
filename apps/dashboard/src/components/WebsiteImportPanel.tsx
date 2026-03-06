@@ -6,7 +6,6 @@ import type { WebsiteImportDraft, WebsiteImportRunRecord } from "@/lib/website-i
 import { SCHEMA_OUT_OF_DATE_CODE } from "@/lib/website-import/api-errors";
 import { normalizeWidgetTheme } from "@/lib/widget-theme";
 import { pickReadableTextColor } from "@/lib/website-import/utils";
-import { SectionCard } from "./SectionCard";
 import { TextInput } from "./TextInput";
 import { updateBusiness } from "@/lib/store-hooks";
 
@@ -14,7 +13,6 @@ type LatestImportResponse = {
   location?: {
     id: string;
     websiteUrl?: string | null;
-    lastImportRunId?: string | null;
   };
   run?: WebsiteImportRunRecord | null;
   code?: string;
@@ -22,9 +20,7 @@ type LatestImportResponse = {
 };
 
 type StartImportResponse = {
-  ok?: boolean;
   runId?: string;
-  status?: string;
   code?: string;
   error?: string;
 };
@@ -38,11 +34,6 @@ type RunResponse = {
 type ApplyResponse = {
   ok?: boolean;
   code?: string;
-  summary?: {
-    theme?: WidgetThemeSettings;
-    faqCount?: number;
-    policyCount?: number;
-  };
   error?: string;
 };
 
@@ -51,8 +42,6 @@ type LocationOption = {
   businessId: string;
   name: string;
   slug: string;
-  address?: string | null;
-  createdAt?: string;
 };
 
 type LocationsResponse = {
@@ -60,9 +49,20 @@ type LocationsResponse = {
   error?: string;
 };
 
+export type ImportedKnowledgePayload = {
+  name?: string;
+  shortDescription?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  hours?: string;
+  faqs: FAQItem[];
+  policies: PolicyItem[];
+};
+
 function getFriendlyImportError(error?: string, code?: string) {
   if (code === SCHEMA_OUT_OF_DATE_CODE) {
-    return "This feature is being updated right now. Please try again in a moment.";
+    return "Database schema is out of date. Run npm run db:push.";
   }
 
   const message = (error ?? "").toLowerCase();
@@ -71,7 +71,7 @@ function getFriendlyImportError(error?: string, code?: string) {
     || (message.includes("onboarding_import_runs") && message.includes("does not exist"))
     || (message.includes("business_locations") && message.includes("website_url") && message.includes("does not exist"))
   ) {
-    return "This feature is being updated right now. Please try again in a moment.";
+    return "Database schema is out of date. Run npm run db:push.";
   }
 
   return error ?? "Something went wrong. Please try again.";
@@ -136,8 +136,9 @@ function mergeThemeFromDraft(existing: WidgetThemeSettings, draft: WebsiteImport
 
 function formatDate(value?: string | null): string {
   if (!value) {
-    return "—";
+    return "-";
   }
+
   return new Date(value).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
@@ -146,50 +147,67 @@ function formatDate(value?: string | null): string {
   });
 }
 
-export function WebsiteImportPanel({ business }: { business: BusinessProfile }) {
+export function WebsiteImportPanel({
+  business,
+  onApplyImportedContent,
+}: {
+  business: BusinessProfile;
+  onApplyImportedContent?: (payload: ImportedKnowledgePayload) => void;
+}) {
+  const businessSlug = (business.businessSlug ?? business.slug ?? "").trim();
   const initialLocationSlug = (business.locationSlug ?? business.slug ?? "").trim();
 
-  const [locationId, setLocationId] = useState<string | null>(null);
   const [locationOptions, setLocationOptions] = useState<LocationOption[]>([]);
   const [selectedLocationSlug, setSelectedLocationSlug] = useState("");
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [url, setUrl] = useState("");
-  const [lastImportedUrl, setLastImportedUrl] = useState<string | null>(null);
   const [run, setRun] = useState<WebsiteImportRunRecord | null>(null);
   const [draft, setDraft] = useState<WebsiteImportDraft | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
-  const [hasPendingSave, setHasPendingSave] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [editingFaqIds, setEditingFaqIds] = useState<Record<string, boolean>>({});
+  const [editingPolicyIds, setEditingPolicyIds] = useState<Record<string, boolean>>({});
 
-  const reviewDraft = draft;
   const selectedLocation = useMemo(
     () => locationOptions.find((entry) => entry.slug === selectedLocationSlug),
     [locationOptions, selectedLocationSlug],
   );
 
   const locationGuardError = useMemo(() => {
+    if (!businessSlug) {
+      return "Business details are missing. Select a valid location before importing.";
+    }
     if (!locationOptions.length) {
-      return isLoadingLocations ? null : "No locations found. Pick a location to continue.";
+      return isLoadingLocations ? null : "No locations found for this business.";
     }
     if (!selectedLocation) {
-      return "Selected location is invalid. Pick a location to continue.";
+      return "Choose a valid location before importing.";
     }
     return null;
-  }, [isLoadingLocations, locationOptions.length, selectedLocation]);
+  }, [businessSlug, isLoadingLocations, locationOptions.length, selectedLocation]);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadLocations = async () => {
+      if (!businessSlug) {
+        setLocationOptions([]);
+        setSelectedLocationSlug("");
+        return;
+      }
+
       setIsLoadingLocations(true);
 
       try {
-        const response = await fetch("/api/locations", { method: "GET" });
+        const params = new URLSearchParams();
+        params.set("businessSlug", businessSlug);
+
+        const response = await fetch(`/api/locations?${params.toString()}`, { method: "GET" });
         const payload = (await response.json().catch(() => ({}))) as LocationsResponse;
+
         if (cancelled) {
           return;
         }
@@ -206,7 +224,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         if (!cancelled) {
           setLocationOptions([]);
           setSelectedLocationSlug("");
-          setError("Failed to load locations for website import");
+          setError("Could not load locations for website import.");
         }
       } finally {
         if (!cancelled) {
@@ -220,30 +238,24 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [initialLocationSlug]);
+  }, [businessSlug, initialLocationSlug]);
 
   useEffect(() => {
     let cancelled = false;
+
     const loadLatest = async () => {
       if (locationGuardError || !selectedLocationSlug) {
         return;
       }
 
-      setLastImportedUrl(null);
-
       try {
         const params = new URLSearchParams();
-        if (selectedLocation?.businessId) {
-          params.set("businessId", selectedLocation.businessId);
-        }
+        params.set("businessSlug", businessSlug);
         params.set("locationSlug", selectedLocationSlug);
 
-        const response = await fetch(
-          `/api/website-import/latest?${params.toString()}`,
-          { method: "GET" },
-        );
-
+        const response = await fetch(`/api/website-import/latest?${params.toString()}`, { method: "GET" });
         const payload = (await response.json().catch(() => ({}))) as LatestImportResponse;
+
         if (cancelled) {
           return;
         }
@@ -253,20 +265,17 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           return;
         }
 
-        setLocationId(payload.location?.id ?? null);
-        const latestUrl = (payload.location?.websiteUrl ?? payload.run?.url ?? "").trim();
-        setLastImportedUrl(latestUrl || null);
+        setUrl((payload.location?.websiteUrl ?? payload.run?.url ?? "").trim());
         setRun(payload.run ?? null);
         setDraft(payload.run?.result ?? null);
-        setHasPendingSave(false);
-        setLastSavedAt(payload.run?.appliedAt ?? null);
+
         if (payload.run?.id && (payload.run.status === "queued" || payload.run.status === "running")) {
           setActiveRunId(payload.run.id);
           setIsLoading(true);
         }
       } catch {
         if (!cancelled) {
-          setError("Failed to load import metadata");
+          setError("Could not load the latest import.");
         }
       }
     };
@@ -276,17 +285,18 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     return () => {
       cancelled = true;
     };
-  }, [locationGuardError, selectedLocation?.businessId, selectedLocationSlug]);
+  }, [businessSlug, locationGuardError, selectedLocationSlug]);
 
   const runImport = async (nextUrl?: string) => {
     const targetUrl = (nextUrl ?? url).trim();
+
     if (!targetUrl) {
-      setError("Website URL is required");
+      setError("Website URL is required.");
       return;
     }
 
     if (locationGuardError || !selectedLocationSlug) {
-      setError(locationGuardError ?? "Pick a valid location before running import");
+      setError(locationGuardError ?? "Choose a valid location before importing.");
       return;
     }
 
@@ -302,7 +312,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          businessId: selectedLocation?.businessId,
+          businessSlug,
           locationSlug: selectedLocationSlug,
           url: targetUrl,
         }),
@@ -316,7 +326,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
       queued = true;
       setActiveRunId(payload.runId);
       setUrl(targetUrl);
-      setSuccess("Import queued. We will update this panel when processing completes.");
+      setSuccess("Import started. We will update this section when it is ready.");
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Import failed";
       setError(message);
@@ -337,6 +347,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     }
 
     let cancelled = false;
+
     const poll = async () => {
       try {
         const runResponse = await fetch(`/api/website-import/${encodeURIComponent(activeRunId)}`, {
@@ -344,6 +355,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         });
 
         const runPayload = (await runResponse.json().catch(() => ({}))) as RunResponse;
+
         if (cancelled) {
           return;
         }
@@ -354,10 +366,9 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
 
         setRun(runPayload.run);
         setDraft(runPayload.run.result ?? null);
-        setLocationId(runPayload.run.locationId);
 
         if (runPayload.run.status === "succeeded") {
-          setSuccess("Import draft ready for review");
+          setSuccess("Suggestions are ready to review.");
           setIsLoading(false);
           setActiveRunId(null);
           return;
@@ -370,7 +381,7 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         }
       } catch (pollError) {
         if (!cancelled) {
-          const message = pollError instanceof Error ? pollError.message : "Failed to load run status";
+          const message = pollError instanceof Error ? pollError.message : "Failed to load import status";
           setError(message);
           setIsLoading(false);
           setActiveRunId(null);
@@ -389,96 +400,8 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
     };
   }, [activeRunId]);
 
-  useEffect(() => {
-    if (!hasPendingSave || typeof window === "undefined") {
-      return;
-    }
-
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-    };
-  }, [hasPendingSave]);
-
-  const stageImport = () => {
-    if (!draft) {
-      return;
-    }
-
-    setError(null);
-    setSuccess(null);
-
-    updateBusiness(business.id, (record) => {
-      if (draft.businessProfile.name.value) {
-        record.businessName = draft.businessProfile.name.value;
-        record.name = draft.businessProfile.name.value;
-      }
-      if (draft.businessProfile.shortDescription.value) {
-        record.summary = draft.businessProfile.shortDescription.value;
-      }
-      if (draft.businessProfile.address.value) {
-        record.location = draft.businessProfile.address.value;
-      }
-
-      const theme = mergeThemeFromDraft(record.theme, draft);
-      record.theme = theme;
-
-      const importedFaqs = toFaqItems(draft);
-      if (importedFaqs.length > 0) {
-        record.faqs = importedFaqs;
-      }
-
-      const importedPolicies = toPolicyItems(draft);
-      if (importedPolicies.length > 0) {
-        record.policies = importedPolicies;
-      }
-
-      if (draft.businessProfile.phone.value) {
-        const existingPhone = record.contacts.find((entry) => entry.type === "phone");
-        if (existingPhone) {
-          existingPhone.value = draft.businessProfile.phone.value;
-          existingPhone.enabled = true;
-        } else {
-          record.contacts.unshift({
-            id: crypto.randomUUID(),
-            type: "phone",
-            label: "Phone",
-            value: draft.businessProfile.phone.value,
-            enabled: true,
-          });
-        }
-      }
-
-      if (draft.businessProfile.email.value) {
-        const existingEmail = record.contacts.find((entry) => entry.type === "email");
-        if (existingEmail) {
-          existingEmail.value = draft.businessProfile.email.value;
-          existingEmail.enabled = true;
-        } else {
-          record.contacts.push({
-            id: crypto.randomUUID(),
-            type: "email",
-            label: "Email",
-            value: draft.businessProfile.email.value,
-            enabled: true,
-          });
-        }
-      }
-
-      record.updatedAt = new Date().toISOString();
-    });
-
-    setHasPendingSave(true);
-    setSuccess("Suggestions are ready. Click Save changes to keep them.");
-  };
-
-  const saveImport = async () => {
-    if (!run?.id || !draft || !hasPendingSave) {
+  const applyImport = async () => {
+    if (!run?.id || !draft) {
       return;
     }
 
@@ -500,20 +423,95 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
         throw new Error(getFriendlyImportError(payload.error, payload.code));
       }
 
-      setHasPendingSave(false);
-      const nowIso = new Date().toISOString();
-      setLastSavedAt(nowIso);
-      setSuccess(`Saved ${new Date(nowIso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+      const importedFaqs = toFaqItems(draft);
+      const importedPolicies = toPolicyItems(draft);
+      const nextTheme = mergeThemeFromDraft(business.theme, draft);
+
+      updateBusiness(business.id, (record) => {
+        if (draft.businessProfile.name.value) {
+          record.businessName = draft.businessProfile.name.value;
+          record.name = draft.businessProfile.name.value;
+        }
+        if (draft.businessProfile.shortDescription.value) {
+          record.summary = draft.businessProfile.shortDescription.value;
+          record.tagline = draft.businessProfile.shortDescription.value;
+        }
+        if (draft.businessProfile.address.value) {
+          record.location = draft.businessProfile.address.value;
+        }
+
+        record.theme = nextTheme;
+
+        if (importedFaqs.length > 0) {
+          record.faqs = importedFaqs;
+        }
+
+        if (importedPolicies.length > 0) {
+          record.policies = importedPolicies;
+        }
+
+        if (draft.businessProfile.hours.value) {
+          record.handoff.supportHoursLabel = draft.businessProfile.hours.value;
+          record.handoff.statusDetail = draft.businessProfile.hours.value;
+        }
+
+        if (draft.businessProfile.phone.value) {
+          const existingPhone = record.contacts.find((entry) => entry.type === "phone");
+          if (existingPhone) {
+            existingPhone.value = draft.businessProfile.phone.value;
+            existingPhone.enabled = true;
+          } else {
+            record.contacts.unshift({
+              id: crypto.randomUUID(),
+              type: "phone",
+              label: "Phone",
+              value: draft.businessProfile.phone.value,
+              enabled: true,
+            });
+          }
+        }
+
+        if (draft.businessProfile.email.value) {
+          const existingEmail = record.contacts.find((entry) => entry.type === "email");
+          if (existingEmail) {
+            existingEmail.value = draft.businessProfile.email.value;
+            existingEmail.enabled = true;
+          } else {
+            record.contacts.push({
+              id: crypto.randomUUID(),
+              type: "email",
+              label: "Email",
+              value: draft.businessProfile.email.value,
+              enabled: true,
+            });
+          }
+        }
+
+        record.updatedAt = new Date().toISOString();
+      });
+
+      onApplyImportedContent?.({
+        name: draft.businessProfile.name.value ?? undefined,
+        shortDescription: draft.businessProfile.shortDescription.value ?? undefined,
+        phone: draft.businessProfile.phone.value ?? undefined,
+        email: draft.businessProfile.email.value ?? undefined,
+        address: draft.businessProfile.address.value ?? undefined,
+        hours: draft.businessProfile.hours.value ?? undefined,
+        faqs: importedFaqs,
+        policies: importedPolicies,
+      });
+
+      setSuccess("Imported details saved.");
       setRun((current) =>
         current
           ? {
               ...current,
-              appliedAt: nowIso,
+              appliedAt: new Date().toISOString(),
             }
           : current,
       );
     } catch (applyError) {
-      const message = applyError instanceof Error ? applyError.message : "Failed to apply import";
+      const message = applyError instanceof Error ? applyError.message : "Failed to save imported details";
       setError(message);
     } finally {
       setIsApplying(false);
@@ -521,52 +519,49 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
   };
 
   const discardDraft = () => {
-    if (hasPendingSave && typeof window !== "undefined") {
-      const confirmed = window.confirm("Discard imported suggestions? Unsaved changes will be lost.");
-      if (!confirmed) {
-        return;
-      }
-    }
-
     setDraft(null);
     setSuccess(null);
     setError(null);
-    setHasPendingSave(false);
+    setEditingFaqIds({});
+    setEditingPolicyIds({});
   };
 
-  const profileRows = useMemo(() => {
-    if (!draft) {
-      return [];
-    }
+  const setFaqInclude = (id: string, include: boolean) => {
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        faqs: current.faqs.map((faq) => (faq.id === id ? { ...faq, include } : faq)),
+      };
+    });
+  };
 
-    return [
-      { key: "name", label: "Business name", value: draft.businessProfile.name.value ?? "", sourceUrl: draft.businessProfile.name.sourceUrl },
-      {
-        key: "shortDescription",
-        label: "Short description",
-        value: draft.businessProfile.shortDescription.value ?? "",
-        sourceUrl: draft.businessProfile.shortDescription.sourceUrl,
-      },
-      { key: "phone", label: "Phone", value: draft.businessProfile.phone.value ?? "", sourceUrl: draft.businessProfile.phone.sourceUrl },
-      { key: "email", label: "Email", value: draft.businessProfile.email.value ?? "", sourceUrl: draft.businessProfile.email.sourceUrl },
-      { key: "address", label: "Address", value: draft.businessProfile.address.value ?? "", sourceUrl: draft.businessProfile.address.sourceUrl },
-      { key: "hours", label: "Hours", value: draft.businessProfile.hours.value ?? "", sourceUrl: draft.businessProfile.hours.sourceUrl },
-    ] as const;
-  }, [draft]);
+  const setPolicyInclude = (id: string, include: boolean) => {
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        policies: current.policies.map((policy) => (policy.id === id ? { ...policy, include } : policy)),
+      };
+    });
+  };
+
+  const hasSuggestions = Boolean((draft?.faqs.length ?? 0) > 0 || (draft?.policies.length ?? 0) > 0);
 
   return (
-    <SectionCard
-      title="Import from Website"
-      description="Import your website once, review suggested updates, then save what you want to keep."
-      actions={
-        run ? (
-          <span className="text-xs text-slate-500">Last import {formatDate(run.finishedAt ?? run.createdAt)} ({run.status})</span>
-        ) : null
-      }
-    >
-      <div className="mx-auto w-full max-w-5xl space-y-5">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,26rem)_auto] md:items-end">
-          <label className="block w-full text-sm">
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-slate-900">Import from your website</h3>
+          <p className="mt-1 text-sm text-slate-600">Pull details from your website to save time. You can review and edit everything before saving.</p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <label className="block text-sm">
             <span className="mb-1 block font-medium text-slate-700">Location</span>
             <select
               value={selectedLocationSlug}
@@ -586,17 +581,11 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
             href="/locations"
             className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
           >
-            Pick a location
+            Choose location
           </a>
         </div>
 
-        <form
-          className="grid gap-3 md:grid-cols-[minmax(0,36rem)_auto_auto] md:items-end"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void runImport();
-          }}
-        >
+        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
           <TextInput
             label="Website URL"
             value={url}
@@ -604,11 +593,12 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
             placeholder="https://example.com"
           />
           <button
-            type="submit"
+            type="button"
+            onClick={() => runImport()}
             disabled={isLoading || Boolean(locationGuardError)}
             className="rounded-2xl bg-[var(--console-primary)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isLoading ? "Running…" : "Run import"}
+            {isLoading ? "Importing..." : "Import Details"}
           </button>
           <button
             type="button"
@@ -616,311 +606,294 @@ export function WebsiteImportPanel({ business }: { business: BusinessProfile }) 
             disabled={isLoading || !url.trim() || Boolean(locationGuardError)}
             className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Refresh import
+            Refresh Data
           </button>
-        </form>
-
-        {lastImportedUrl && !url.trim() ? (
-          <div>
-            <button
-              type="button"
-              onClick={() => setUrl(lastImportedUrl)}
-              className="text-xs font-medium text-slate-600 underline hover:text-slate-800"
-            >
-              Resume last URL ({lastImportedUrl})
-            </button>
-          </div>
-        ) : null}
-
-        {locationGuardError ? (
-          <p className="text-sm text-amber-700">{locationGuardError}</p>
-        ) : null}
-
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        {success ? <p className="text-sm text-emerald-600">{success}</p> : null}
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-          {locationId ? <p>Location ID: {locationId}</p> : null}
-          {lastSavedAt ? <p>Last saved {formatDate(lastSavedAt)}</p> : null}
-          {hasPendingSave ? <p className="font-medium text-amber-700">Unsaved imported changes</p> : null}
         </div>
 
-        {!reviewDraft ? (
-          <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Run an import to generate editable business profile, FAQs, policies, and brand suggestions.
+        {run ? <p className="mt-3 text-xs text-slate-500">Last import: {formatDate(run.finishedAt ?? run.createdAt)} ({run.status})</p> : null}
+        {locationGuardError ? <p className="mt-3 text-sm text-amber-700">{locationGuardError}</p> : null}
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+        {success ? <p className="mt-3 text-sm text-emerald-600">{success}</p> : null}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <h3 className="text-lg font-semibold text-slate-900">Suggestions from your website</h3>
+        <p className="mt-1 text-sm text-slate-600">We found a few things on your website that may help answer customer questions.</p>
+
+        {!draft ? (
+          <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Import your website to review suggested questions and policies.
+          </p>
+        ) : !hasSuggestions ? (
+          <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            We did not find suggestions this time. Try another page or refresh your import.
           </p>
         ) : (
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900">Business profile</h3>
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
-                {profileRows.map((row) => (
-                  <div key={row.key} className="space-y-2">
-                    <TextInput
-                      label={row.label}
-                      value={row.value}
-                      onChange={(value) => {
-                        setDraft((current) => {
-                          if (!current) {
-                            return current;
-                          }
-                          if (row.key === "name") current.businessProfile.name.value = value;
-                          if (row.key === "shortDescription") current.businessProfile.shortDescription.value = value;
-                          if (row.key === "phone") current.businessProfile.phone.value = value;
-                          if (row.key === "email") current.businessProfile.email.value = value;
-                          if (row.key === "address") current.businessProfile.address.value = value;
-                          if (row.key === "hours") current.businessProfile.hours.value = value;
-                          return { ...current };
-                        });
-                      }}
-                    />
-                    {row.sourceUrl ? (
-                      <a href={row.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 underline">
-                        Evidence
-                      </a>
-                    ) : null}
+          <div className="mt-4 grid gap-3">
+            {draft.faqs.map((faq) => {
+              const isEditing = Boolean(editingFaqIds[faq.id]);
+              return (
+                <article key={faq.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-900">Suggested Question</p>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${faq.include ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                      {faq.include ? "Accepted" : "Dismissed"}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900">Suggested FAQs</h3>
-              <div className="mt-3 space-y-3">
-                {reviewDraft.faqs.length === 0 ? (
-                  <p className="text-sm text-slate-500">No FAQs detected in this crawl.</p>
-                ) : (
-                  reviewDraft.faqs.map((faq, index) => (
-                    <article key={faq.id} className="rounded-xl border border-slate-200 p-3">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={faq.include}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              setDraft((current) => {
-                                if (!current) return current;
-                                const next = [...current.faqs];
-                                next[index] = { ...next[index], include: checked };
-                                return { ...current, faqs: next };
-                              });
-                            }}
-                          />
-                          Include
-                        </label>
-                        {faq.sourceUrl ? (
-                          <a href={faq.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-slate-500 underline">
-                            Source
-                          </a>
-                        ) : null}
-                        {faq.lowConfidence ? (
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Low confidence</span>
-                        ) : null}
-                      </div>
+                  {isEditing ? (
+                    <div className="space-y-3">
                       <TextInput
                         label="Question"
                         value={faq.question}
                         onChange={(value) => {
-                          setDraft((current) => {
-                            if (!current) return current;
-                            const next = [...current.faqs];
-                            next[index] = { ...next[index], question: value };
-                            return { ...current, faqs: next };
-                          });
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  faqs: current.faqs.map((entry) => (entry.id === faq.id ? { ...entry, question: value } : entry)),
+                                }
+                              : current,
+                          );
                         }}
                       />
-                      <div className="mt-3">
-                        <TextInput
-                          label="Answer"
-                          multiline
-                          rows={3}
-                          value={faq.answer}
-                          onChange={(value) => {
-                            setDraft((current) => {
-                              if (!current) return current;
-                              const next = [...current.faqs];
-                              next[index] = { ...next[index], answer: value };
-                              return { ...current, faqs: next };
-                            });
-                          }}
-                        />
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            </div>
+                      <TextInput
+                        label="Suggested answer"
+                        multiline
+                        rows={3}
+                        value={faq.answer}
+                        onChange={(value) => {
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  faqs: current.faqs.map((entry) => (entry.id === faq.id ? { ...entry, answer: value } : entry)),
+                                }
+                              : current,
+                          );
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-slate-900">{faq.question || "Untitled question"}</h4>
+                      <p className="text-sm text-slate-600">{faq.answer || "No suggested answer yet."}</p>
+                    </div>
+                  )}
 
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900">Suggested policies</h3>
-              <div className="mt-3 space-y-3">
-                {reviewDraft.policies.length === 0 ? (
-                  <p className="text-sm text-slate-500">No policies detected in this crawl.</p>
-                ) : (
-                  reviewDraft.policies.map((policy, index) => (
-                    <article key={policy.id} className="rounded-xl border border-slate-200 p-3">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={policy.include}
-                            onChange={(event) => {
-                              const checked = event.target.checked;
-                              setDraft((current) => {
-                                if (!current) return current;
-                                const next = [...current.policies];
-                                next[index] = { ...next[index], include: checked };
-                                return { ...current, policies: next };
-                              });
-                            }}
-                          />
-                          Include
-                        </label>
-                        {policy.sourceUrl ? (
-                          <a href={policy.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-slate-500 underline">
-                            Source
-                          </a>
-                        ) : null}
-                      </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFaqInclude(faq.id, true)}
+                      className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingFaqIds((current) => ({ ...current, [faq.id]: !current[faq.id] }))}
+                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                    >
+                      {isEditing ? "Done" : "Edit"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFaqInclude(faq.id, false)}
+                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+
+            {draft.policies.map((policy) => {
+              const isEditing = Boolean(editingPolicyIds[policy.id]);
+              return (
+                <article key={policy.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-900">Suggested Policy</p>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${policy.include ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                      {policy.include ? "Accepted" : "Dismissed"}
+                    </span>
+                  </div>
+
+                  {isEditing ? (
+                    <div className="space-y-3">
                       <TextInput
                         label="Title"
                         value={policy.title}
                         onChange={(value) => {
-                          setDraft((current) => {
-                            if (!current) return current;
-                            const next = [...current.policies];
-                            next[index] = { ...next[index], title: value };
-                            return { ...current, policies: next };
-                          });
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  policies: current.policies.map((entry) => (entry.id === policy.id ? { ...entry, title: value } : entry)),
+                                }
+                              : current,
+                          );
                         }}
                       />
-                      <div className="mt-3">
-                        <TextInput
-                          label="Summary"
-                          multiline
-                          rows={3}
-                          value={policy.summary}
-                          onChange={(value) => {
-                            setDraft((current) => {
-                              if (!current) return current;
-                              const next = [...current.policies];
-                              next[index] = { ...next[index], summary: value };
-                              return { ...current, policies: next };
-                            });
-                          }}
-                        />
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            </div>
+                      <TextInput
+                        label="Suggested details"
+                        multiline
+                        rows={3}
+                        value={policy.summary}
+                        onChange={(value) => {
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  policies: current.policies.map((entry) => (entry.id === policy.id ? { ...entry, summary: value } : entry)),
+                                }
+                              : current,
+                          );
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-slate-900">{policy.title || "Untitled policy"}</h4>
+                      <p className="text-sm text-slate-600">{policy.summary || "No suggested details yet."}</p>
+                    </div>
+                  )}
 
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900">Brand suggestions</h3>
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
-                <TextInput
-                  label="Primary color"
-                  value={reviewDraft.brand.primaryColor.value ?? ""}
-                  onChange={(value) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            brand: {
-                              ...current.brand,
-                              primaryColor: { ...current.brand.primaryColor, value },
-                            },
-                          }
-                        : current,
-                    )
-                  }
-                  placeholder="#3170FC"
-                />
-                <TextInput
-                  label="Accent color"
-                  value={reviewDraft.brand.accentColor.value ?? ""}
-                  onChange={(value) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            brand: {
-                              ...current.brand,
-                              accentColor: { ...current.brand.accentColor, value },
-                            },
-                          }
-                        : current,
-                    )
-                  }
-                  placeholder="#9E4770"
-                />
-                <TextInput
-                  label="Font family"
-                  value={reviewDraft.brand.fontFamily.value ?? ""}
-                  onChange={(value) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            brand: {
-                              ...current.brand,
-                              fontFamily: { ...current.brand.fontFamily, value },
-                            },
-                          }
-                        : current,
-                    )
-                  }
-                  placeholder="Inter, sans-serif"
-                />
-                <TextInput
-                  label="Logo URL"
-                  value={reviewDraft.brand.logoUrl.value ?? ""}
-                  onChange={(value) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            brand: {
-                              ...current.brand,
-                              logoUrl: { ...current.brand.logoUrl, value },
-                            },
-                          }
-                        : current,
-                    )
-                  }
-                  placeholder="https://example.com/logo.svg"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={discardDraft}
-                className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
-              >
-                Discard
-              </button>
-              <button
-                type="button"
-                onClick={stageImport}
-                className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-              >
-                Review suggested changes
-              </button>
-              <button
-                type="button"
-                onClick={saveImport}
-                disabled={isApplying || !hasPendingSave}
-                className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isApplying ? "Saving…" : "Save changes"}
-              </button>
-            </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPolicyInclude(policy.id, true)}
+                      className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingPolicyIds((current) => ({ ...current, [policy.id]: !current[policy.id] }))}
+                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                    >
+                      {isEditing ? "Done" : "Edit"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPolicyInclude(policy.id, false)}
+                      className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
-    </SectionCard>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <h3 className="text-lg font-semibold text-slate-900">Brand Style</h3>
+        <p className="mt-1 text-sm text-slate-600">These settings help your assistant match your brand when responding.</p>
+
+        {!draft ? (
+          <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Import your website to prefill brand style settings.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <TextInput
+              label="Primary color"
+              value={draft.brand.primaryColor.value ?? ""}
+              onChange={(value) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        brand: {
+                          ...current.brand,
+                          primaryColor: { ...current.brand.primaryColor, value },
+                        },
+                      }
+                    : current,
+                )
+              }
+              placeholder="#3170FC"
+            />
+            <TextInput
+              label="Accent color"
+              value={draft.brand.accentColor.value ?? ""}
+              onChange={(value) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        brand: {
+                          ...current.brand,
+                          accentColor: { ...current.brand.accentColor, value },
+                        },
+                      }
+                    : current,
+                )
+              }
+              placeholder="#9E4770"
+            />
+            <TextInput
+              label="Font family"
+              value={draft.brand.fontFamily.value ?? ""}
+              onChange={(value) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        brand: {
+                          ...current.brand,
+                          fontFamily: { ...current.brand.fontFamily, value },
+                        },
+                      }
+                    : current,
+                )
+              }
+              placeholder="Inter, sans-serif"
+            />
+            <TextInput
+              label="Logo URL"
+              value={draft.brand.logoUrl.value ?? ""}
+              onChange={(value) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        brand: {
+                          ...current.brand,
+                          logoUrl: { ...current.brand.logoUrl, value },
+                        },
+                      }
+                    : current,
+                )
+              }
+              placeholder="https://example.com/logo.svg"
+            />
+          </div>
+        )}
+
+        {draft ? (
+          <div className="mt-5 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={applyImport}
+              disabled={isApplying}
+              className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isApplying ? "Saving..." : "Save imported details"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
