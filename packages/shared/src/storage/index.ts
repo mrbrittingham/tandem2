@@ -2,6 +2,7 @@ import { createSupabaseChatStore } from "./supabase";
 import { createFileChatStore } from "./file";
 import { createMemoryChatStore } from "./memory";
 import type { ChatStore } from "./types";
+export { resolveChatStoreDataDir } from "./file";
 
 let storePromise: Promise<ChatStore> | null = null;
 
@@ -11,9 +12,25 @@ function hasSupabaseServerEnv() {
   );
 }
 
+export type ChatStoreSelection = {
+  backend: "supabase" | "file";
+  dataDir?: string;
+};
+
+export function resolveChatStoreSelection(): ChatStoreSelection {
+  if (hasSupabaseServerEnv()) {
+    return { backend: "supabase" };
+  }
+
+  return {
+    backend: "file",
+  };
+}
+
 export async function getChatStore(): Promise<ChatStore> {
   if (!storePromise) {
-    if (hasSupabaseServerEnv()) {
+    const selection = resolveChatStoreSelection();
+    if (selection.backend === "supabase") {
       storePromise = Promise.resolve(createSupabaseChatStore());
     } else {
       storePromise = createFileChatStore().catch((error) => {

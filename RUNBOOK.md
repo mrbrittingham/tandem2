@@ -42,10 +42,16 @@ Deploy sequence (copy/paste checklist):
 ### Optional
 - `LLM_PROVIDER` (default: `openai`)
 - `LLM_MODEL` (default: `gpt-5.2`)
+- `CHAT_STORE_DIR` (preferred file-store override path)
 - `TANDEM_DATA_DIR` (file-store override)
 - `TANDEM_API_KEY`
 - `TANDEM_ALLOWED_BUSINESS_IDS`
 - `WEBSITE_IMPORT_MAX_PAGES` (default: `22`)
+
+Chat store runtime safety:
+- Serverless deployments (for example Vercel) cannot write under `/var/task`.
+- If Supabase chat storage is unavailable, production/serverless now stores chat files under `/tmp/.tandem` by default.
+- Validate selection/path with `npm run check:chat-store`.
 
 ### Supabase migration automation (required for remote db push)
 - `SUPABASE_ACCESS_TOKEN`

@@ -91,7 +91,7 @@ Canonical scope key is the pair `(businessId, locationSlug)`.
 
 - Chat store selection is in `packages/shared/src/storage/index.ts`.
 - Supabase adapter: `packages/shared/src/storage/supabase.ts`.
-- File adapter: `packages/shared/src/storage/file.ts` (default path `.data/`, override with `TANDEM_DATA_DIR`).
+- File adapter: `packages/shared/src/storage/file.ts` (default path `.data/` in local dev, override with `CHAT_STORE_DIR` or `TANDEM_DATA_DIR`; in production/serverless it auto-falls back to `/tmp/.tandem` when a repo-local path would be used).
 - Active migration source for CLI push: `supabase/migrations/*`.
 - A second migration path exists in `packages/shared/supabase/migrations/*` and is not automatically pushed by default CLI commands.
 
@@ -107,6 +107,7 @@ Canonical scope key is the pair `(businessId, locationSlug)`.
 ### Optional behavior flags
 - `LLM_PROVIDER` (default `openai`)
 - `LLM_MODEL` (default `gpt-5.2`)
+- `CHAT_STORE_DIR`
 - `TANDEM_DATA_DIR`
 - `TANDEM_API_KEY`
 - `TANDEM_ALLOWED_BUSINESS_IDS`

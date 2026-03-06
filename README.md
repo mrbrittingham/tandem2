@@ -53,9 +53,13 @@ Required for LLM generation:
 Optional:
 - `LLM_PROVIDER` (default `openai`)
 - `LLM_MODEL` (default `gpt-5.2`)
+- `CHAT_STORE_DIR` (preferred file-store override path)
 - `TANDEM_DATA_DIR`
 - `TANDEM_API_KEY`
 - `TANDEM_ALLOWED_BUSINESS_IDS`
+
+Serverless note:
+- Vercel runtime paths under `/var/task` are read-only. If Supabase chat storage is not configured, the file store automatically falls back to `/tmp/.tandem` in production/serverless.
 
 ## Documentation index
 

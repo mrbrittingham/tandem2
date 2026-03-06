@@ -21,6 +21,7 @@
     "db:reset": "npx --yes supabase db reset",
     "db:status": "node --env-file=.env.local ./scripts/supabase-status.mjs",
     "doctor": "node ./scripts/check-deploy-env.mjs",
+    "check:chat-store": "node --import tsx ./scripts/check-chat-store-runtime.ts",
     "worker:imports": "node --env-file=.env.local --import tsx ./scripts/worker/website-import-worker.ts",
     "verify:api": "bash ./scripts/verify-api.sh",
     "smoke:chat": "node ./scripts/smoke-chat.mjs",

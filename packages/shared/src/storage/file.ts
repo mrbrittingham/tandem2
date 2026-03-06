@@ -12,6 +12,8 @@ import type {
   UpdateSessionInput,
 } from "./types";
 
+const DEFAULT_EPHEMERAL_DATA_DIR = "/tmp/.tandem";
+
 function looksLikeRepoRoot(dir: string) {
   return (
     existsSync(path.join(dir, "package.json")) &&
@@ -20,10 +22,36 @@ function looksLikeRepoRoot(dir: string) {
   );
 }
 
-function resolveDataDir() {
-  const override = process.env.TANDEM_DATA_DIR;
+function isServerlessRuntime() {
+  return Boolean(
+    process.env.VERCEL === "1" ||
+    process.env.VERCEL_ENV ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME,
+  );
+}
+
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production" || isServerlessRuntime();
+}
+
+function isPathInsideCwd(dir: string) {
+  const relative = path.relative(process.cwd(), dir);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function resolveOverrideDir() {
+  const override = process.env.CHAT_STORE_DIR ?? process.env.TANDEM_DATA_DIR;
   if (override && override.trim().length > 0) {
     return path.isAbsolute(override) ? override : path.join(process.cwd(), override);
+  }
+
+  return null;
+}
+
+function resolveDefaultDataDir() {
+  const override = resolveOverrideDir();
+  if (override) {
+    return override;
   }
 
   let current = process.cwd();
@@ -41,7 +69,17 @@ function resolveDataDir() {
   return path.join(process.cwd(), ".data");
 }
 
-const DATA_DIR = resolveDataDir();
+export function resolveChatStoreDataDir() {
+  const resolved = resolveDefaultDataDir();
+
+  // Serverless production filesystems (e.g., Vercel /var/task) are read-only.
+  if (isProductionRuntime() && isPathInsideCwd(resolved)) {
+    return DEFAULT_EPHEMERAL_DATA_DIR;
+  }
+
+  return resolved;
+}
+
 const SESSIONS_FILE = "sessions.json";
 const MESSAGES_FILE = "messages.json";
 
@@ -195,5 +233,5 @@ class FileChatStore implements ChatStore {
 }
 
 export async function createFileChatStore(): Promise<ChatStore> {
-  return new FileChatStore(DATA_DIR);
+  return new FileChatStore(resolveChatStoreDataDir());
 }
