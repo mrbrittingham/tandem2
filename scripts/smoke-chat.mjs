@@ -2,6 +2,7 @@
 
 const BASE_URL = process.env.BASE_URL?.trim() || "http://localhost:3100";
 const BUSINESS_ID = process.env.BUSINESS_ID?.trim() || "cedar-sage";
+const BUSINESS_SLUG = process.env.BUSINESS_SLUG?.trim() || BUSINESS_ID;
 const LOCATION_SLUG = process.env.LOCATION_SLUG?.trim() || "valencia-st";
 const API_KEY_HEADER = process.env.TANDEM_API_KEY_HEADER?.trim() || "";
 const DEV_SMOKE = (process.env.DEV_SMOKE ?? "").trim();
@@ -70,7 +71,7 @@ async function main() {
   ensureRequiredEnv();
 
   info(`baseUrl=${BASE_URL}`);
-  info(`scope businessId=${BUSINESS_ID} locationSlug=${LOCATION_SLUG}`);
+  info(`scope businessId=${BUSINESS_ID} businessSlug=${BUSINESS_SLUG} locationSlug=${LOCATION_SLUG}`);
 
   const health = await request(`${BASE_URL}/api/health`, {
     method: "GET",
@@ -106,6 +107,46 @@ async function main() {
   const sessionId = chatPost.json?.sessionId;
   if (typeof sessionId !== "string" || !sessionId) {
     fail(`POST /api/chat did not return sessionId. Body: ${bodyPreview(chatPost.text)}`);
+  }
+
+  info("POST /api/chat (businessSlug + locationSlug)");
+  const slugPost = await request(`${BASE_URL}/api/chat`, {
+    method: "POST",
+    headers: buildHeaders({
+      "content-type": "application/json",
+    }),
+    body: JSON.stringify({
+      businessSlug: BUSINESS_SLUG,
+      locationSlug: LOCATION_SLUG,
+      messages: [{ role: "user", content: `LOCAL_SMOKE_SLUG:${marker}` }],
+    }),
+  });
+
+  if (!slugPost.response.ok) {
+    fail(`POST /api/chat with businessSlug failed (${slugPost.response.status}). ${bodyPreview(slugPost.text)}`);
+  }
+
+  info("POST /api/chat (missing business identifiers)");
+  const missingBusiness = await request(`${BASE_URL}/api/chat`, {
+    method: "POST",
+    headers: buildHeaders({
+      "content-type": "application/json",
+    }),
+    body: JSON.stringify({
+      locationSlug: LOCATION_SLUG,
+      messages: [{ role: "user", content: `LOCAL_SMOKE_MISSING:${marker}` }],
+    }),
+  });
+
+  if (missingBusiness.response.status !== 400) {
+    fail(
+      `Expected 400 when business identifiers are missing; got ${missingBusiness.response.status}. Body: ${bodyPreview(missingBusiness.text)}`,
+    );
+  }
+
+  const missingBusinessError = typeof missingBusiness.json?.error === "string" ? missingBusiness.json.error : "";
+  if (!/businessid|businessslug/i.test(missingBusinessError)) {
+    fail(`Expected clear business identifier error. Body: ${bodyPreview(missingBusiness.text)}`);
   }
 
   info("GET /api/conversations");

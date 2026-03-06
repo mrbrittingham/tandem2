@@ -137,6 +137,8 @@ export type ChatWidgetProps = {
   showLauncher?: boolean;
   onClose?: () => void;
   businessId?: string;
+  businessSlug?: string;
+  locationId?: string;
   locationSlug?: string;
   apiBaseUrl?: string;
   hydrateHistory?: boolean;
@@ -405,6 +407,8 @@ export function ChatWidget({
   showLauncher = true,
   onClose,
   businessId,
+  businessSlug,
+  locationId,
   locationSlug,
   apiBaseUrl,
   hydrateHistory = true,
@@ -418,8 +422,8 @@ export function ChatWidget({
     [mergedTheme]
   );
   const runtimeConfig = useMemo(
-    () => resolveWidgetRuntimeConfig({ businessId, locationSlug, apiBaseUrl }),
-    [apiBaseUrl, businessId, locationSlug],
+    () => resolveWidgetRuntimeConfig({ businessId, businessSlug, locationId, locationSlug, apiBaseUrl }),
+    [apiBaseUrl, businessId, businessSlug, locationId, locationSlug],
   );
   const chatApiUrl = `${runtimeConfig.apiBaseUrl}/api/chat`;
   const contentConfig = useMemo(() => {
@@ -473,7 +477,7 @@ export function ChatWidget({
   useEffect(() => {
     setMessages(hydrateMessages(initialMessages));
     setHistoryLoaded(false);
-  }, [initialMessages, runtimeConfig.businessId, runtimeConfig.locationSlug]);
+  }, [initialMessages, runtimeConfig.businessId, runtimeConfig.businessSlug, runtimeConfig.locationId, runtimeConfig.locationSlug]);
 
   useEffect(() => {
     if (!hydrateHistory) {
@@ -482,7 +486,7 @@ export function ChatWidget({
       return;
     }
 
-    if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+    if (!runtimeConfig.isValid) {
       setIsHydratingHistory(false);
       setHistoryLoaded(true);
       return;
@@ -517,7 +521,15 @@ export function ChatWidget({
 
       try {
         const params = new URLSearchParams();
-        params.set("businessId", runtimeConfig.businessId!);
+        if (runtimeConfig.businessId) {
+          params.set("businessId", runtimeConfig.businessId);
+        }
+        if (runtimeConfig.businessSlug) {
+          params.set("businessSlug", runtimeConfig.businessSlug);
+        }
+        if (runtimeConfig.locationId) {
+          params.set("locationId", runtimeConfig.locationId);
+        }
         if (runtimeConfig.locationSlug) {
           params.set("locationSlug", runtimeConfig.locationSlug);
         }
@@ -571,7 +583,16 @@ export function ChatWidget({
       cancelled = true;
       controller.abort();
     };
-  }, [chatApiUrl, historyLoaded, hydrateHistory, runtimeConfig.businessId, runtimeConfig.isValid, runtimeConfig.locationSlug]);
+  }, [
+    chatApiUrl,
+    historyLoaded,
+    hydrateHistory,
+    runtimeConfig.businessId,
+    runtimeConfig.businessSlug,
+    runtimeConfig.isValid,
+    runtimeConfig.locationId,
+    runtimeConfig.locationSlug,
+  ]);
 
   const closePanel = useCallback(() => {
     setIsOpen(false);
@@ -715,7 +736,7 @@ export function ChatWidget({
 
   const startAssistantResponse = useCallback(
     async (history: Message[], assistantMessageId: string) => {
-      if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+      if (!runtimeConfig.isValid) {
         setComposerError({
           message: "Chat is unavailable right now.",
           devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
@@ -742,6 +763,8 @@ export function ChatWidget({
           },
           body: JSON.stringify({
             businessId: runtimeConfig.businessId,
+            businessSlug: runtimeConfig.businessSlug,
+            locationId: runtimeConfig.locationId,
             locationSlug: runtimeConfig.locationSlug,
             messages: [
               {
@@ -848,7 +871,15 @@ export function ChatWidget({
         setIsStreaming(false);
       }
     },
-    [chatApiUrl, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, runtimeConfig.locationSlug],
+    [
+      chatApiUrl,
+      runtimeConfig.businessId,
+      runtimeConfig.businessSlug,
+      runtimeConfig.error,
+      runtimeConfig.isValid,
+      runtimeConfig.locationId,
+      runtimeConfig.locationSlug,
+    ],
   );
 
   const stopStreaming = useCallback(() => {
@@ -859,7 +890,7 @@ export function ChatWidget({
 
   const sendMessage = useCallback(async () => {
     const trimmed = inputValue.trim();
-    if (!runtimeConfig.isValid || !runtimeConfig.businessId) {
+    if (!runtimeConfig.isValid) {
       setComposerError({
         message: "Chat is unavailable right now.",
         devHint: process.env.NODE_ENV !== "production" ? runtimeConfig.error : undefined,
