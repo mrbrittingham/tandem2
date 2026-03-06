@@ -370,7 +370,7 @@ function createEmptyLocationTemplate(industry: Industry): BusinessProfile {
   const handoffMethod = business.handoff.contactMethods.find((method) => method.enabled);
 
   return {
-    businessName: business.businessName ?? business.name,
+    businessName: (business.locationName ?? "").trim() || (business.businessName ?? business.name),
     tagline: buildWidgetLocationSubtitle(business),
     welcomeMessage: business.summary,
     intents: business.intents.map((intent) => ({

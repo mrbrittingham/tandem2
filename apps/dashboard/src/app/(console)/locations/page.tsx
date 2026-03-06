@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import type { BusinessProfile } from "@tandem/shared";
 import { saveLocationConfig } from "@/lib/location-config-client";
@@ -27,6 +27,13 @@ type LocationFormState = {
   zip: string;
   phone: string;
   timezone: string;
+};
+
+type PersistedLocationProfile = {
+  locationName?: string;
+  address?: string;
+  phone?: string;
+  timezone?: string;
 };
 
 const emptyForm: LocationFormState = {
@@ -230,6 +237,36 @@ function buildFormFromLocation(location?: BusinessProfile): LocationFormState {
   };
 }
 
+function readPersistedProfile(value: unknown): PersistedLocationProfile {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  const root = value as Record<string, unknown>;
+  const knowledge = root.knowledgeConfig;
+  if (typeof knowledge !== "object" || knowledge === null || Array.isArray(knowledge)) {
+    return {};
+  }
+
+  const businessProfile = (knowledge as Record<string, unknown>).businessProfile;
+  if (typeof businessProfile !== "object" || businessProfile === null || Array.isArray(businessProfile)) {
+    return {};
+  }
+
+  const profile = businessProfile as Record<string, unknown>;
+  const getValue = (key: string) => {
+    const value = profile[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+
+  return {
+    locationName: getValue("locationName") || undefined,
+    address: getValue("address") || undefined,
+    phone: getValue("phone") || undefined,
+    timezone: getValue("timezone") || undefined,
+  };
+}
+
 function deriveBusinessTitle(location: BusinessProfile) {
   const fromLocationName = (location.locationName ?? "").trim();
   if (fromLocationName) {
@@ -291,6 +328,89 @@ export default function LocationsPage() {
 
   const selectedLocation = locations.find((entry) => entry.id === activeLocation?.id) ?? locations[0];
 
+  useEffect(() => {
+    const location = selectedLocation;
+    if (!location?.id) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateFromServer = async () => {
+      const locationSlug = (location.locationSlug ?? location.slug ?? "").trim();
+      const businessSlug = (location.businessSlug ?? "").trim();
+      const query = new URLSearchParams();
+      query.set("locationId", location.id);
+      if (locationSlug) {
+        query.set("locationSlug", locationSlug);
+      }
+      if (businessSlug) {
+        query.set("businessSlug", businessSlug);
+      }
+
+      try {
+        const [locationResponse, configResponse] = await Promise.all([
+          fetch(`/api/locations?${query.toString()}`, { method: "GET" }),
+          fetch(`/api/location-config?${query.toString()}`, { method: "GET" }),
+        ]);
+
+        const locationPayload = locationResponse.ok
+          ? (await locationResponse.json().catch(() => ({}))) as {
+            locations?: Array<{ id?: string; slug?: string; name?: string; address?: string | null }>;
+          }
+          : {};
+
+        const serverLocation = (locationPayload.locations ?? []).find(
+          (entry) => (entry.id ?? "").trim() === location.id || (entry.slug ?? "").trim() === locationSlug,
+        );
+
+        const configPayload = configResponse.ok
+          ? (await configResponse.json().catch(() => ({}))) as { config?: Record<string, unknown> }
+          : {};
+
+        const persisted = readPersistedProfile(configPayload.config);
+        const mergedLocationName = (serverLocation?.name ?? "").trim() || persisted.locationName || location.locationName || "";
+        const mergedAddress = (serverLocation?.address ?? "").trim() || persisted.address || location.location || "";
+        const mergedTimezone = (persisted.timezone ?? "").trim() || location.timezone || "UTC";
+        const mergedPhone = (persisted.phone ?? "").trim() || readPhone(location);
+
+        if (cancelled) {
+          return;
+        }
+
+        updateBusiness(location.id, (draft) => {
+          if (mergedLocationName) {
+            draft.locationName = mergedLocationName;
+            draft.name = mergedLocationName;
+          }
+          draft.location = mergedAddress;
+          draft.timezone = mergedTimezone;
+          upsertPhone(draft, mergedPhone);
+        });
+
+        setEditForm((prev) => {
+          if (activeLocation?.id !== location.id) {
+            return prev;
+          }
+          return {
+            ...prev,
+            locationName: mergedLocationName,
+            ...parseLocationAddress(mergedAddress),
+            phone: mergedPhone,
+            timezone: mergedTimezone,
+          };
+        });
+      } catch {
+        // Ignore hydration errors and keep local snapshot.
+      }
+    };
+
+    void hydrateFromServer();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLocation?.id, selectedLocation?.locationSlug, selectedLocation?.businessSlug, activeLocation?.id]);
+
   const syncEditForm = (locationId: string) => {
     const location = locations.find((entry) => entry.id === locationId);
     if (!location) {
@@ -337,6 +457,7 @@ export default function LocationsPage() {
 
     updateBusiness(locationId, (draft) => {
       draft.locationName = nextLocationName;
+      draft.name = nextLocationName;
       draft.location = composedAddress;
       draft.timezone = nextTimezone;
       upsertPhone(draft, nextPhone);
