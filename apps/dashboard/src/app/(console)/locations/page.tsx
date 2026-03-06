@@ -30,10 +30,10 @@ type LocationFormState = {
 };
 
 type PersistedLocationProfile = {
-  locationName?: string;
-  address?: string;
   phone?: string;
   timezone?: string;
+  legacyLocationName?: string;
+  legacyAddress?: string;
 };
 
 const emptyForm: LocationFormState = {
@@ -260,10 +260,10 @@ function readPersistedProfile(value: unknown): PersistedLocationProfile {
   };
 
   return {
-    locationName: getValue("locationName") || undefined,
-    address: getValue("address") || undefined,
     phone: getValue("phone") || undefined,
     timezone: getValue("timezone") || undefined,
+    legacyLocationName: getValue("locationName") || undefined,
+    legacyAddress: getValue("address") || undefined,
   };
 }
 
@@ -328,6 +328,81 @@ export default function LocationsPage() {
 
   const selectedLocation = locations.find((entry) => entry.id === activeLocation?.id) ?? locations[0];
 
+  const fetchCanonicalLocationProfile = async (location: BusinessProfile) => {
+    const locationSlug = (location.locationSlug ?? location.slug ?? "").trim();
+    const businessSlug = (location.businessSlug ?? "").trim();
+    const query = new URLSearchParams();
+    query.set("locationId", location.id);
+    if (locationSlug) {
+      query.set("locationSlug", locationSlug);
+    }
+    if (businessSlug) {
+      query.set("businessSlug", businessSlug);
+    }
+
+    const [locationResponse, configResponse] = await Promise.all([
+      fetch(`/api/locations?${query.toString()}`, { method: "GET" }),
+      fetch(`/api/location-config?${query.toString()}`, { method: "GET" }),
+    ]);
+
+    if (!locationResponse.ok) {
+      throw new Error("Failed to fetch canonical location profile");
+    }
+
+    const locationPayload = (await locationResponse.json().catch(() => ({}))) as {
+      locations?: Array<{ id?: string; slug?: string; name?: string; address?: string | null }>;
+    };
+
+    const matchedLocation = (locationPayload.locations ?? []).find(
+      (entry) => (entry.id ?? "").trim() === location.id || (entry.slug ?? "").trim() === locationSlug,
+    );
+
+    const configPayload = configResponse.ok
+      ? (await configResponse.json().catch(() => ({}))) as { config?: Record<string, unknown> }
+      : {};
+
+    const persisted = readPersistedProfile(configPayload.config);
+    const canonicalName = (matchedLocation?.name ?? "").trim() || persisted.legacyLocationName || "";
+    const canonicalAddress = (matchedLocation?.address ?? "").trim() || persisted.legacyAddress || "";
+
+    return {
+      locationId: (matchedLocation?.id ?? "").trim() || location.id,
+      locationSlug: (matchedLocation?.slug ?? "").trim() || locationSlug,
+      name: canonicalName,
+      address: canonicalAddress,
+      phone: persisted.phone ?? "",
+      timezone: persisted.timezone ?? "UTC",
+    };
+  };
+
+  const applyCanonicalLocationProfile = (locationId: string, canonical: {
+    name: string;
+    address: string;
+    phone: string;
+    timezone: string;
+  }) => {
+    updateBusiness(locationId, (draft) => {
+      draft.name = canonical.name;
+      draft.locationName = canonical.name;
+      draft.location = canonical.address;
+      draft.timezone = canonical.timezone;
+      upsertPhone(draft, canonical.phone);
+    });
+
+    const parsedAddress = parseLocationAddress(canonical.address);
+    setEditForm((prev) => ({
+      ...prev,
+      locationName: canonical.name,
+      streetAddress: parsedAddress.streetAddress,
+      city: parsedAddress.city,
+      country: parsedAddress.country || "United States",
+      state: parsedAddress.state || defaultRegion(parsedAddress.country || "United States"),
+      zip: parsedAddress.zip,
+      phone: canonical.phone,
+      timezone: canonical.timezone,
+    }));
+  };
+
   useEffect(() => {
     const location = selectedLocation;
     if (!location?.id) {
@@ -337,68 +412,18 @@ export default function LocationsPage() {
     let cancelled = false;
 
     const hydrateFromServer = async () => {
-      const locationSlug = (location.locationSlug ?? location.slug ?? "").trim();
-      const businessSlug = (location.businessSlug ?? "").trim();
-      const query = new URLSearchParams();
-      query.set("locationId", location.id);
-      if (locationSlug) {
-        query.set("locationSlug", locationSlug);
-      }
-      if (businessSlug) {
-        query.set("businessSlug", businessSlug);
-      }
-
       try {
-        const [locationResponse, configResponse] = await Promise.all([
-          fetch(`/api/locations?${query.toString()}`, { method: "GET" }),
-          fetch(`/api/location-config?${query.toString()}`, { method: "GET" }),
-        ]);
-
-        const locationPayload = locationResponse.ok
-          ? (await locationResponse.json().catch(() => ({}))) as {
-            locations?: Array<{ id?: string; slug?: string; name?: string; address?: string | null }>;
-          }
-          : {};
-
-        const serverLocation = (locationPayload.locations ?? []).find(
-          (entry) => (entry.id ?? "").trim() === location.id || (entry.slug ?? "").trim() === locationSlug,
-        );
-
-        const configPayload = configResponse.ok
-          ? (await configResponse.json().catch(() => ({}))) as { config?: Record<string, unknown> }
-          : {};
-
-        const persisted = readPersistedProfile(configPayload.config);
-        const mergedLocationName = (serverLocation?.name ?? "").trim() || persisted.locationName || location.locationName || "";
-        const mergedAddress = (serverLocation?.address ?? "").trim() || persisted.address || location.location || "";
-        const mergedTimezone = (persisted.timezone ?? "").trim() || location.timezone || "UTC";
-        const mergedPhone = (persisted.phone ?? "").trim() || readPhone(location);
+        const canonical = await fetchCanonicalLocationProfile(location);
 
         if (cancelled) {
           return;
         }
 
-        updateBusiness(location.id, (draft) => {
-          if (mergedLocationName) {
-            draft.locationName = mergedLocationName;
-            draft.name = mergedLocationName;
-          }
-          draft.location = mergedAddress;
-          draft.timezone = mergedTimezone;
-          upsertPhone(draft, mergedPhone);
-        });
-
-        setEditForm((prev) => {
-          if (activeLocation?.id !== location.id) {
-            return prev;
-          }
-          return {
-            ...prev,
-            locationName: mergedLocationName,
-            ...parseLocationAddress(mergedAddress),
-            phone: mergedPhone,
-            timezone: mergedTimezone,
-          };
+        applyCanonicalLocationProfile(canonical.locationId, {
+          name: canonical.name,
+          address: canonical.address,
+          phone: canonical.phone,
+          timezone: canonical.timezone,
         });
       } catch {
         // Ignore hydration errors and keep local snapshot.
@@ -455,14 +480,6 @@ export default function LocationsPage() {
     setEditStatus(null);
     setIsSavingEdit(true);
 
-    updateBusiness(locationId, (draft) => {
-      draft.locationName = nextLocationName;
-      draft.name = nextLocationName;
-      draft.location = composedAddress;
-      draft.timezone = nextTimezone;
-      upsertPhone(draft, nextPhone);
-    });
-
     try {
       const response = await fetch("/api/locations", {
         method: "PATCH",
@@ -506,25 +523,35 @@ export default function LocationsPage() {
         });
       }
 
-      // Persist profile fields that are not part of business_locations columns.
+      // Persist profile fields that are owned by business_location_configs.
       await saveLocationConfig({
         location: {
           ...(selectedLocation as BusinessProfile),
           id: persistedId || locationId,
           locationSlug: persistedSlug || locationSlug || selectedLocation?.locationSlug,
           slug: persistedSlug || selectedLocation?.slug || locationSlug || selectedLocation?.slug,
-          locationName: nextLocationName,
-          location: composedAddress,
           timezone: nextTimezone,
         },
         knowledgeConfig: {
           businessProfile: {
-            locationName: nextLocationName,
-            address: composedAddress,
             phone: nextPhone,
             timezone: nextTimezone,
           },
         },
+      });
+
+      const canonical = await fetchCanonicalLocationProfile({
+        ...(selectedLocation as BusinessProfile),
+        id: persistedId || locationId,
+        slug: persistedSlug || selectedLocation?.slug || locationSlug || selectedLocation?.slug,
+        locationSlug: persistedSlug || selectedLocation?.locationSlug || locationSlug,
+      });
+
+      applyCanonicalLocationProfile(canonical.locationId, {
+        name: canonical.name,
+        address: canonical.address,
+        phone: canonical.phone,
+        timezone: canonical.timezone,
       });
 
       setEditStatus("Location saved.");
@@ -564,6 +591,7 @@ export default function LocationsPage() {
     });
 
     updateBusiness(created.id, (draft) => {
+      draft.name = locationName;
       draft.locationName = locationName;
       draft.location = address;
       draft.timezone = timezone;
@@ -623,6 +651,23 @@ export default function LocationsPage() {
           draft.slug = persistedSlug;
         });
       }
+
+      const canonical = await fetchCanonicalLocationProfile({
+        ...created,
+        id: persistedId || created.id,
+        name: locationName,
+        locationName,
+        location: address,
+        slug: persistedSlug || created.slug,
+        locationSlug: persistedSlug || created.locationSlug,
+      });
+
+      applyCanonicalLocationProfile(canonical.locationId, {
+        name: canonical.name,
+        address: canonical.address,
+        phone: canonical.phone,
+        timezone: canonical.timezone,
+      });
 
       setCreateStatus("Location created.");
     } catch {

@@ -37,6 +37,27 @@ function asObject(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function asStringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function sanitizeKnowledgeConfig(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const next = { ...value };
+  const businessProfile = asObject(next.businessProfile);
+  if (Object.keys(businessProfile).length) {
+    const sanitized = { ...businessProfile };
+    delete sanitized.locationName;
+    delete sanitized.address;
+    next.businessProfile = sanitized;
+  }
+
+  return next;
+}
+
 async function resolveSingleMembershipBusinessId(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   userId: string,
@@ -170,6 +191,12 @@ export async function GET(request: Request) {
       return resolvedLocation.error;
     }
 
+    const locationMeta = await supabase
+      .from("business_locations")
+      .select("id,slug")
+      .eq("id", resolvedLocation.locationId)
+      .maybeSingle<{ id: string; slug: string }>();
+
     const { data, error } = await supabase
       .from("business_location_configs")
       .select("location_id,assistant_config,knowledge_config,handoff_config,widget_config,integrations_config,updated_at")
@@ -179,6 +206,22 @@ export async function GET(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message || "Failed to load location config" }, { status: 500 });
     }
+
+    const knowledgeConfig = asObject(data?.knowledge_config);
+    const businessProfile = asObject(knowledgeConfig.businessProfile);
+
+    console.info("[location-config/get]", {
+      requestedLocationId: url.searchParams.get("locationId") ?? null,
+      requestedLocationSlug: url.searchParams.get("locationSlug") ?? null,
+      resolvedLocationId: resolvedLocation.locationId,
+      resolvedLocationSlug: locationMeta.data?.slug ?? null,
+      readValues: {
+        phone: asStringOrNull(businessProfile.phone),
+        timezone: asStringOrNull(businessProfile.timezone),
+        legacyLocationName: asStringOrNull(businessProfile.locationName),
+        legacyAddress: asStringOrNull(businessProfile.address),
+      },
+    });
 
     return NextResponse.json({
       ok: true,
@@ -235,6 +278,14 @@ export async function PUT(request: Request) {
       return resolvedLocation.error;
     }
 
+    const locationMeta = await supabase
+      .from("business_locations")
+      .select("id,slug")
+      .eq("id", resolvedLocation.locationId)
+      .maybeSingle<{ id: string; slug: string }>();
+
+    const sanitizedKnowledgeConfig = sanitizeKnowledgeConfig(body.knowledgeConfig);
+
     const existing = await supabase
       .from("business_location_configs")
       .select("location_id,assistant_config,knowledge_config,handoff_config,widget_config,integrations_config")
@@ -248,12 +299,26 @@ export async function PUT(request: Request) {
     const merged = {
       location_id: resolvedLocation.locationId,
       assistant_config: body.assistantConfig ? { ...asObject(existing.data?.assistant_config), ...body.assistantConfig } : asObject(existing.data?.assistant_config),
-      knowledge_config: body.knowledgeConfig ? { ...asObject(existing.data?.knowledge_config), ...body.knowledgeConfig } : asObject(existing.data?.knowledge_config),
+      knowledge_config: sanitizedKnowledgeConfig ? { ...asObject(existing.data?.knowledge_config), ...sanitizedKnowledgeConfig } : asObject(existing.data?.knowledge_config),
       handoff_config: body.handoffConfig ? { ...asObject(existing.data?.handoff_config), ...body.handoffConfig } : asObject(existing.data?.handoff_config),
       widget_config: body.widgetConfig ? { ...asObject(existing.data?.widget_config), ...body.widgetConfig } : asObject(existing.data?.widget_config),
       integrations_config: body.integrationsConfig ? { ...asObject(existing.data?.integrations_config), ...body.integrationsConfig } : asObject(existing.data?.integrations_config),
       updated_at: new Date().toISOString(),
     };
+
+    const writtenBusinessProfile = asObject(asObject(merged.knowledge_config).businessProfile);
+    console.info("[location-config/put]", {
+      requestedLocationId: body.locationId ?? null,
+      requestedLocationSlug: body.locationSlug ?? null,
+      resolvedLocationId: resolvedLocation.locationId,
+      resolvedLocationSlug: locationMeta.data?.slug ?? null,
+      writtenValues: {
+        phone: asStringOrNull(writtenBusinessProfile.phone),
+        timezone: asStringOrNull(writtenBusinessProfile.timezone),
+        legacyLocationName: asStringOrNull(writtenBusinessProfile.locationName),
+        legacyAddress: asStringOrNull(writtenBusinessProfile.address),
+      },
+    });
 
     const { error: upsertError } = await supabase
       .from("business_location_configs")

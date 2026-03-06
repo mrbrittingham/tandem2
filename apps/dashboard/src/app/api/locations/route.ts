@@ -39,6 +39,18 @@ type LocationConfigRow = {
   integrations_config: unknown;
 };
 
+function toLocationResponse(row: LocationRow) {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    business_id: row.business_id,
+    name: row.name,
+    slug: row.slug,
+    address: row.address,
+    createdAt: row.created_at,
+  };
+}
+
 function normalizeText(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -214,6 +226,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const businessIdParam = (url.searchParams.get("businessId") ?? "").trim();
     const businessSlugParam = (url.searchParams.get("businessSlug") ?? "").trim();
+    const locationIdParam = (url.searchParams.get("locationId") ?? "").trim();
+    const locationSlugParam = (url.searchParams.get("locationSlug") ?? "").trim();
 
     let resolvedBusinessId: string | null = null;
     if (businessIdParam || businessSlugParam) {
@@ -234,6 +248,14 @@ export async function GET(request: Request) {
       query = query.eq("business_id", resolvedBusinessId);
     }
 
+    if (UUID_PATTERN.test(locationIdParam)) {
+      query = query.eq("id", locationIdParam);
+    }
+
+    if (locationSlugParam) {
+      query = query.eq("slug", locationSlugParam);
+    }
+
     const { data, error } = await query.returns<LocationRow[]>();
 
     if (error) {
@@ -244,16 +266,25 @@ export async function GET(request: Request) {
       ? (data ?? [])
       : (data ?? []).filter((location) => !isLegacyDemoLocation(location));
 
-    return NextResponse.json({
-      locations: filtered.map((location) => ({
-        id: location.id,
-        businessId: location.business_id,
-        name: location.name,
-        slug: location.slug,
-        address: location.address,
-        createdAt: location.created_at,
+    const locations = filtered.map(toLocationResponse);
+    const resolvedLocation = locations[0];
+
+    console.info("[locations/get]", {
+      requestedLocationId: locationIdParam || null,
+      requestedLocationSlug: locationSlugParam || null,
+      resolvedBusinessId,
+      resolvedLocationId: resolvedLocation?.id ?? null,
+      resolvedLocationSlug: resolvedLocation?.slug ?? null,
+      readValues: locations.slice(0, 5).map((entry) => ({
+        id: entry.id,
+        slug: entry.slug,
+        name: entry.name,
+        address: entry.address,
       })),
+      totalLocations: locations.length,
     });
+
+    return NextResponse.json({ locations });
   } catch (error) {
     if (error instanceof BusinessResolutionError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
@@ -364,6 +395,17 @@ export async function PATCH(request: Request) {
     const name = (body.name ?? "").trim();
     const address = (body.address ?? "").trim() || null;
 
+    console.info("[locations/patch] request", {
+      requestedLocationId: locationId || null,
+      requestedLocationSlug: locationSlug || null,
+      requestedBusinessId: businessIdParam || null,
+      requestedBusinessSlug: businessSlugParam || null,
+      writtenValues: {
+        name,
+        address,
+      },
+    });
+
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
@@ -396,17 +438,18 @@ export async function PATCH(request: Request) {
         .maybeSingle<LocationRow>();
 
       if (!error && data) {
+        const location = toLocationResponse(data);
+        console.info("[locations/patch] updated-by-id", {
+          resolvedLocationId: location.id,
+          resolvedLocationSlug: location.slug,
+          writtenValues: {
+            name: location.name,
+            address: location.address,
+          },
+        });
         return NextResponse.json({
           ok: true,
-          location: {
-            id: data.id,
-            businessId: data.business_id,
-            business_id: data.business_id,
-            name: data.name,
-            slug: data.slug,
-            address: data.address,
-            createdAt: data.created_at,
-          },
+          location,
         });
       }
     }
@@ -576,31 +619,35 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Location not found" }, { status: 404 });
       }
 
+      const location = toLocationResponse(retry.data);
+      console.info("[locations/patch] updated-fallback", {
+        resolvedLocationId: location.id,
+        resolvedLocationSlug: location.slug,
+        writtenValues: {
+          name: location.name,
+          address: location.address,
+        },
+      });
+
       return NextResponse.json({
         ok: true,
-        location: {
-          id: retry.data.id,
-          businessId: retry.data.business_id,
-          business_id: retry.data.business_id,
-          name: retry.data.name,
-          slug: retry.data.slug,
-          address: retry.data.address,
-          createdAt: retry.data.created_at,
-        },
+        location,
       });
     }
 
+    const location = toLocationResponse(data);
+    console.info("[locations/patch] updated-by-slug", {
+      resolvedLocationId: location.id,
+      resolvedLocationSlug: location.slug,
+      writtenValues: {
+        name: location.name,
+        address: location.address,
+      },
+    });
+
     return NextResponse.json({
       ok: true,
-      location: {
-        id: data.id,
-        businessId: data.business_id,
-        business_id: data.business_id,
-        name: data.name,
-        slug: data.slug,
-        address: data.address,
-        createdAt: data.created_at,
-      },
+      location,
     });
   } catch (error) {
     if (error instanceof BusinessResolutionError) {
