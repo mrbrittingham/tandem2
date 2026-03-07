@@ -161,18 +161,29 @@ function OverviewPageClient() {
     router.replace(`${pathname}?${next.toString()}`);
   };
 
-  const enabledFaqs = business?.faqs.filter((faq) => faq.showInHelp) ?? [];
-  const enabledPolicies = business?.policies.filter((policy) => policy.showInHelp) ?? [];
-  const liveContacts = business?.handoff.contactMethods.filter((method) => method.enabled) ?? [];
-  const widgetIntegration = business?.integrations.find((integration) =>
+  if (!business) {
+    return (
+      <EmptyState
+        title="Create your first location assistant"
+        description="Add a location to unlock setup checklists, preview, and install docs."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
+      />
+    );
+  }
+
+  const enabledFaqs = business.faqs.filter((faq) => faq.showInHelp);
+  const enabledPolicies = business.policies.filter((policy) => policy.showInHelp);
+  const liveContacts = business.handoff.contactMethods.filter((method) => method.enabled);
+  const widgetIntegration = business.integrations.find((integration) =>
     integration.category.toLowerCase().includes("website") || integration.name.toLowerCase().includes("widget"),
   );
 
-  const locationComplete = Boolean((business?.locationName ?? "").trim());
+  const locationComplete = Boolean((business.locationName ?? "").trim());
   const faqsComplete = enabledFaqs.length >= 3;
   const contactComplete = liveContacts.length > 0;
   const widgetInstalled = widgetIntegration?.status === "connected";
-  const assistantTested = (business?.intents.length ?? 0) >= 1;
+  const assistantTested = business.intents.length >= 1;
   const assistantLive = locationComplete && faqsComplete && contactComplete && widgetInstalled && assistantTested;
 
   const checklistProgress: Record<(typeof checklistConfig)[number]["key"], boolean> = {
@@ -191,10 +202,10 @@ function OverviewPageClient() {
   const onboardingComplete = completedCount === checklistState.length;
 
   const snippet = useMemo(() => {
-    const snippetBusinessId = business?.businessSlug ?? business?.slug ?? "business";
-    const snippetLocationSlug = business?.locationSlug ?? business?.slug ?? "location";
+    const snippetBusinessId = business.businessSlug ?? business.slug;
+    const snippetLocationSlug = business.locationSlug ?? business.slug;
     return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${snippetBusinessId}" data-location="${snippetLocationSlug}"></script>`;
-  }, [business?.businessSlug, business?.locationSlug, business?.slug]);
+  }, [business.businessSlug, business.locationSlug, business.slug]);
 
   const rangeSessionData = useMemo(() => {
     if (!sessions.length) {
@@ -275,18 +286,18 @@ function OverviewPageClient() {
   }, [rangeSessionData.filtered]);
 
   const knowledgeCount = enabledFaqs.length + enabledPolicies.length;
-  const latestKnowledgeUpdate = [...(business?.faqs ?? []), ...(business?.policies ?? [])]
+  const latestKnowledgeUpdate = [...business.faqs, ...business.policies]
     .map((item) => item.updatedAt)
     .filter(Boolean)
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 
-  const latestUpdateIso = [business?.updatedAt, latestKnowledgeUpdate]
+  const latestUpdateIso = [business.updatedAt, latestKnowledgeUpdate]
     .filter(Boolean)
     .sort((a, b) => toTimestamp(b) - toTimestamp(a))[0];
 
   const recentActivity = useMemo(() => {
     const events = [
-      business?.updatedAt
+      business.updatedAt
         ? {
             eventKey: "business-updated",
             label: "Business profile updated",
@@ -334,7 +345,7 @@ function OverviewPageClient() {
         return a.eventKey < b.eventKey ? -1 : 1;
       })
       .slice(0, 6);
-  }, [business?.updatedAt, latestKnowledgeUpdate, sessions, widgetIntegration?.lastSynced]);
+  }, [business.updatedAt, latestKnowledgeUpdate, sessions, widgetIntegration?.lastSynced]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(snippet);
@@ -343,17 +354,6 @@ function OverviewPageClient() {
   };
 
   const hasScope = Boolean(businessId && locationSlug);
-
-  if (!business) {
-    return (
-      <EmptyState
-        title="Create your first location assistant"
-        description="Add a location to unlock setup checklists, preview, and install docs."
-        actionLabel="Add location"
-        onAction={openCreateLocation}
-      />
-    );
-  }
 
   return (
     <div className="space-y-8">
