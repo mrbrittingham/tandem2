@@ -106,7 +106,9 @@ function OverviewPageClient() {
   const hasScope = Boolean(businessId && locationSlug);
 
   useEffect(() => {
-    if (!hasScope) {
+    const scopedBusinessId = businessId;
+    const scopedLocationSlug = locationSlug;
+    if (!scopedBusinessId || !scopedLocationSlug) {
       return;
     }
 
@@ -120,7 +122,7 @@ function OverviewPageClient() {
       setSessionsError(null);
     });
 
-    const url = `/api/conversations?businessId=${encodeURIComponent(businessId)}&locationSlug=${encodeURIComponent(locationSlug)}&range=${selectedRange}`;
+    const url = `/api/conversations?businessId=${encodeURIComponent(scopedBusinessId)}&locationSlug=${encodeURIComponent(scopedLocationSlug)}&range=${selectedRange}`;
     fetch(url, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) {
@@ -151,7 +153,7 @@ function OverviewPageClient() {
       cancelled = true;
       controller.abort();
     };
-  }, [businessId, hasScope, locationSlug, selectedRange]);
+  }, [businessId, locationSlug, selectedRange]);
 
   const updateRange = (nextRange: RangeKey) => {
     const next = new URLSearchParams(searchParams.toString());
