@@ -14,6 +14,7 @@
     "build": "npm --workspace apps/dashboard run build",
     "clean": "node ./scripts/clean.mjs",
     "guard:migrations": "node ./scripts/guard-migrations.mjs",
+    "guard:schema": "node scripts/guard/supabase-schema-guard.mjs",
     "db:link": "node --env-file=.env.local ./scripts/supabase-link.mjs",
     "db:pull": "node --env-file=.env.local ./scripts/supabase-pull.mjs",
     "db:push": "node --env-file=.env.local ./scripts/supabase-push.mjs",
