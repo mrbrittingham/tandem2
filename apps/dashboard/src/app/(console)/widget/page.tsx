@@ -230,10 +230,10 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <SectionCard
-        title="Widget look & feel"
-        description="Keep the Tandem brand consistent across every client site."
+        title="Website chat appearance"
+        description="Keep your website chat experience on-brand and easy to use."
       >
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleThemeSubmit}>
           {colorFields.map((field) => (
@@ -336,7 +336,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
 
       <SectionCard
         title="Add chat to your website"
-        description="Paste this script inside the <head> on every page where the assistant should appear."
+        description="Paste this install code in your site header on pages where chat should appear."
       >
         <pre className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-900 p-4 text-sm text-slate-100">
           <code suppressHydrationWarning>{snippet}</code>

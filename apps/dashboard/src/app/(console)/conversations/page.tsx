@@ -441,7 +441,7 @@ function ConversationsWorkspace({
         <ChartCard title="Conversations Over Time" subtitle="Daily counts · last 7 days">
           <MiniBarChart data={conversationSeries} />
         </ChartCard>
-        <ChartCard title="Recent Activity" subtitle="Session updates trend">
+        <ChartCard title="Recent Activity" subtitle="Conversation activity trend">
           <MiniSparkline data={activitySeries} />
         </ChartCard>
       </section>
@@ -450,7 +450,7 @@ function ConversationsWorkspace({
       <section className={`${showListPanel ? "block" : "hidden"} rounded-3xl border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm lg:block`}>
         <div className="border-b border-[var(--console-border-light)] p-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-lg font-semibold text-[var(--console-text-primary)]">Chats</p>
+            <p className="text-lg font-semibold text-[var(--console-text-primary)]">Conversations</p>
             <span className="text-xs text-[var(--console-text-tertiary)]">{filteredSessions.length}</span>
           </div>
           <div className="mt-3 space-y-2">
@@ -458,7 +458,7 @@ function ConversationsWorkspace({
               type="search"
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
-              placeholder="Search inbox"
+              placeholder="Search conversations"
               className="w-full rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)]"
             />
             <select
@@ -756,7 +756,7 @@ function ConversationDetail({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-[var(--console-text-tertiary)]">No messages captured for this session.</p>
+          <p className="text-sm text-[var(--console-text-tertiary)]">No messages yet in this conversation.</p>
         )}
       </div>
     </div>

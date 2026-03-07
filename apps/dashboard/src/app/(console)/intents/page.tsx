@@ -130,7 +130,7 @@ export default function IntentsPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <SectionCard
         title="Assistant playbook"
         description="Choose what your assistant can help with. These quick actions appear above the chat composer."
@@ -156,7 +156,7 @@ export default function IntentsPage() {
             value={intentForm.prompt}
             onChange={(value) => setIntentForm((prev) => ({ ...prev, prompt: value }))}
             placeholder="Act as the Tandem concierge..."
-            helperText="We’ll inject this when guests tap the suggestion."
+            helperText="Used when customers tap this suggestion."
           />
           <label className="flex flex-col gap-2 text-sm text-slate-600">
             <span className="font-semibold text-slate-800">Response type</span>
@@ -201,7 +201,7 @@ export default function IntentsPage() {
             ) : null}
             <button
               type="submit"
-              className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
+              className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]"
             >
               {editingIntentId ? "Save suggested action" : "Add to assistant"}
             </button>

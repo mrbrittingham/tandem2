@@ -3,19 +3,19 @@
 import { SectionCard } from "@/components/SectionCard";
 
 const analyticsCards = [
-  { title: "Conversation volume", state: "Coming soon" },
-  { title: "Handoff rate", state: "Coming soon" },
-  { title: "Response time", state: "Coming soon" },
-  { title: "Most asked questions", state: "Coming soon" },
-  { title: "Channel breakdown", state: "Coming soon" },
+  { title: "Conversation volume", state: "Data will appear as conversations come in." },
+  { title: "Handoff rate", state: "Data will appear after handoffs are used." },
+  { title: "Response time", state: "Data will appear once enough responses are recorded." },
+  { title: "Most asked questions", state: "Data will appear after common topics are detected." },
+  { title: "Channel breakdown", state: "Data will appear when multiple channels are active." },
 ];
 
 export default function AnalyticsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <header>
         <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Analytics</h1>
-        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Track assistant performance and customer behavior across channels.</p>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Track assistant performance and customer behavior over time.</p>
       </header>
 
       <SectionCard

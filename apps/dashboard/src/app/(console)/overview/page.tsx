@@ -369,9 +369,9 @@ function OverviewPageClient() {
   const visibleSessionsError = hasScope ? sessionsError : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Chatbot performance</h2>
@@ -402,13 +402,13 @@ function OverviewPageClient() {
           {visibleSessionsError ? <p className="mt-3 text-xs text-rose-600">{visibleSessionsError}</p> : null}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           <h2 className="text-lg font-semibold text-slate-900">Website installation</h2>
           <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Install status</p>
             <p className="mt-1 text-lg font-semibold text-slate-900">{widgetInstalled ? "Installed" : "Not detected"}</p>
             <p className="text-xs text-slate-600">
-              Signal: integration where category or name includes website/widget and status is connected.
+              We detect installation when your website integration reports as connected.
             </p>
             {widgetIntegration?.lastSynced ? (
               <p className="mt-1 text-xs text-slate-500">Last signal: {formatUtcMDY(widgetIntegration.lastSynced)}</p>
@@ -439,7 +439,7 @@ function OverviewPageClient() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           {!onboardingComplete ? (
             <>
               <div className="flex items-center justify-between gap-2">
@@ -483,7 +483,7 @@ function OverviewPageClient() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Conversation activity</h2>
@@ -514,7 +514,7 @@ function OverviewPageClient() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           <h2 className="text-lg font-semibold text-slate-900">Recent activity</h2>
           <p className="mt-1 text-sm text-slate-600">Latest known updates from existing dashboard data.</p>
           <div className="mt-4 space-y-2">

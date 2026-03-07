@@ -34,15 +34,15 @@ type ConsolePageHeading = {
 const pageHeadingMap: Record<string, ConsolePageHeading> = {
   "/overview": {
     title: "Overview",
-    description: "Track readiness and recent activity.",
+    description: "Track setup progress and recent customer activity.",
   },
   "/conversations": {
     title: "Inbox",
-    description: "Review and respond to recent guest chats.",
+    description: "Review and respond to recent customer chats.",
   },
   "/intents": {
     title: "Assistant",
-    description: "Manage suggested actions and assistant behavior.",
+    description: "Set suggested actions and how your assistant responds.",
   },
   "/knowledge": {
     title: "Knowledge Base",
@@ -50,23 +50,23 @@ const pageHeadingMap: Record<string, ConsolePageHeading> = {
   },
   "/handoff": {
     title: "Handoff",
-    description: "Configure live support and contact methods.",
+    description: "Set how customers can reach a person when needed.",
   },
   "/widget": {
     title: "Widget",
-    description: "Install and customize the website chat widget.",
+    description: "Customize and install chat on your website.",
   },
   "/integrations": {
     title: "Integrations",
-    description: "Connect systems that keep answers up to date.",
+    description: "Connect tools that keep customer answers accurate.",
   },
   "/branding": {
     title: "Settings",
-    description: "Business profile and defaults.",
+    description: "Manage your business profile and assistant defaults.",
   },
   "/locations": {
     title: "Locations",
-    description: "Manage location names, addresses, and timezones.",
+    description: "Update location details your assistant relies on.",
   },
 };
 
@@ -380,15 +380,17 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
                 </div>
               </header>
               <main className="flex-1 bg-[var(--bg)] px-6 py-10 md:px-8">
-                {currentPageHeading ? (
-                  <section className="mb-8">
-                    <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">{currentPageHeading.title}</h1>
-                    {currentPageHeading.description ? (
-                      <p className="mt-2 text-sm text-[var(--console-text-secondary)]">{currentPageHeading.description}</p>
-                    ) : null}
-                  </section>
-                ) : null}
-                {children}
+                <div className="mx-auto w-full max-w-[var(--console-content-max-width)] space-y-10">
+                  {currentPageHeading ? (
+                    <section className="space-y-2">
+                      <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">{currentPageHeading.title}</h1>
+                      {currentPageHeading.description ? (
+                        <p className="max-w-3xl text-sm text-[var(--console-text-secondary)]">{currentPageHeading.description}</p>
+                      ) : null}
+                    </section>
+                  ) : null}
+                  {children}
+                </div>
               </main>
             </div>
           </div>

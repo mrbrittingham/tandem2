@@ -5,8 +5,12 @@ import type { BusinessProfile, FAQItem, PolicyItem } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { SaveBar } from "@/components/SaveBar";
+import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
+import { SegmentedControl } from "@/components/SegmentedControl";
+import { DataTableShell } from "@/components/DataTableShell";
+import { StatusBadge } from "@/components/StatusBadge";
 import { WebsiteImportPanel, type ImportedKnowledgePayload } from "@/components/WebsiteImportPanel";
 import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
 import { saveLocationConfig } from "@/lib/location-config-client";
@@ -51,29 +55,6 @@ function getBusinessFormFromProfile(business: BusinessProfile): BusinessInfoForm
     address: business.location ?? "",
     hours: business.handoff.supportHoursLabel || business.handoff.statusDetail || "",
   };
-}
-
-function SectionShell({
-  eyebrow,
-  title,
-  description,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5 md:p-7">
-      <header className="mb-6 space-y-2 border-b border-slate-100 pb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
-        <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
-        <p className="max-w-3xl text-sm text-slate-600">{description}</p>
-      </header>
-      {children}
-    </section>
-  );
 }
 
 export default function KnowledgePage() {
@@ -294,7 +275,7 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
 
   return (
     <div className="space-y-10">
-      <SectionShell
+      <SectionCard
         eyebrow="Business Information"
         title="Business Information"
         description="Keep your business details up to date so your assistant can answer common questions accurately."
@@ -349,10 +330,10 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
 
           <WebsiteImportPanel business={business} onApplyImportedContent={applyImportedContent} />
         </div>
-      </SectionShell>
+      </SectionCard>
 
       <div id="answers-for-customers">
-        <SectionShell
+        <SectionCard
           eyebrow="Customer Knowledge"
           title="Answers for Customers"
           description="Add answers to common questions and important policies so your assistant can respond quickly."
@@ -468,40 +449,25 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
               </form>
             </div>
           </div>
-        </SectionShell>
+        </SectionCard>
       </div>
 
-      <SectionShell
+      <SectionCard
         eyebrow="Saved Content"
         title="Saved Content"
         description="Review and manage the answers your assistant can use."
       >
         <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setActiveContentTab("questions")}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                  activeContentTab === "questions"
-                    ? "bg-[var(--console-primary)] text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Questions
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveContentTab("policies")}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                  activeContentTab === "policies"
-                    ? "bg-[var(--console-primary)] text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Policies
-              </button>
-            </div>
+            <SegmentedControl
+              value={activeContentTab}
+              ariaLabel="Saved content tabs"
+              options={[
+                { value: "questions", label: "Questions" },
+                { value: "policies", label: "Policies" },
+              ]}
+              onChange={(next) => setActiveContentTab(next)}
+            />
           </div>
 
           {activeContentTab === "questions" ? (
@@ -521,7 +487,7 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                 </button>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <DataTableShell>
                 <table className="min-w-full text-left text-sm">
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                     <tr>
@@ -549,9 +515,9 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                                 ),
                               );
                             }}
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${faq.showInHelp ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}
+                            className="rounded-full"
                           >
-                            {faq.showInHelp ? "Visible" : "Internal"}
+                            <StatusBadge label={faq.showInHelp ? "Visible" : "Internal"} tone={faq.showInHelp ? "success" : "neutral"} />
                           </button>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{formatTimestamp(faq.updatedAt)}</td>
@@ -592,7 +558,7 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DataTableShell>
             )
           ) : sortedPolicies.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
@@ -610,7 +576,7 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <DataTableShell>
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   <tr>
@@ -640,9 +606,9 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                               ),
                             );
                           }}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${policy.showInHelp ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}
+                            className="rounded-full"
                         >
-                          {policy.showInHelp ? "Visible" : "Internal"}
+                            <StatusBadge label={policy.showInHelp ? "Visible" : "Internal"} tone={policy.showInHelp ? "success" : "neutral"} />
                         </button>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{formatTimestamp(policy.updatedAt)}</td>
@@ -683,10 +649,10 @@ function KnowledgeEditor({ business }: { business: BusinessProfile }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTableShell>
           )}
         </div>
-      </SectionShell>
+      </SectionCard>
 
       <SaveBar visible={isDirty} onSave={handleSave} saving={saving} label="You have unsaved updates" />
     </div>

@@ -30,7 +30,7 @@ export default function ChannelsPage() {
   const enabledMethods = business.handoff.contactMethods.filter((method) => method.enabled);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <header>
         <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Channels</h1>
         <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Manage delivery channels across website chat and human handoff routes.</p>
@@ -50,7 +50,7 @@ export default function ChannelsPage() {
               href="/channels#website-widget"
               className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
             >
-              Website widget section
+              View website setup
             </Link>
           </div>
         </SectionCard>
@@ -68,14 +68,14 @@ export default function ChannelsPage() {
             href="/channels#handoff"
             className="inline-flex rounded-2xl border border-[var(--console-border)] px-4 py-2 text-sm font-semibold text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-dark)]"
           >
-            Handoff section
+              View handoff setup
           </Link>
         </SectionCard>
       </section>
 
       <SectionCard
         title="Business hours routing"
-        description="Route conversations based on location hours and availability windows."
+        description="Set customer handoff timing based on your location hours."
       >
         <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           {business.hours.length ? "Configured from location hours." : "Not configured. Add business hours to enable schedule-aware routing."}

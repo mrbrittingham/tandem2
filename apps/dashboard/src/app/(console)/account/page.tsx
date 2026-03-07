@@ -9,10 +9,10 @@ export default function AccountPage() {
   const locations = useLocations();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <header>
         <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Account</h1>
-        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Manage business profile, access, billing, and security settings.</p>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Manage business details, team access, billing, and account security.</p>
       </header>
 
       <SectionCard title="Business info" description="Business identity and profile details.">

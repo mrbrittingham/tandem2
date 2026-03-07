@@ -108,7 +108,7 @@ export default function BrandingPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <SectionCard
         title="Branding"
         description="Control how your concierge shows up across the widget and dashboard."
@@ -136,7 +136,7 @@ export default function BrandingPage() {
               onClick={handleLogoChange}
               className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300"
             >
-              Upload placeholder
+              Add logo
             </button>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">

@@ -101,7 +101,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
     <form className="space-y-8" onSubmit={handleSave}>
       <SectionCard
         title="Handoff"
-        description="Set the live support headline, status, and fallback message customers will see."
+        description="Set how customers reach your team when they need a person."
       >
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput
@@ -206,7 +206,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
       </SectionCard>
 
       <div className="flex justify-end">
-        <button type="submit" className="rounded-2xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-500">
+        <button type="submit" className="rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]">
           Save contact settings
         </button>
       </div>

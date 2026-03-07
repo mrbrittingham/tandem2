@@ -22,10 +22,10 @@ export default function AssistantSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <header>
-        <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Assistant Settings</h1>
-        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Configure assistant personality, safety boundaries, and escalation behavior.</p>
+        <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Assistant Setup</h1>
+        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">Set how your assistant sounds, what it should avoid, and when to hand off.</p>
       </header>
 
       <SectionCard
@@ -38,8 +38,8 @@ export default function AssistantSettingsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Guardrails"
-        description="Set boundaries for what the assistant should refuse or defer."
+        title="Response boundaries"
+        description="Set limits for topics your assistant should avoid or defer."
       >
         <p className="rounded-2xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-hover)] px-4 py-3 text-sm text-[var(--console-text-secondary)]">
           Not configured. Guardrail policies are coming soon.
@@ -78,8 +78,8 @@ export default function AssistantSettingsPage() {
 
       <section id="intent-rules">
         <SectionCard
-          title="Intent rules"
-          description="Review the suggested actions currently available to the assistant."
+          title="Suggested actions"
+          description="Review actions customers can tap to get help quickly."
           actions={<span className="text-[var(--console-text-tertiary)]">{business.intents.length} configured</span>}
         >
           {business.intents.length ? (

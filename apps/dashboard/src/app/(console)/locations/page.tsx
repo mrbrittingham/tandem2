@@ -494,7 +494,7 @@ export default function LocationsPage() {
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        setEditStatus(payload.error ? `Saved locally only: ${payload.error}` : "Saved locally only.");
+        setEditStatus(payload.error ? `Saved here, cloud update pending: ${payload.error}` : "Saved here, cloud update pending.");
         return;
       }
 
@@ -553,7 +553,7 @@ export default function LocationsPage() {
 
       setEditStatus("Location saved.");
     } catch {
-      setEditStatus("Saved locally only.");
+      setEditStatus("Saved here, cloud update pending.");
     } finally {
       setIsSavingEdit(false);
     }
@@ -623,7 +623,7 @@ export default function LocationsPage() {
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        setCreateStatus(payload.error ? `Created locally only: ${payload.error}` : "Created locally only.");
+        setCreateStatus(payload.error ? `Created here, cloud update pending: ${payload.error}` : "Created here, cloud update pending.");
         return;
       }
 
@@ -668,7 +668,7 @@ export default function LocationsPage() {
 
       setCreateStatus("Location created.");
     } catch {
-      setCreateStatus("Created locally only.");
+      setCreateStatus("Created here, cloud update pending.");
     } finally {
       setIsCreatingLocation(false);
     }
@@ -745,9 +745,9 @@ export default function LocationsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-10">
       <div className="grid gap-6 lg:grid-cols-[minmax(300px,380px)_1fr]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-900">Locations</h2>
             <button
@@ -790,7 +790,7 @@ export default function LocationsPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
           {panelMode === "create" ? (
             <form
               className="mx-auto w-full max-w-3xl space-y-4"
@@ -800,8 +800,8 @@ export default function LocationsPage() {
               }}
             >
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Create location</h2>
-                <p className="mt-1 text-sm text-slate-600">Add a location with name, address, and timezone.</p>
+                <h2 className="text-lg font-semibold text-slate-900">Add location</h2>
+                <p className="mt-1 text-sm text-slate-600">Add a location so your assistant can answer with the right local details.</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -926,8 +926,8 @@ export default function LocationsPage() {
               }}
             >
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Edit location</h2>
-                <p className="mt-1 text-sm text-slate-600">Update location details used throughout the console.</p>
+                <h2 className="text-lg font-semibold text-slate-900">Update location</h2>
+                <p className="mt-1 text-sm text-slate-600">Keep this location accurate so customers receive the right information.</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
