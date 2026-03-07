@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import type { BusinessProfile } from "@tandem/shared";
 import { saveLocationConfig } from "@/lib/location-config-client";
@@ -330,6 +330,8 @@ export default function LocationsPage() {
   }, [locations]);
 
   const selectedLocation = locations.find((entry) => entry.id === activeLocation?.id) ?? locations[0];
+  const selectedLocationId = selectedLocation?.id;
+  const selectedLocationRef = useRef<BusinessProfile | undefined>(selectedLocation);
   const deleteTarget = deleteTargetId
     ? locations.find((entry) => entry.id === deleteTargetId) ?? null
     : null;
@@ -424,8 +426,16 @@ export default function LocationsPage() {
   };
 
   useEffect(() => {
-    const location = selectedLocation;
-    if (!location?.id) {
+    selectedLocationRef.current = selectedLocation;
+  }, [selectedLocation]);
+
+  useEffect(() => {
+    if (!selectedLocationId) {
+      return;
+    }
+
+    const location = selectedLocationRef.current;
+    if (!location) {
       return;
     }
 
@@ -454,7 +464,7 @@ export default function LocationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLocation, activeLocation?.id]);
+  }, [selectedLocationId]);
 
   const syncEditForm = (locationId: string) => {
     const location = locations.find((entry) => entry.id === locationId);
