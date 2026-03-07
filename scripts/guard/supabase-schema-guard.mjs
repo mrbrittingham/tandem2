@@ -27,6 +27,26 @@ const REQUIRED_INDEXES = [
   "chat_messages_session_id_created_at_idx",
 ];
 
+const REQUIRED_RLS_TABLES = [
+  "businesses",
+  "business_locations",
+  "business_location_configs",
+  "business_memberships",
+  "chat_sessions",
+  "chat_messages",
+  "onboarding_import_runs",
+  "operator_profiles",
+];
+
+const REQUIRED_POLICY_TABLES = [
+  "businesses",
+  "business_locations",
+  "business_location_configs",
+  "business_memberships",
+  "chat_sessions",
+  "chat_messages",
+];
+
 function run(command, args, label) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
@@ -106,22 +126,42 @@ function main() {
       dumpSql,
       /CREATE (?:UNIQUE )?INDEX "([^"]+)" ON "public"\./g,
     );
+    const tablesWithRls = extractSet(
+      dumpSql,
+      /ALTER TABLE "public"\."([^"]+)" ENABLE ROW LEVEL SECURITY;/g,
+    );
+    const tablesWithPolicies = extractSet(
+      dumpSql,
+      /CREATE POLICY "[^"]+" ON "public"\."([^"]+)"/g,
+    );
 
     const missingTables = listMissing(REQUIRED_TABLES, existingTables);
     const missingFunctions = listMissing(REQUIRED_FUNCTIONS, existingFunctions);
     const missingIndexes = listMissing(REQUIRED_INDEXES, existingIndexes);
+    const missingRlsTables = listMissing(REQUIRED_RLS_TABLES, tablesWithRls);
+    const missingPolicyTables = listMissing(REQUIRED_POLICY_TABLES, tablesWithPolicies);
 
-    if (missingTables.length || missingFunctions.length || missingIndexes.length) {
+    if (
+      missingTables.length ||
+      missingFunctions.length ||
+      missingIndexes.length ||
+      missingRlsTables.length ||
+      missingPolicyTables.length
+    ) {
       console.error("❌ Supabase schema guard failed\n");
       printMissing("Missing tables", missingTables);
       console.error("");
       printMissing("Missing functions", missingFunctions);
       console.error("");
       printMissing("Missing indexes", missingIndexes);
+      console.error("");
+      printMissing("Missing RLS on tables", missingRlsTables);
+      console.error("");
+      printMissing("Missing RLS policies on tables", missingPolicyTables);
       process.exit(1);
     }
 
-    console.log("✅ Supabase schema verified");
+    console.log("✅ Supabase schema + RLS verified");
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
