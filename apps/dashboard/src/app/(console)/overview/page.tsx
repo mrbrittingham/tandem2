@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/EmptyState";
+import { SectionCard } from "@/components/SectionCard";
 import { usePreviewDock } from "@/components/PreviewDockContext";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { resolveChatScope } from "@/lib/chat-scope";
@@ -17,8 +18,8 @@ const checklistConfig = [
     key: "location",
   },
   {
-    label: "Add at least 3 FAQs",
-    description: "Publish core answers.",
+    label: "Add at least 3 common questions",
+    description: "Publish your most common customer answers.",
     href: "/knowledge",
     key: "faqs",
   },
@@ -30,7 +31,7 @@ const checklistConfig = [
   },
   {
     label: "Add chat to your website",
-    description: "Install the widget snippet.",
+    description: "Install the website chat code.",
     href: "/widget",
     key: "widget",
   },
@@ -371,12 +372,13 @@ function OverviewPageClient() {
   return (
     <div className="space-y-10">
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Chatbot performance</h2>
-              <p className="mt-1 text-sm text-slate-600">Metrics from Inbox sessions in the selected range.</p>
-            </div>
+        <SectionCard
+          title="Assistant performance"
+          description="Track customer conversation trends for this location."
+          titleClassName="text-lg"
+          headerClassName="mb-4 pb-4"
+          bodyClassName="space-y-0"
+          actions={
             <select
               aria-label="Date range"
               value={selectedRange}
@@ -387,24 +389,30 @@ function OverviewPageClient() {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-          </div>
+          }
+        >
           {hasScope ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <MetricTile label="Total conversations" value={String(totalConversations)} helper={`${rangeDays(selectedRange)}-day range`} />
               <MetricTile label="Active days" value={String(rangeSessionData.activeDays)} helper="Days with at least one conversation" />
               <MetricTile label="Avg conversations / active day" value={String(avgPerActiveDay)} helper="Based on conversation created date" />
               <MetricTile label="Latest conversation" value={latestConversation} helper="Most recent conversation update" />
             </div>
           ) : (
-            <p className="mt-4 text-sm text-slate-600">Select a location to load conversation performance.</p>
+            <p className="text-sm text-slate-600">Select a location to load conversation performance.</p>
           )}
           {visibleSessionsLoading ? <p className="mt-3 text-xs text-slate-500">Loading conversation metrics…</p> : null}
           {visibleSessionsError ? <p className="mt-3 text-xs text-rose-600">{visibleSessionsError}</p> : null}
-        </section>
+        </SectionCard>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
-          <h2 className="text-lg font-semibold text-slate-900">Website installation</h2>
-          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+        <SectionCard
+          title="Website chat setup"
+          description="Check installation status and copy your website install code."
+          titleClassName="text-lg"
+          headerClassName="mb-4 pb-4"
+          bodyClassName="space-y-0"
+        >
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Install status</p>
             <p className="mt-1 text-lg font-semibold text-slate-900">{widgetInstalled ? "Installed" : "Not detected"}</p>
             <p className="text-xs text-slate-600">
@@ -437,17 +445,19 @@ function OverviewPageClient() {
               Preview
             </button>
           </div>
-        </section>
+        </SectionCard>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <SectionCard
+          title={!onboardingComplete ? "Launch checklist" : "Assistant health"}
+          description={!onboardingComplete ? "Complete these steps to launch with confidence." : "Current readiness signals for this location."}
+          titleClassName="text-lg"
+          headerClassName="mb-4 pb-4"
+          bodyClassName="space-y-0"
+          actions={!onboardingComplete ? <span className="text-xs text-slate-500">{completedCount}/{checklistState.length} complete</span> : undefined}
+        >
           {!onboardingComplete ? (
             <>
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-lg font-semibold text-slate-900">Onboarding</h2>
-                <span className="text-xs text-slate-500">{completedCount}/{checklistState.length} complete</span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">Complete these steps to launch.</p>
-              <div className="mt-4 space-y-2">
+              <div className="space-y-2">
                 {checklistState.map((item) => (
                   <Link
                     key={item.label}
@@ -469,9 +479,7 @@ function OverviewPageClient() {
             </>
           ) : (
             <>
-              <h2 className="text-lg font-semibold text-slate-900">Assistant health</h2>
-              <p className="mt-1 text-sm text-slate-600">Current operational signals for this location.</p>
-              <div className="mt-4 space-y-2">
+              <div className="space-y-2">
                 <HealthRow label="Knowledge coverage" value={`${enabledFaqs.length} FAQs, ${enabledPolicies.length} Policies`} href="/knowledge" />
                 <HealthRow label="Handoff configured" value={liveContacts.length > 0 ? "Yes" : "No"} href="/handoff" />
                 <HealthRow label="Website installed" value={widgetInstalled ? "Installed" : "Not detected"} href="/widget" />
@@ -479,16 +487,17 @@ function OverviewPageClient() {
               </div>
             </>
           )}
-        </section>
+        </SectionCard>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Conversation activity</h2>
-              <p className="mt-1 text-sm text-slate-600">Daily conversations for the selected range.</p>
-            </div>
+        <SectionCard
+          title="Conversation activity"
+          description="Daily conversation volume for the selected time range."
+          titleClassName="text-lg"
+          headerClassName="mb-4 pb-4"
+          bodyClassName="space-y-0"
+          actions={
             <div className="flex items-center gap-3">
               <select
                 aria-label="Conversation activity range"
@@ -501,23 +510,28 @@ function OverviewPageClient() {
                 <option value="90d">90d</option>
               </select>
               <Link href="/conversations" className="text-sm font-semibold text-[var(--console-primary)] hover:underline">
-                Open Inbox
+                Open conversations
               </Link>
             </div>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
             <MetricTile label="Total conversations" value={String(totalConversations)} helper={`${rangeDays(selectedRange)}-day range`} />
             <MetricTile label="Avg conversations / day" value={String(avgPerActiveDay)} helper="Across active days" />
           </div>
           <div className="mt-4">
             <ActivityLineChart data={rangeSessionData.daily} />
           </div>
-        </section>
+        </SectionCard>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
-          <h2 className="text-lg font-semibold text-slate-900">Recent activity</h2>
-          <p className="mt-1 text-sm text-slate-600">Latest known updates from existing dashboard data.</p>
-          <div className="mt-4 space-y-2">
+        <SectionCard
+          title="Recent updates"
+          description="Latest changes across your assistant setup and customer activity."
+          titleClassName="text-lg"
+          headerClassName="mb-4 pb-4"
+          bodyClassName="space-y-0"
+        >
+          <div className="space-y-2">
             {recentActivity.length ? (
               recentActivity.map((event) => (
                 <div key={event.eventKey} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
@@ -532,10 +546,10 @@ function OverviewPageClient() {
             )}
           </div>
           <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Link href="/conversations" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Open Inbox</Link>
+            <Link href="/conversations" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Open conversations</Link>
             <Link href="/knowledge" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Update Knowledge</Link>
             <Link href="/handoff" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Configure Handoff</Link>
-            <Link href="/widget" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Widget install</Link>
+            <Link href="/widget" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Website chat setup</Link>
             <button
               type="button"
               onClick={() => previewDock.open()}
@@ -544,7 +558,7 @@ function OverviewPageClient() {
               Preview
             </button>
           </div>
-        </section>
+        </SectionCard>
       </div>
     </div>
   );

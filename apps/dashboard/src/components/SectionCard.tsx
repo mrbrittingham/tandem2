@@ -9,6 +9,9 @@ export interface SectionCardProps {
   className?: string;
   headerClassName?: string;
   bodyClassName?: string;
+  eyebrowClassName?: string;
+  titleClassName?: string;
+  descriptionClassName?: string;
   children: ReactNode;
 }
 
@@ -21,6 +24,9 @@ export function SectionCard({
   className,
   headerClassName,
   bodyClassName,
+  eyebrowClassName,
+  titleClassName,
+  descriptionClassName,
   children,
 }: SectionCardProps) {
   const sectionClassName = [
@@ -48,10 +54,10 @@ export function SectionCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             {eyebrow ? (
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--console-text-tertiary)]">{eyebrow}</p>
+              <p className={["text-xs font-semibold uppercase tracking-[0.18em] text-[var(--console-text-tertiary)]", eyebrowClassName].filter(Boolean).join(" ")}>{eyebrow}</p>
             ) : null}
-            <h2 className="text-2xl font-semibold text-[var(--console-text-primary)]">{title}</h2>
-            {description ? <p className="max-w-3xl text-sm text-[var(--console-text-secondary)]">{description}</p> : null}
+            <h2 className={["text-2xl font-semibold text-[var(--console-text-primary)]", titleClassName].filter(Boolean).join(" ")}>{title}</h2>
+            {description ? <p className={["max-w-3xl text-sm text-[var(--console-text-secondary)]", descriptionClassName].filter(Boolean).join(" ")}>{description}</p> : null}
           </div>
           {actions ? (
             <div className="flex items-center gap-3 text-sm text-[var(--console-text-secondary)]">

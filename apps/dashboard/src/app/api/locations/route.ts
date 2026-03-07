@@ -9,6 +9,10 @@ type CreateLocationBody = {
   sourceLocationId?: string;
 };
 
+type DeleteLocationBody = {
+  locationId?: string;
+};
+
 type LocationRow = {
   id: string;
   business_id: string;
@@ -128,6 +132,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, location: data?.[0] ?? null });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create location";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let body: DeleteLocationBody;
+    try {
+      body = (await request.json()) as DeleteLocationBody;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const locationId = (body.locationId ?? "").trim();
+    if (!locationId) {
+      return NextResponse.json({ error: "locationId is required" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("business_locations")
+      .delete()
+      .eq("id", locationId)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (error) {
+      return NextResponse.json({ error: error.message || "Failed to delete location" }, { status: 500 });
+    }
+
+    if (!data?.id) {
+      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, locationId: data.id });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete location";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

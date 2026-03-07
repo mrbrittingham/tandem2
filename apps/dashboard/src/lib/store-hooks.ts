@@ -188,10 +188,43 @@ export function syncLocationsFromServer(snapshots: ServerLocationSnapshot[]) {
   });
 }
 
+function removeLocation(locationId: string) {
+  updateMockState((draft) => {
+    const nextLocations = draft.businesses.filter((entry) => entry.id !== locationId);
+    draft.businesses = nextLocations;
+
+    const currentActive = draft.activeLocationId ?? draft.activeBusinessId;
+    if (currentActive === locationId) {
+      const replacement = nextLocations[0]?.id;
+      draft.activeLocationId = replacement;
+      draft.activeBusinessId = replacement;
+    }
+
+    if (!nextLocations.length) {
+      draft.activeLocationId = undefined;
+      draft.activeBusinessId = undefined;
+      draft.accountBusinessName = undefined;
+      draft.accountBusinessSlug = undefined;
+      return;
+    }
+
+    if (!draft.activeLocationId) {
+      draft.activeLocationId = nextLocations[0].id;
+    }
+    if (!draft.activeBusinessId) {
+      draft.activeBusinessId = draft.activeLocationId;
+    }
+
+    draft.accountBusinessName = nextLocations[0].businessName ?? nextLocations[0].name;
+    draft.accountBusinessSlug = nextLocations[0].businessSlug;
+  });
+}
+
 export {
   businessToWidgetConfig,
   createBusiness,
   createLocation,
+  removeLocation,
   selectActiveBusiness,
   selectActiveLocation,
   updateBusiness,

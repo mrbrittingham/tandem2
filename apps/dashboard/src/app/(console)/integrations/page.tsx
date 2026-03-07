@@ -75,7 +75,8 @@ export default function IntegrationsPage() {
     <SectionCard
       eyebrow="Connected Tools"
       title="Integrations"
-      description="Connect your business tools so your assistant can stay up to date."
+      description="Connect the tools your team uses so customer answers stay current."
+      titleClassName="text-xl"
     >
       <div className="grid gap-5 md:grid-cols-2">
         {business.integrations.map((integration) => (
@@ -112,7 +113,7 @@ export default function IntegrationsPage() {
                     : "bg-[var(--console-primary)] text-white hover:bg-[var(--console-primary-hover)]"
                 }`}
               >
-                {integration.status === "connected" ? "Connected" : "Connect"}
+                {integration.status === "connected" ? "Connected" : "Connect account"}
               </button>
               <button
                 type="button"

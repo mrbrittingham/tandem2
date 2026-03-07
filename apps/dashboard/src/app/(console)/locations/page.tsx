@@ -6,6 +6,7 @@ import type { BusinessProfile } from "@tandem/shared";
 import { saveLocationConfig } from "@/lib/location-config-client";
 import {
   createLocation,
+  removeLocation,
   selectActiveLocation,
   updateBusiness,
   useActiveLocation,
@@ -302,6 +303,8 @@ export default function LocationsPage() {
   const [panelMode, setPanelMode] = useState<"edit" | "create">("edit");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
+  const [isDeletingLocation, setIsDeletingLocation] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<string | null>(null);
   const [createStatus, setCreateStatus] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<LocationFormState>(() => ({
@@ -327,6 +330,26 @@ export default function LocationsPage() {
   }, [locations]);
 
   const selectedLocation = locations.find((entry) => entry.id === activeLocation?.id) ?? locations[0];
+  const deleteTarget = deleteTargetId
+    ? locations.find((entry) => entry.id === deleteTargetId) ?? null
+    : null;
+
+  useEffect(() => {
+    if (!deleteTargetId || typeof window === "undefined") {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isDeletingLocation) {
+        setDeleteTargetId(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [deleteTargetId, isDeletingLocation]);
 
   const fetchCanonicalLocationProfile = async (location: BusinessProfile) => {
     const locationSlug = (location.locationSlug ?? location.slug ?? "").trim();
@@ -684,6 +707,54 @@ export default function LocationsPage() {
     });
   };
 
+  const requestDeleteLocation = (locationId: string) => {
+    setDeleteTargetId(locationId);
+  };
+
+  const confirmDeleteLocation = async () => {
+    if (!deleteTargetId) {
+      return;
+    }
+
+    const targetId = deleteTargetId;
+    setIsDeletingLocation(true);
+    setEditStatus(null);
+    setCreateStatus(null);
+
+    try {
+      const response = await fetch("/api/locations", {
+        method: "DELETE",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ locationId: targetId }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (response.status === 404) {
+          removeLocation(targetId);
+          setEditStatus("Location removed.");
+          return;
+        }
+
+        removeLocation(targetId);
+        setEditStatus(payload.error ? `Removed here. We will retry syncing this change: ${payload.error}` : "Removed here. We will retry syncing this change.");
+        return;
+      }
+
+      removeLocation(targetId);
+      setEditStatus("Location deleted.");
+    } catch {
+      removeLocation(targetId);
+      setEditStatus("Removed here. We will retry syncing this change.");
+    } finally {
+      setDeleteTargetId(null);
+      setIsDeletingLocation(false);
+      setPanelMode("edit");
+    }
+  };
+
   const canCreate = Boolean(
     createForm.locationName.trim()
       && createForm.streetAddress.trim()
@@ -1036,6 +1107,14 @@ export default function LocationsPage() {
                 >
                   Cancel
                 </button>
+                <button
+                  type="button"
+                  onClick={() => requestDeleteLocation(selectedLocation.id)}
+                  disabled={isDeletingLocation}
+                  className="ml-auto rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Delete location
+                </button>
               </div>
               {editStatus ? <p className="text-xs text-slate-600">{editStatus}</p> : null}
             </form>
@@ -1044,6 +1123,50 @@ export default function LocationsPage() {
           )}
         </section>
       </div>
+
+      {deleteTarget ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm"
+          onClick={() => {
+            if (!isDeletingLocation) {
+              setDeleteTargetId(null);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/20"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-500">Delete location</p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">Delete {deriveBusinessTitle(deleteTarget)}?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              This removes the location from your dashboard. This action cannot be undone.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Address: {deriveStreetAddress(deleteTarget)}</p>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetId(null)}
+                disabled={isDeletingLocation}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Keep location
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void confirmDeleteLocation();
+                }}
+                disabled={isDeletingLocation}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeletingLocation ? "Deleting…" : "Delete location"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
