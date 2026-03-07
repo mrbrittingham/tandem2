@@ -1,34 +1,36 @@
 @import "tailwindcss";
+@import "@tandem/ui-kit/src/tokens/tokens.css";
 @import "./tandem-console-tokens.css";
 
 :root {
-  --bg: var(--console-bg-page);
-  --panel: var(--console-bg-card);
-  --panel-muted: var(--console-bg-hover);
-  --text: var(--console-text-primary);
-  --muted: var(--console-text-secondary);
-  --accent: var(--console-primary);
+  /* Legacy aliases — mapped to unified tokens for backward compat */
+  --bg: var(--color-bg);
+  --panel: var(--color-surface);
+  --panel-muted: var(--color-surface-hover);
+  --text: var(--color-text);
+  --muted: var(--color-text-secondary);
+  --accent: var(--color-primary);
   --accent-soft: var(--console-sidebar-item-active-bg);
-  --border: var(--console-border);
-  --radius-large: var(--console-radius-lg);
-  --radius-medium: var(--console-radius-md);
+  --border: var(--color-border);
+  --radius-large: var(--radius-lg);
+  --radius-medium: var(--radius-md);
 }
 
 @theme inline {
-  --color-dashboard-bg: var(--bg);
-  --color-dashboard-panel: var(--panel);
-  --color-dashboard-text: var(--text);
-  --color-dashboard-muted: var(--muted);
-  --color-dashboard-accent: var(--accent);
-  --font-sans: var(--console-font-family);
+  --color-dashboard-bg: var(--color-bg);
+  --color-dashboard-panel: var(--color-surface);
+  --color-dashboard-text: var(--color-text);
+  --color-dashboard-muted: var(--color-text-secondary);
+  --color-dashboard-accent: var(--color-primary);
+  --font-sans: var(--font-sans);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--console-bg-page);
-  color: var(--console-text-primary);
-  font-family: var(--console-font-family);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
 }
 
 * {
