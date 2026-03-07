@@ -63,6 +63,10 @@ Serverless note:
 
 ## Documentation index
 
+- Agent orientation: `AGENTS.md`
+- Canonical architecture: `docs/architecture.md`
+- Repo navigation index: `docs/REPO_INDEX.md`
+- Verified DB schema reference: `docs/DATABASE_SCHEMA.md`
 - System map: `docs/system-map.md`
 - Current audit status: `docs/current-status.md`
 - Stabilization priorities: `docs/stabilization-plan.md`

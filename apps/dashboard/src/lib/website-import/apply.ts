@@ -97,6 +97,8 @@ export function buildKnowledgeImportPayload(runId: string, sourceUrl: string, dr
     },
     faqs,
     policies,
+    pageClassification: draft.pageClassification,
+    restaurantKnowledge: draft.restaurantKnowledge,
     evidence: draft.evidence,
   };
 
@@ -105,6 +107,13 @@ export function buildKnowledgeImportPayload(runId: string, sourceUrl: string, dr
       importedSummary: importDocument,
       importedFaqs: faqs,
       importedPolicies: policies,
+      structuredWebsiteKnowledge: {
+        pageClassification: draft.pageClassification,
+        events: draft.restaurantKnowledge.events.filter((entry) => entry.include),
+        menuSections: draft.restaurantKnowledge.menuSections.filter((entry) => entry.include),
+        reservations: draft.restaurantKnowledge.reservations,
+        memberships: draft.restaurantKnowledge.memberships,
+      },
       importedInsights: {
         eventHighlights: draft.restaurantInsights?.eventHighlights ?? null,
         reservationGuidance: draft.restaurantInsights?.reservationGuidance ?? null,

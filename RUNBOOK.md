@@ -172,7 +172,7 @@ Imports are asynchronous: the API queues work and a separate worker processes qu
 2. Go to Knowledge.
 3. Enter a website URL and click `Run import` (this creates a queued run).
 4. Wait for the run to move `queued -> running -> succeeded`.
-5. Review/edit profile fields, FAQs, policies, and brand suggestions.
+5. Review/edit structured restaurant knowledge first (events, menus, reservations, memberships), then optional FAQ/policy suggestions.
 6. Click `Apply import` to write the draft to location config.
 7. Use `Refresh import` to create a new draft from the same URL (no silent overwrite).
 
@@ -198,7 +198,7 @@ Production pattern:
 ### Data written on apply
 
 - `business_location_configs.knowledge_config`
-   - imported summary, imported FAQs/policies, contact/hours snapshot, provenance (`runId`, URL)
+      - imported summary, structured website knowledge, optional imported FAQs/policies, contact/hours snapshot, provenance (`runId`, URL)
 - `business_location_configs.widget_config.theme`
    - mapped defaults for header/send/quick actions and brand/logo values
 - `business_locations.website_url`

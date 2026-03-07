@@ -1,8 +1,9 @@
 export const WEBSITE_IMPORT_LIMITS = {
-  maxPages: Number(process.env.WEBSITE_IMPORT_MAX_PAGES ?? 36),
-  maxChars: 320_000,
-  perPageChars: 20_000,
+  maxPages: Number(process.env.WEBSITE_IMPORT_MAX_PAGES ?? 48),
+  maxChars: 420_000,
+  perPageChars: 24_000,
   requestTimeoutMs: 12_000,
+  maxDepth: Number(process.env.WEBSITE_IMPORT_MAX_DEPTH ?? 3),
 };
 
 export function normalizeWebsiteUrl(input: string): string {
@@ -44,7 +45,8 @@ export function normalizeCandidateUrl(raw: string, baseUrl: string): string | nu
 }
 
 export function getDomain(url: string): string {
-  return new URL(url).hostname.toLowerCase();
+  const host = new URL(url).hostname.toLowerCase();
+  return host.startsWith("www.") ? host.slice(4) : host;
 }
 
 export function isSameDomain(leftUrl: string, rightUrl: string): boolean {

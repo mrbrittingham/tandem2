@@ -39,6 +39,20 @@ function asArray(value: unknown): unknown[] {
 
 export function mapImportRunRow(row: ImportRunRow): WebsiteImportRunRecord {
   const resultJson = asObject(row.result_json);
+  const signalsObject = asObject(row.signals_json);
+  const normalizedSignals = {
+    emails: asArray(signalsObject.emails),
+    phones: asArray(signalsObject.phones),
+    addresses: asArray(signalsObject.addresses),
+    hours: asArray(signalsObject.hours),
+    bookingLinks: asArray(signalsObject.bookingLinks),
+    socialLinks: asArray(signalsObject.socialLinks),
+    logoCandidates: asArray(signalsObject.logoCandidates),
+    faviconCandidates: asArray(signalsObject.faviconCandidates),
+    colorCandidates: asArray(signalsObject.colorCandidates),
+    fontCandidates: asArray(signalsObject.fontCandidates),
+  };
+
   return {
     id: row.id,
     locationId: row.location_id,
@@ -51,7 +65,7 @@ export function mapImportRunRow(row: ImportRunRow): WebsiteImportRunRecord {
     finishedAt: row.finished_at,
     appliedAt: row.applied_at,
     pages: asArray(row.pages_json) as WebsiteImportRunRecord["pages"],
-    signals: asObject(row.signals_json) as WebsiteImportRunRecord["signals"],
+    signals: normalizedSignals as WebsiteImportRunRecord["signals"],
     result: (Object.keys(resultJson).length ? resultJson : null) as WebsiteImportDraft | null,
   };
 }

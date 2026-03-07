@@ -20,9 +20,7 @@ Status reflects repository state as currently implemented.
   - CLI push uses `supabase/migrations/*`.
   - Additional historical migrations also exist at `packages/shared/supabase/migrations/*`.
 - `.env.example` is now aligned with required auth and LLM variables, but runtime startup checks are still minimal.
-- Documentation drift exists:
-  - prior README/API descriptions do not fully match current `ChatWidget` prop/runtime behavior,
-  - architecture docs are too thin for production operations.
+- Documentation is improved with agent orientation, architecture, schema, and repo index references, but should be kept current with future flow changes.
 
 ## Risks and footguns
 
@@ -35,6 +33,10 @@ Status reflects repository state as currently implemented.
 
 - Claims above are based on direct inspection of route handlers, shared storage/LLM/auth modules, and current migration folders.
 - No automated test suite exists; confidence relies on lint/typecheck and route-level behavior checks.
+
+## Direction callouts
+
+- Website import is now structured-knowledge-first (classification -> extraction -> review/apply), with FAQ output treated as secondary when structured restaurant data is available.
 
 ## Root cause + fix (chat/conversations)
 

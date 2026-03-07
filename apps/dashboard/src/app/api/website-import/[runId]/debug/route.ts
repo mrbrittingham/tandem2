@@ -52,6 +52,7 @@ export async function GET(
           phones: mapped.signals.phones.length,
           addresses: mapped.signals.addresses.length,
           hours: mapped.signals.hours.length,
+          bookingLinks: mapped.signals.bookingLinks.length,
           socialLinks: mapped.signals.socialLinks.length,
           logoCandidates: mapped.signals.logoCandidates.length,
           faviconCandidates: mapped.signals.faviconCandidates.length,
@@ -59,6 +60,8 @@ export async function GET(
           fontCandidates: mapped.signals.fontCandidates.length,
         },
         draftCounts: {
+          events: mapped.result?.restaurantKnowledge.events.length ?? 0,
+          menuSections: mapped.result?.restaurantKnowledge.menuSections.length ?? 0,
           faqs: mapped.result?.faqs.length ?? 0,
           policies: mapped.result?.policies.length ?? 0,
         },
@@ -66,7 +69,9 @@ export async function GET(
       pages: mapped.pages.map((page) => ({
         url: page.url,
         title: page.title,
+        pageType: page.pageType ?? "general",
         excerptChars: page.textExcerpt.length,
+        headingCount: Array.isArray(page.headingText) ? page.headingText.length : 0,
         excerptPreview: page.textExcerpt.slice(0, 300),
       })),
       signals: mapped.signals,

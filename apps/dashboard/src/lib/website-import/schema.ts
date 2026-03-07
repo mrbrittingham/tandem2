@@ -25,6 +25,10 @@ function isClaim(value: unknown): value is { value: string | null; sourceUrl: st
   return true;
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
 export function isWebsiteImportDraft(value: unknown): value is WebsiteImportDraft {
   if (!isObject(value)) {
     return false;
@@ -46,6 +50,46 @@ export function isWebsiteImportDraft(value: unknown): value is WebsiteImportDraf
   if (!Array.isArray(value.businessProfile.socialLinks)) return false;
 
   if (!Array.isArray(value.faqs) || !Array.isArray(value.policies)) {
+    return false;
+  }
+
+  if (!Array.isArray(value.pageClassification)) {
+    return false;
+  }
+
+  if (!isObject(value.restaurantKnowledge)) {
+    return false;
+  }
+
+  if (!Array.isArray(value.restaurantKnowledge.events)) {
+    return false;
+  }
+
+  if (!Array.isArray(value.restaurantKnowledge.menuSections)) {
+    return false;
+  }
+
+  if (!isObject(value.restaurantKnowledge.reservations) || !isObject(value.restaurantKnowledge.memberships)) {
+    return false;
+  }
+
+  if (!isNullableString(value.restaurantKnowledge.reservations.sourceUrl)) {
+    return false;
+  }
+
+  if (!isNullableString(value.restaurantKnowledge.reservations.bookingUrl)) {
+    return false;
+  }
+
+  if (!isStringArray(value.restaurantKnowledge.reservations.platforms)) {
+    return false;
+  }
+
+  if (!isNullableString(value.restaurantKnowledge.memberships.sourceUrl)) {
+    return false;
+  }
+
+  if (!isNullableString(value.restaurantKnowledge.memberships.signupUrl)) {
     return false;
   }
 

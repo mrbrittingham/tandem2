@@ -5,8 +5,15 @@
   - `apps/dashboard` (operator console, port 3100)
   - `packages/ui-kit` (embeddable `ChatWidget`)
   - `packages/shared` (domain types, mock store, server utilities)
-- Keep backend logic in Next.js App Router route handlers (`src/app/api/**`) only. Do not add standalone servers/workers.
+- Keep backend API logic in Next.js App Router route handlers (`src/app/api/**`). Do not add new standalone servers/workers; the existing website-import worker in `scripts/worker/website-import-worker.ts` is the approved async exception.
 - Use `@tandem/shared` in client-safe code and `@tandem/shared/server` only in server code (route handlers/server contexts).
+
+## Agent context loading order
+- Before broad exploration, load context in this order:
+  1. `AGENTS.md`
+  2. `docs/architecture.md`
+  3. `docs/REPO_INDEX.md`
+  4. only then the relevant module files for the task
 
 ## Core data flows you should preserve
 - Dashboard state is mock-first and browser-persistent:

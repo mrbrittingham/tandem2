@@ -1,9 +1,28 @@
 export type ImportRunStatus = "queued" | "running" | "succeeded" | "failed";
 
+export type WebsitePageType =
+  | "home"
+  | "menu"
+  | "events"
+  | "reservations"
+  | "memberships"
+  | "private-events"
+  | "catering"
+  | "contact"
+  | "hours"
+  | "faq"
+  | "policies"
+  | "about"
+  | "general";
+
 export type CrawledPage = {
   url: string;
   title: string;
   textExcerpt: string;
+  pageType?: WebsitePageType;
+  metaDescription?: string;
+  headingText?: string[];
+  sourceAnchorTexts?: string[];
 };
 
 export type SocialLink = {
@@ -17,6 +36,7 @@ export type ImportSignals = {
   phones: Array<{ value: string; sourceUrl: string }>;
   addresses: Array<{ value: string; sourceUrl: string }>;
   hours: Array<{ value: string; sourceUrl: string }>;
+  bookingLinks: Array<{ url: string; label: string; sourceUrl: string; platform: string | null }>;
   socialLinks: SocialLink[];
   logoCandidates: Array<{ url: string; sourceUrl: string }>;
   faviconCandidates: Array<{ url: string; sourceUrl: string }>;
@@ -48,8 +68,63 @@ export type ImportPolicy = {
   include: boolean;
 };
 
+export type ImportEvent = {
+  id: string;
+  title: string;
+  date: string | null;
+  time: string | null;
+  description: string;
+  category: string;
+  bookingInfo: string | null;
+  bookingUrl: string | null;
+  pricing: string | null;
+  location: string | null;
+  sourceUrl: string | null;
+  recurring: boolean;
+  include: boolean;
+};
+
+export type ImportMenuItem = {
+  id: string;
+  name: string;
+  price: string | null;
+  description: string;
+  dietaryNotes: string | null;
+  include: boolean;
+};
+
+export type ImportMenuSection = {
+  id: string;
+  title: string;
+  sourceUrl: string | null;
+  include: boolean;
+  items: ImportMenuItem[];
+};
+
+export type ImportReservationInfo = {
+  include: boolean;
+  sourceUrl: string | null;
+  bookingUrl: string | null;
+  platforms: string[];
+  instructions: string;
+  partySizeNotes: string | null;
+  depositPolicy: string | null;
+  experienceNotes: string | null;
+};
+
+export type ImportMembershipInfo = {
+  include: boolean;
+  sourceUrl: string | null;
+  name: string;
+  benefits: string;
+  pickupDetails: string | null;
+  signupUrl: string | null;
+  memberEventNotes: string | null;
+};
+
 export type WebsiteImportDraft = {
   sourceUrl: string;
+  pageClassification: Array<{ url: string; title: string; pageType: WebsitePageType }>;
   businessProfile: {
     name: ImportClaim<string>;
     shortDescription: ImportClaim<string>;
@@ -61,6 +136,12 @@ export type WebsiteImportDraft = {
   };
   faqs: ImportFaq[];
   policies: ImportPolicy[];
+  restaurantKnowledge: {
+    events: ImportEvent[];
+    menuSections: ImportMenuSection[];
+    reservations: ImportReservationInfo;
+    memberships: ImportMembershipInfo;
+  };
   brand: {
     primaryColor: ImportClaim<string>;
     accentColor: ImportClaim<string>;

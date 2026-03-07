@@ -1,5 +1,16 @@
 import { llmGenerate, validateLLMServerConfig } from "@tandem/shared/server";
-import type { CrawledPage, ImportSignals, WebsiteImportDraft, WebsiteImportResult } from "./types";
+import type {
+  CrawledPage,
+  ImportEvent,
+  ImportMembershipInfo,
+  ImportMenuItem,
+  ImportMenuSection,
+  ImportReservationInfo,
+  ImportSignals,
+  WebsiteImportDraft,
+  WebsiteImportResult,
+  WebsitePageType,
+} from "./types";
 import { isLikelyFaqPage, normalizeFaqCandidate } from "./faq-heuristics";
 import { createId, normalizeHexColor, pickReadableTextColor } from "./utils";
 
@@ -47,6 +58,392 @@ function bestPageSnippet(pages: CrawledPage[], matcher: RegExp, fallbackLength =
 
 const POLICY_HINT_REGEX = /(policy|policies|terms|privacy|return|refund|shipping|reservation|booking|cancellation|cancel)/i;
 const POLICY_NOISE_REGEX = /(skip\s+to\s+content|main\s+menu|see\s+more|share\b|comments?|likes?|copy\s+link|facebook|instagram|x\.com|twitter|pinterest|utm_|cookie\s+policy|newsletter)/i;
+const MONTH_REGEX = /(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)/i;
+
+const PAGE_TYPE_HINTS: Record<WebsitePageType, RegExp[]> = {
+  home: [/^\/$/, /\bhome\b/, /welcome/i],
+  menu: [/\bmenu\b/, /food|dining|drink|wine\s+list|brunch|lunch|dinner/i],
+  events: [/\bevent\b/, /calendar|upcoming|happenings|live\s+music|what'?s\s+on/i],
+  reservations: [/reserv|book\b/, /opentable|resy|tock|sevenrooms|toast/i],
+  memberships: [/membership|wine\s*club|loyalty|join\s+club/i],
+  "private-events": [/private\s*event|group\s*dining|party\s+packages?/i],
+  catering: [/\bcatering\b|cater\b/i],
+  contact: [/contact|call\s+us|email\s+us|visit\s+us|get\s+in\s+touch/i],
+  hours: [/\bhours\b|opening\s+hours|open\s+today|hours\s+of\s+operation/i],
+  faq: [/\bfaq\b|frequently\s+asked|questions\b/i],
+  policies: [/\bpolicy\b|terms|privacy|cancellation|refund|returns?/i],
+  about: [/\babout\b|our\s+story|our\s+team|about\s+us/i],
+  general: [],
+};
+
+const PAGE_TYPE_ORDER: WebsitePageType[] = [
+  "reservations",
+  "events",
+  "menu",
+  "memberships",
+  "private-events",
+  "catering",
+  "contact",
+  "hours",
+  "faq",
+  "policies",
+  "about",
+  "home",
+  "general",
+];
+
+type ClassifiedPage = CrawledPage & {
+  pageType: WebsitePageType;
+};
+
+function makeClassificationHaystack(page: CrawledPage) {
+  const headingText = Array.isArray(page.headingText) ? page.headingText.join(" ") : "";
+  const anchorText = Array.isArray(page.sourceAnchorTexts) ? page.sourceAnchorTexts.join(" ") : "";
+  return {
+    path: new URL(page.url).pathname.toLowerCase(),
+    title: (page.title ?? "").toLowerCase(),
+    headings: headingText.toLowerCase(),
+    meta: (page.metaDescription ?? "").toLowerCase(),
+    excerpt: (page.textExcerpt ?? "").toLowerCase(),
+    anchor: anchorText.toLowerCase(),
+  };
+}
+
+function classifyPageType(page: CrawledPage): WebsitePageType {
+  const haystack = makeClassificationHaystack(page);
+  const scores = new Map<WebsitePageType, number>();
+
+  for (const pageType of PAGE_TYPE_ORDER) {
+    if (pageType === "general") {
+      continue;
+    }
+    let score = 0;
+    for (const hint of PAGE_TYPE_HINTS[pageType]) {
+      if (hint.test(haystack.path)) score += 6;
+      if (hint.test(haystack.title)) score += 7;
+      if (hint.test(haystack.headings)) score += 5;
+      if (hint.test(haystack.meta)) score += 3;
+      if (hint.test(haystack.anchor)) score += 4;
+      if (hint.test(haystack.excerpt)) score += 2;
+    }
+    scores.set(pageType, score);
+  }
+
+  if (haystack.path === "/" || haystack.path === "") {
+    scores.set("home", (scores.get("home") ?? 0) + 8);
+  }
+
+  if (/private/.test(haystack.path) && /event|party|group/.test(haystack.path)) {
+    scores.set("private-events", (scores.get("private-events") ?? 0) + 8);
+  }
+
+  if (/cater/.test(haystack.path)) {
+    scores.set("catering", (scores.get("catering") ?? 0) + 10);
+  }
+
+  const best = PAGE_TYPE_ORDER.reduce<{ type: WebsitePageType; score: number }>((current, pageType) => {
+    const score = scores.get(pageType) ?? (pageType === "general" ? 0 : -1);
+    return score > current.score ? { type: pageType, score } : current;
+  }, { type: "general", score: 0 });
+
+  return best.score >= 5 ? best.type : "general";
+}
+
+function classifyPages(pages: CrawledPage[]): ClassifiedPage[] {
+  return pages.map((page) => ({
+    ...page,
+    pageType: classifyPageType(page),
+  }));
+}
+
+function compact(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;|&apos;/gi, "'")
+    .replace(/&ndash;|&#8211;/gi, "-")
+    .replace(/&mdash;|&#8212;/gi, "-")
+    .replace(/&hellip;/gi, "...")
+    .replace(/&laquo;|&raquo;/gi, " ")
+    .replace(/&#8217;/gi, "'")
+    .replace(/&#8216;/gi, "'")
+    .replace(/&#8220;|&#8221;/gi, '"')
+    .replace(/&#\d+;/g, " ");
+}
+
+function cleanEventTitle(raw: string): string {
+  const cleaned = compact(decodeHtmlEntities(raw)
+    .replace(/\|\s*[^|]+$/g, "")
+    .replace(/^event\s+series:\s*/i, "")
+    .replace(/\bskip\s+to\s+content\b/gi, "")
+    .replace(/\s{2,}/g, " "));
+  return cleaned.slice(0, 120);
+}
+
+function pickEventTitleFromPage(page: CrawledPage): string {
+  const heading = page.headingText?.find((entry) => entry.trim().length > 0);
+  const fromHeading = heading ? cleanEventTitle(heading) : "";
+  if (fromHeading) {
+    return fromHeading;
+  }
+  const fromTitle = cleanEventTitle(page.title ?? "");
+  return fromTitle || "Upcoming event";
+}
+
+function normalizeEventDescription(value: string): string {
+  return compact(decodeHtmlEntities(value)
+    .replace(/^.*?\bAll\s+Events\b\s*/i, "")
+    .replace(/^.*?\|\s*[^|]+\|\s*[^|]+\s*/i, "")
+    .replace(/\bskip\s+to\s+content\b/gi, "")
+    .replace(/\badd\s+to\s+calendar\b[\s\S]*$/i, "")
+    .replace(/\bcategories?:\b[\s\S]*$/i, "")
+    .replace(/\bCategor(?:y|ies)?\s*:?\s*$/i, "")
+    .replace(/^[-|:;,.\s]+/, ""));
+}
+
+function extractEventDateAndTime(text: string): { date: string | null; time: string | null } {
+  const rangeDate = text.match(new RegExp(`(${MONTH_REGEX.source}\\s+\\d{1,2}(?:,\\s*\\d{4})?\\s*(?:-|to|–)\\s*${MONTH_REGEX.source}\\s+\\d{1,2}(?:,\\s*\\d{4})?)`, "i"));
+  const singleDate = text.match(new RegExp(`(${MONTH_REGEX.source}\\s+\\d{1,2}(?:,\\s*\\d{4})?)`, "i"));
+  const timeMatch = text.match(/\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b(?:\s*(?:-|to|–)\s*\d{1,2}(?::\d{2})?\s?(?:am|pm))?/i);
+
+  return {
+    date: rangeDate?.[1] ?? singleDate?.[1] ?? null,
+    time: timeMatch?.[0] ?? null,
+  };
+}
+
+function extractEventCategory(text: string): string {
+  const categoryText = text.match(/\bcategories?:\s*([^\n]+?)(?:\badd\s+to\s+calendar\b|$)/i)?.[1] ?? "";
+  const normalized = compact(decodeHtmlEntities(categoryText).replace(/\s+,\s+/g, ", "));
+  if (normalized) {
+    return normalized.slice(0, 90);
+  }
+  if (/live\s+music|music\s+bingo|dj/i.test(text)) {
+    return "Live music";
+  }
+  if (/workshop|paint\s+and\s+sip/i.test(text)) {
+    return "Workshop";
+  }
+  if (/dinner|prix\s+fixe|farm\s+kitchen|food/i.test(text)) {
+    return "Dining event";
+  }
+  return "Event";
+}
+
+function eventBookingHint(text: string): string | null {
+  return text.match(/(?:reservations?\s+recommended|book\s+a\s+reservation|tickets?\s+include[^.]{0,120}|rsvp[^.]{0,120}|deposit[^.]{0,140})/i)?.[0] ?? null;
+}
+
+function extractEventDescription(text: string, title: string): string {
+  const normalized = normalizeEventDescription(text);
+  const titleEscaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const afterDateTime = normalized.match(/(?:@\s*\d{1,2}(?::\d{2})?\s?(?:am|pm)(?:\s*(?:-|to|–)\s*\d{1,2}(?::\d{2})?\s?(?:am|pm))?\s*)([\s\S]+)/i)?.[1] ?? "";
+  const afterTitle = normalized.match(new RegExp(`${titleEscaped}\\s+([\\s\\S]+)`, "i"))?.[1] ?? "";
+  const candidate = afterDateTime || afterTitle || normalized;
+  const trimmed = normalizeEventDescription(candidate)
+    .replace(/\bfind\s+out\s+more\b/gi, "")
+    .replace(/\bcategor[^.]{0,80}$/i, "")
+    .replace(/\bjoin\s+us\s+at\s+windmill\s+creek[^.]*\.?/gi, "");
+  return trimmed.slice(0, 420);
+}
+
+function hasStrongEventSignal(page: CrawledPage): boolean {
+  const haystack = `${page.url} ${page.title} ${page.textExcerpt}`.toLowerCase();
+  return /\/event\//.test(page.url)
+    || /event\s+series|all\s+events|upcoming\s+events|calendar/.test(haystack)
+    || /\b(march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b\s+\d{1,2}/.test(haystack);
+}
+
+function rankSourceUrlForSignal(url: string, preferred: RegExp): number {
+  const lower = url.toLowerCase();
+  if (preferred.test(lower)) return 4;
+  if (/contact|about|visit|location/.test(lower)) return 3;
+  if (/home|\/$/.test(lower)) return 2;
+  return 1;
+}
+
+function pickBestSignal<T extends { sourceUrl: string }>(values: T[], preferred: RegExp): T | null {
+  if (!values.length) {
+    return null;
+  }
+  return [...values]
+    .sort((left, right) => rankSourceUrlForSignal(right.sourceUrl, preferred) - rankSourceUrlForSignal(left.sourceUrl, preferred))[0] ?? null;
+}
+
+function extractEventsFromPages(pages: CrawledPage[], signals: ImportSignals): ImportEvent[] {
+  const events: ImportEvent[] = [];
+  const seen = new Set<string>();
+  const eventPages = pages.filter((page) => page.pageType === "events" || hasStrongEventSignal(page));
+  const detailPages = eventPages.filter((page) => /\/event\//.test(page.url));
+  const listingPages = eventPages.filter((page) => !/\/event\//.test(page.url));
+  const orderedPages = [...detailPages, ...listingPages];
+
+  for (const page of orderedPages) {
+    const normalizedText = normalizeEventDescription(page.textExcerpt);
+    const title = pickEventTitleFromPage(page);
+    const dateTime = extractEventDateAndTime(normalizedText);
+    const description = extractEventDescription(normalizedText, title);
+    const bookingSignal = signals.bookingLinks.find((entry) => entry.sourceUrl === page.url)
+      ?? signals.bookingLinks.find((entry) => /resy|opentable|tock|eventbrite|tickets?|rsvp|book/i.test(`${entry.url} ${entry.label}`));
+    const bookingUrl = bookingSignal?.url ?? null;
+    const bookingInfo = eventBookingHint(`${normalizedText} ${bookingSignal?.label ?? ""}`);
+    const category = extractEventCategory(normalizedText);
+    const recurring = /event\s+series|every\s|weekly|monthly|recurring|each\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i.test(normalizedText);
+    const pricing = normalizedText.match(/\$\s?\d{1,3}(?:\.\d{2})?(?:\s*(?:-|to)\s*\$\s?\d{1,3}(?:\.\d{2})?)?/i)?.[0] ?? null;
+    const location = normalizedText.match(/\b(?:at|in)\s+([A-Z][A-Za-z0-9&'\-\s]{3,60})/)?.[1]?.trim() ?? null;
+
+    if (!/\/event\//.test(page.url) && !dateTime.date) {
+      continue;
+    }
+
+    const normalizedTitle = title.toLowerCase();
+    if (!normalizedTitle || /skip\s+to\s+content|winery\s+events\s+in|what'?s\s+happening/.test(normalizedTitle)) {
+      continue;
+    }
+
+    const key = `${normalizedTitle}::${dateTime.date ?? ""}::${dateTime.time ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+
+    events.push({
+      id: createId("event"),
+      title,
+      date: dateTime.date,
+      time: dateTime.time,
+      description,
+      category,
+      bookingInfo,
+      bookingUrl,
+      pricing,
+      location,
+      sourceUrl: page.url,
+      recurring,
+      include: true,
+    });
+
+    if (events.length >= 24) {
+      break;
+    }
+  }
+
+  return events
+    .filter((entry) => entry.title.length >= 4)
+    .slice(0, 20);
+}
+
+function extractMenuSectionsFromPages(pages: CrawledPage[]): ImportMenuSection[] {
+  const menuPages = pages.filter((page) => page.pageType === "menu" || /menu|food|wine|cocktail|brunch|dinner/i.test(`${page.url} ${page.title}`));
+  const sections: ImportMenuSection[] = [];
+
+  for (const page of menuPages) {
+    const text = compact(page.textExcerpt);
+    const headingCandidate = page.headingText?.find((entry) => /menu|food|wine|cocktail|brunch|dinner/i.test(entry));
+    const sectionTitle = headingCandidate || page.title || "Menu";
+    const priceMatches = Array.from(text.matchAll(/([^.$]{3,60})\s+\$\s?(\d{1,3}(?:\.\d{2})?)/g));
+    const items: ImportMenuItem[] = priceMatches.slice(0, 20).map((match) => ({
+      id: createId("menu_item"),
+      name: compact((match[1] ?? "Item").replace(/[^a-zA-Z0-9&,'\-\s]/g, "")).slice(-48) || "Menu item",
+      price: `$${match[2]}`,
+      description: "",
+      dietaryNotes: /vegan|vegetarian|gluten|allergy|dairy/i.test(text) ? "Contains dietary notes on page" : null,
+      include: true,
+    }));
+
+    if (!items.length) {
+      items.push({
+        id: createId("menu_item"),
+        name: "Menu overview",
+        price: null,
+        description: text.slice(0, 280),
+        dietaryNotes: /vegan|vegetarian|gluten|allergy|dairy/i.test(text) ? "Contains dietary notes on page" : null,
+        include: true,
+      });
+    }
+
+    sections.push({
+      id: createId("menu_section"),
+      title: sectionTitle,
+      sourceUrl: page.url,
+      include: true,
+      items,
+    });
+  }
+
+  return sections.slice(0, 8);
+}
+
+function extractReservationInfo(pages: CrawledPage[], signals: ImportSignals): ImportReservationInfo {
+  const reservationPages = pages.filter(
+    (page) => page.pageType === "reservations" || page.pageType === "private-events" || /reserv|book|table|opentable|resy|tock|experience/i.test(`${page.url} ${page.title} ${page.textExcerpt.slice(0, 280)}`),
+  );
+  const bookingSignal = signals.bookingLinks[0] ?? null;
+
+  if (!reservationPages.length && !bookingSignal) {
+    return {
+      include: false,
+      sourceUrl: null,
+      bookingUrl: null,
+      platforms: [],
+      instructions: "",
+      partySizeNotes: null,
+      depositPolicy: null,
+      experienceNotes: null,
+    };
+  }
+
+  const joined = compact(reservationPages.map((entry) => `${entry.title}. ${entry.textExcerpt}`).join(" "));
+  const bookingUrl =
+    bookingSignal?.url
+    ?? reservationPages.find((entry) => /resy|opentable|tock|book|reserv|sevenrooms|toast/i.test(`${entry.url} ${entry.textExcerpt}`))?.url
+    ?? reservationPages[0]?.url
+    ?? null;
+  const platforms = ["resy", "opentable", "tock", "sevenrooms", "toast"].filter((platform) => new RegExp(platform, "i").test(`${joined} ${bookingUrl}`));
+
+  return {
+    include: true,
+    sourceUrl: reservationPages[0]?.url ?? bookingSignal?.sourceUrl ?? null,
+    bookingUrl,
+    platforms,
+    instructions: (joined || bookingSignal?.label || "").slice(0, 360),
+    partySizeNotes: joined.match(/party[^.]{0,100}|group[^.]{0,100}/i)?.[0] ?? null,
+    depositPolicy: joined.match(/deposit[^.]{0,120}|cancellation[^.]{0,120}/i)?.[0] ?? null,
+    experienceNotes: joined.match(/experience[^.]{0,140}|special[^.]{0,140}/i)?.[0] ?? null,
+  };
+}
+
+function extractMembershipInfo(pages: CrawledPage[]): ImportMembershipInfo {
+  const memberPage = pages.find((page) => page.pageType === "memberships" || /club|membership|wine\s*club|loyalty/i.test(`${page.url} ${page.title}`));
+  if (!memberPage) {
+    return {
+      include: false,
+      sourceUrl: null,
+      name: "",
+      benefits: "",
+      pickupDetails: null,
+      signupUrl: null,
+      memberEventNotes: null,
+    };
+  }
+
+  const text = compact(memberPage.textExcerpt);
+
+  return {
+    include: true,
+    sourceUrl: memberPage.url,
+    name: memberPage.title || "Membership",
+    benefits: text.slice(0, 320),
+    pickupDetails: text.match(/pickup[^.]{0,120}/i)?.[0] ?? null,
+    signupUrl: memberPage.url,
+    memberEventNotes: text.match(/member[^.]{0,140}event[^.]{0,140}|event[^.]{0,140}member[^.]{0,140}/i)?.[0] ?? null,
+  };
+}
 
 function scorePolicyCandidate(title: string, summary: string, sourceUrl: string | null): number {
   let score = 0;
@@ -119,6 +516,10 @@ function extractFallbackFaqs(pages: CrawledPage[]) {
     .trim();
 
   for (const page of pages) {
+    if (page.pageType && page.pageType !== "faq" && page.pageType !== "general" && page.pageType !== "contact") {
+      continue;
+    }
+
     const faqPageHint = isLikelyFaqPage(page.url, page.title);
     const sanitizedExcerpt = sanitizeFallbackText(page.textExcerpt);
     const questions: Array<{ text: string; start: number; end: number }> = [];
@@ -309,19 +710,29 @@ function parseLlmJson(content: string): RawDraft | null {
 }
 
 function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signals: ImportSignals): WebsiteImportDraft {
-  const homepage = pages[0];
-  const firstPhone = signals.phones[0];
-  const firstEmail = signals.emails[0];
-  const firstAddress = signals.addresses[0];
-  const firstHours = signals.hours[0];
+  const classifiedPages = classifyPages(pages);
+  const homepage = classifiedPages[0];
+  const firstPhone = pickBestSignal(signals.phones, /contact|visit/);
+  const firstEmail = pickBestSignal(signals.emails, /contact|visit/);
+  const firstAddress = pickBestSignal(signals.addresses, /contact|visit|location/);
+  const firstHours = pickBestSignal(signals.hours, /hours|visit|contact/);
   const primaryColor = signals.colorCandidates[0];
   const accentColor = signals.colorCandidates[1] ?? primaryColor;
   const backgroundColor = normalizeHexColor("#FFFFFF");
   const logo = signals.logoCandidates[0] ?? signals.faviconCandidates[0];
   const font = signals.fontCandidates.find((entry) => !/serif|sans-serif|monospace/i.test(entry.value)) ?? signals.fontCandidates[0];
+  const events = extractEventsFromPages(classifiedPages, signals);
+  const menuSections = extractMenuSectionsFromPages(classifiedPages);
+  const reservations = extractReservationInfo(classifiedPages, signals);
+  const memberships = extractMembershipInfo(classifiedPages);
 
   return {
     sourceUrl,
+    pageClassification: classifiedPages.map((page) => ({
+      url: page.url,
+      title: page.title,
+      pageType: page.pageType ?? "general",
+    })),
     businessProfile: {
       name: {
         value: homepage?.title ?? null,
@@ -351,6 +762,12 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
     },
     faqs: [],
     policies: [],
+    restaurantKnowledge: {
+      events,
+      menuSections,
+      reservations,
+      memberships,
+    },
     brand: {
       primaryColor: {
         value: primaryColor?.value ?? null,
@@ -384,13 +801,13 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
       },
     },
     restaurantInsights: {
-      eventHighlights: bestPageSnippet(pages, /event|music|calendar|happenings|what'?s on/, 260),
-      reservationGuidance: bestPageSnippet(pages, /reserv|book|table|opentable|resy/, 260),
-      membershipNotes: bestPageSnippet(pages, /club|membership|wine club|loyalty/, 260),
-      menuSummary: bestPageSnippet(pages, /menu|dining|food|drink|tasting/, 260),
+      eventHighlights: events[0]?.description ?? bestPageSnippet(classifiedPages, /event|music|calendar|happenings|what'?s on/, 260),
+      reservationGuidance: reservations.instructions || bestPageSnippet(classifiedPages, /reserv|book|table|opentable|resy/, 260),
+      membershipNotes: memberships.benefits || bestPageSnippet(classifiedPages, /club|membership|wine club|loyalty/, 260),
+      menuSummary: menuSections[0]?.items[0]?.description || bestPageSnippet(classifiedPages, /menu|dining|food|drink|tasting/, 260),
     },
     evidence: {
-      pages: pages.map((page) => ({ url: page.url, title: page.title })),
+      pages: classifiedPages.map((page) => ({ url: page.url, title: page.title })),
     },
   };
 }
@@ -544,6 +961,7 @@ function parseLlmDraft(input: {
 
   return {
     sourceUrl: input.sourceUrl,
+    pageClassification: deterministic.pageClassification,
     businessProfile: {
       name: {
         value: name ?? deterministic.businessProfile.name.value,
@@ -573,6 +991,7 @@ function parseLlmDraft(input: {
     },
     faqs,
     policies,
+    restaurantKnowledge: deterministic.restaurantKnowledge,
     brand: {
       primaryColor: {
         value: primaryColor ?? deterministic.brand.primaryColor.value,
@@ -697,24 +1116,33 @@ export async function buildWebsiteImportResult(input: {
   pages: CrawledPage[];
   signals: ImportSignals;
 }): Promise<WebsiteImportResult> {
-  const llmDraft = await extractWithLlm(input).catch(() => null);
+  const classifiedPages = classifyPages(input.pages);
+  const llmDraft = await extractWithLlm({ ...input, pages: classifiedPages }).catch(() => null);
   const draft = parseLlmDraft({
     sourceUrl: input.sourceUrl,
-    pages: input.pages,
+    pages: classifiedPages,
     signals: input.signals,
     llmDraft,
   });
 
   if (draft.faqs.length === 0) {
-    draft.faqs = extractFallbackFaqs(input.pages);
+    draft.faqs = extractFallbackFaqs(classifiedPages);
+  }
+
+  const eventsDetected = draft.restaurantKnowledge.events.filter((entry) => entry.include).length;
+  const eventHeavyImport = eventsDetected >= 3 && classifiedPages.filter((entry) => entry.pageType === "events").length >= 2;
+  const hasFaqPages = classifiedPages.some((entry) => entry.pageType === "faq");
+  if (eventHeavyImport && !hasFaqPages) {
+    // Keep FAQ output secondary when we already extracted strong event knowledge.
+    draft.faqs = [];
   }
 
   if (draft.policies.length === 0) {
-    draft.policies = extractFallbackPolicies(input.pages);
+    draft.policies = extractFallbackPolicies(classifiedPages);
   }
 
   return {
-    pages: input.pages,
+    pages: classifiedPages,
     signals: input.signals,
     draft,
   };

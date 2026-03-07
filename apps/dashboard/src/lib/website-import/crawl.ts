@@ -21,6 +21,9 @@ type CrawlResult = {
 type LinkCandidate = {
   url: string;
   score: number;
+  depth: number;
+  anchorText: string;
+  sourceSection: "nav" | "header" | "footer" | "button" | "content";
 };
 
 const SOCIAL_PATTERNS: Array<{ platform: SocialLink["platform"]; pattern: RegExp }> = [
@@ -38,6 +41,11 @@ const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{7,}\d)/g;
 const HOURS_PATTERN = /\b(?:hours|tasting room hours|open|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b[^\n]{0,180}(?:\d{1,2}[:.]?\d{0,2}\s?(?:am|pm)?\s?(?:-|–|to)\s?\d{1,2}[:.]?\d{0,2}\s?(?:am|pm)?|closed|noon)/i;
 const ADDRESS_PATTERN = /\b\d{1,6}\s+[A-Za-z0-9.'#\-\s]{3,80}(?:street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|way|suite|ste\.?|unit)\b[^\n]{0,120}/i;
 const TRACKING_QUERY_PARAMS = new Set(["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "mc_cid", "mc_eid"]);
+const JUNK_QUERY_PREFIXES = ["utm_", "oly_", "vero_", "hsa_"];
+const JUNK_PATH_REGEX = /(\/tag\/|\/category\/|\/author\/|\/feed\/?$|\/wp-admin|\/wp-json|\/xmlrpc\.php|\/cart|\/checkout|\/my-account|\/search\b|\?s=)/i;
+const JUNK_FILENAME_REGEX = /\.(xml|rss|txt|csv|json)(\?|$)/i;
+const BOOKING_PLATFORM_REGEX = /(opentable|resy|tock|toasttab|sevenrooms|exploretock|bookeo)/i;
+const BOOKING_LINK_HINT_REGEX = /(reserve|reservation|book\s+now|book\s+a\s+table|book\s+an\s+experience|tickets?|rsvp)/i;
 const HIGH_SIGNAL_PATHS = [
   "/contact",
   "/about",
@@ -101,7 +109,8 @@ function normalizeCrawlUrl(raw: string, baseUrl: string): string | null {
     url.hash = "";
 
     for (const key of Array.from(url.searchParams.keys())) {
-      if (TRACKING_QUERY_PARAMS.has(key.toLowerCase())) {
+      const lowerKey = key.toLowerCase();
+      if (TRACKING_QUERY_PARAMS.has(lowerKey) || JUNK_QUERY_PREFIXES.some((prefix) => lowerKey.startsWith(prefix))) {
         url.searchParams.delete(key);
       }
     }
@@ -118,15 +127,17 @@ function normalizeCrawlUrl(raw: string, baseUrl: string): string | null {
       url.pathname = url.pathname.slice(0, -1);
     }
 
+    url.pathname = url.pathname
+      .replace(/\/index\.html?$/i, "")
+      .replace(/\/default\.aspx?$/i, "");
+
     const lowerPath = url.pathname.toLowerCase();
-    if (
-      /\/tag\//.test(lowerPath)
-      || /\/category\//.test(lowerPath)
-      || /\/page\/\d+/.test(lowerPath)
-      || /\/wp-admin/.test(lowerPath)
-      || /\/wp-json/.test(lowerPath)
-    ) {
+    if (JUNK_PATH_REGEX.test(lowerPath) || JUNK_FILENAME_REGEX.test(lowerPath) || /\/page\/\d+/.test(lowerPath)) {
       return null;
+    }
+
+    if (url.pathname === "") {
+      url.pathname = "/";
     }
 
     return url.toString();
@@ -156,7 +167,23 @@ function extractFooterText(html: string) {
   return htmlToSignalText(chunks.join(" "));
 }
 
-function extractLinks(html: string, pageUrl: string): LinkCandidate[] {
+function detectSourceSection(context: string): "nav" | "header" | "footer" | "button" | "content" {
+  if (/<footer/.test(context)) {
+    return "footer";
+  }
+  if (/<nav/.test(context)) {
+    return "nav";
+  }
+  if (/<header/.test(context)) {
+    return "header";
+  }
+  if (/(button|btn|cta)/.test(context)) {
+    return "button";
+  }
+  return "content";
+}
+
+function extractLinks(html: string, pageUrl: string, depth: number): LinkCandidate[] {
   const links: LinkCandidate[] = [];
   const hrefPattern = /<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let match: RegExpExecArray | null;
@@ -170,14 +197,28 @@ function extractLinks(html: string, pageUrl: string): LinkCandidate[] {
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
+    const context = html.slice(Math.max(0, match.index - 240), Math.min(html.length, match.index + 140)).toLowerCase();
+    const sourceSection = detectSourceSection(context);
+    const navBonus = sourceSection === "nav" || sourceSection === "header" ? 18 : 0;
+    const footerBonus = sourceSection === "footer" ? 10 : 0;
+    const ctaBonus = sourceSection === "button" ? 10 : 0;
     const bonus =
-      /contact|about|faq|hours|visit|reserv|book|menu|event|policy|privacy|terms/.test(anchorText)
+      /contact|about|faq|hours|visit|reserv|book|menu|event|policy|privacy|terms|club|membership|catering|private/.test(anchorText)
         ? 16
         : 0;
 
+    const bookingBonus = BOOKING_LINK_HINT_REGEX.test(anchorText) ? 12 : 0;
+
+    if (anchorText.length < 2 && sourceSection === "content") {
+      continue;
+    }
+
     links.push({
       url: normalized,
-      score: linkPriorityScore(normalized) + bonus,
+      score: linkPriorityScore(normalized) + bonus + navBonus + footerBonus + ctaBonus + bookingBonus,
+      depth: depth + 1,
+      anchorText,
+      sourceSection,
     });
   }
 
@@ -339,6 +380,33 @@ function collectSignalsFromHtml(args: {
     }
   }
 
+  const bookingLinkPattern = /<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let bookingMatch: RegExpExecArray | null;
+  while ((bookingMatch = bookingLinkPattern.exec(html)) !== null) {
+    const href = bookingMatch[1] ?? "";
+    const normalized = normalizeCandidateUrl(href, pageUrl);
+    if (!normalized) {
+      continue;
+    }
+
+    const label = decodeHtml((bookingMatch[2] ?? "").replace(/<[^>]+>/g, " "))
+      .replace(/\s+/g, " ")
+      .trim();
+    const haystack = `${normalized} ${label}`;
+
+    if (!BOOKING_LINK_HINT_REGEX.test(haystack) && !BOOKING_PLATFORM_REGEX.test(normalized)) {
+      continue;
+    }
+
+    const platform = BOOKING_PLATFORM_REGEX.exec(normalized)?.[1]?.toLowerCase() ?? null;
+    signals.bookingLinks.push({
+      url: normalized,
+      label,
+      sourceUrl: pageUrl,
+      platform,
+    });
+  }
+
   const colorPattern = /#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b/g;
   for (const value of collectRegexMatches(html, colorPattern)) {
     const normalized = normalizeHexColor(value);
@@ -436,12 +504,37 @@ function collectSignalsFromHtml(args: {
   }
 }
 
+function extractHeadingText(html: string): string[] {
+  const headings: string[] = [];
+  const headingPattern = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = headingPattern.exec(html)) !== null) {
+    const value = decodeHtml((match[1] ?? "").replace(/<[^>]+>/g, " "))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (value) {
+      headings.push(value);
+    }
+    if (headings.length >= 18) {
+      break;
+    }
+  }
+  return headings;
+}
+
+function extractMetaDescription(html: string): string {
+  const match = /<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["'][^>]*>/i.exec(html)
+    ?? /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["'][^>]*>/i.exec(html);
+  return decodeHtml((match?.[1] ?? "").trim());
+}
+
 function dedupeSignals(signals: ImportSignals): ImportSignals {
   return {
     emails: uniqueBy(signals.emails, (entry) => `${entry.value.toLowerCase()}::${entry.sourceUrl}`),
     phones: uniqueBy(signals.phones, (entry) => `${entry.value.toLowerCase()}::${entry.sourceUrl}`),
     addresses: uniqueBy(signals.addresses, (entry) => `${entry.value.toLowerCase()}::${entry.sourceUrl}`),
     hours: uniqueBy(signals.hours, (entry) => `${entry.value.toLowerCase()}::${entry.sourceUrl}`),
+    bookingLinks: uniqueBy(signals.bookingLinks, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
     socialLinks: uniqueBy(signals.socialLinks, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
     logoCandidates: uniqueBy(signals.logoCandidates, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
     faviconCandidates: uniqueBy(signals.faviconCandidates, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
@@ -452,14 +545,55 @@ function dedupeSignals(signals: ImportSignals): ImportSignals {
 
 export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
   const normalizedSeed = normalizeWebsiteUrl(seedUrl);
-  const queue: LinkCandidate[] = [{ url: normalizedSeed, score: 100 }];
+  const queue: LinkCandidate[] = [{ url: normalizedSeed, score: 140, depth: 0, anchorText: "seed", sourceSection: "content" }];
+  const discovered = new Map<string, { score: number; count: number; depth: number }>();
+  const anchorTextsByUrl = new Map<string, Set<string>>();
+
+  const enqueue = (candidate: LinkCandidate) => {
+    if (candidate.depth > WEBSITE_IMPORT_LIMITS.maxDepth) {
+      return;
+    }
+
+    const existing = discovered.get(candidate.url);
+    if (!existing) {
+      discovered.set(candidate.url, {
+        score: candidate.score,
+        count: 1,
+        depth: candidate.depth,
+      });
+      queue.push(candidate);
+    } else {
+      existing.count += 1;
+      existing.depth = Math.min(existing.depth, candidate.depth);
+      existing.score = Math.max(existing.score, candidate.score + Math.min(existing.count * 3, 24));
+      for (const queued of queue) {
+        if (queued.url === candidate.url) {
+          queued.score = Math.max(queued.score, existing.score);
+          queued.depth = Math.min(queued.depth, existing.depth);
+          break;
+        }
+      }
+    }
+
+    if (candidate.anchorText) {
+      const existingAnchors = anchorTextsByUrl.get(candidate.url) ?? new Set<string>();
+      existingAnchors.add(candidate.anchorText.slice(0, 120));
+      anchorTextsByUrl.set(candidate.url, existingAnchors);
+    }
+  };
 
   for (const path of HIGH_SIGNAL_PATHS) {
     const candidate = normalizeCrawlUrl(path, normalizedSeed);
     if (!candidate) {
       continue;
     }
-    queue.push({ url: candidate, score: 80 + linkPriorityScore(candidate) });
+    enqueue({
+      url: candidate,
+      score: 96 + linkPriorityScore(candidate),
+      depth: 1,
+      anchorText: path,
+      sourceSection: "nav",
+    });
   }
 
   queue.sort((a, b) => b.score - a.score);
@@ -471,6 +605,7 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
     phones: [],
     addresses: [],
     hours: [],
+    bookingLinks: [],
     socialLinks: [],
     logoCandidates: [],
     faviconCandidates: [],
@@ -486,6 +621,12 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
     if (!nextUrl || seen.has(nextUrl)) {
       continue;
     }
+
+    const currentDepth = next?.depth ?? 0;
+    if (currentDepth > WEBSITE_IMPORT_LIMITS.maxDepth) {
+      continue;
+    }
+
     seen.add(nextUrl);
 
     let response: Response;
@@ -537,21 +678,30 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
       url: nextUrl,
       title,
       textExcerpt,
+      metaDescription: extractMetaDescription(html),
+      headingText: extractHeadingText(html),
+      sourceAnchorTexts: Array.from(anchorTextsByUrl.get(nextUrl) ?? []).slice(0, 12),
     });
 
     totalChars += textExcerpt.length;
 
     collectSignalsFromHtml({ html, signalText, footerText, pageUrl: nextUrl, signals });
 
-    const links = extractLinks(html, nextUrl);
+    const links = extractLinks(html, nextUrl, currentDepth);
     for (const link of links) {
       if (!isSameDomain(normalizedSeed, link.url) || seen.has(link.url)) {
         continue;
       }
-      queue.push(link);
+      enqueue(link);
     }
 
-    queue.sort((a, b) => b.score - a.score);
+    queue.sort((left, right) => {
+      const l = discovered.get(left.url);
+      const r = discovered.get(right.url);
+      const lScore = (l?.score ?? left.score) - left.depth * 4;
+      const rScore = (r?.score ?? right.score) - right.depth * 4;
+      return rScore - lScore;
+    });
   }
 
   return {

@@ -44,6 +44,49 @@ export type KnowledgeProgram = {
     membershipNotes?: string;
     menuSummary?: string;
   };
+  structuredWebsiteKnowledge: {
+    pageClassification: Array<{ url: string; title: string; pageType: string }>;
+    events: Array<{
+      id: string;
+      title: string;
+      date: string | null;
+      time: string | null;
+      description: string;
+      category: string;
+      bookingInfo: string | null;
+      sourceUrl: string | null;
+      recurring: boolean;
+    }>;
+    menuSections: Array<{
+      id: string;
+      title: string;
+      sourceUrl: string | null;
+      items: Array<{
+        id: string;
+        name: string;
+        price: string | null;
+        description: string;
+        dietaryNotes: string | null;
+      }>;
+    }>;
+    reservations: {
+      sourceUrl: string | null;
+      bookingUrl: string | null;
+      platforms: string[];
+      instructions: string;
+      partySizeNotes: string | null;
+      depositPolicy: string | null;
+      experienceNotes: string | null;
+    };
+    memberships: {
+      sourceUrl: string | null;
+      name: string;
+      benefits: string;
+      pickupDetails: string | null;
+      signupUrl: string | null;
+      memberEventNotes: string | null;
+    };
+  };
 };
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -103,6 +146,28 @@ export function buildKnowledgeProgramFromBusiness(business: BusinessProfile): Kn
     faqs: business.faqs.map((entry) => ({ ...entry })),
     policies: business.policies.map((entry) => ({ ...entry })),
     importedInsights: {},
+    structuredWebsiteKnowledge: {
+      pageClassification: [],
+      events: [],
+      menuSections: [],
+      reservations: {
+        sourceUrl: null,
+        bookingUrl: null,
+        platforms: [],
+        instructions: "",
+        partySizeNotes: null,
+        depositPolicy: null,
+        experienceNotes: null,
+      },
+      memberships: {
+        sourceUrl: null,
+        name: "",
+        benefits: "",
+        pickupDetails: null,
+        signupUrl: null,
+        memberEventNotes: null,
+      },
+    },
   };
 }
 
@@ -113,6 +178,7 @@ export function hydrateKnowledgeProgram(value: unknown, fallback: KnowledgeProgr
   const training = asObject(structured.training);
   const uploadedSources = Array.isArray(structured.uploadedSources) ? structured.uploadedSources : [];
   const importedInsights = asObject(root.importedInsights);
+  const structuredWebsiteKnowledge = asObject(root.structuredWebsiteKnowledge);
 
   return {
     setupPrompt: asString(structured.setupPrompt) || fallback.setupPrompt,
@@ -170,6 +236,25 @@ export function hydrateKnowledgeProgram(value: unknown, fallback: KnowledgeProgr
       membershipNotes: asString(importedInsights.membershipNotes) || undefined,
       menuSummary: asString(importedInsights.menuSummary) || undefined,
     },
+    structuredWebsiteKnowledge: {
+      pageClassification: Array.isArray(structuredWebsiteKnowledge.pageClassification)
+        ? (structuredWebsiteKnowledge.pageClassification as KnowledgeProgram["structuredWebsiteKnowledge"]["pageClassification"])
+        : fallback.structuredWebsiteKnowledge.pageClassification,
+      events: Array.isArray(structuredWebsiteKnowledge.events)
+        ? (structuredWebsiteKnowledge.events as KnowledgeProgram["structuredWebsiteKnowledge"]["events"])
+        : fallback.structuredWebsiteKnowledge.events,
+      menuSections: Array.isArray(structuredWebsiteKnowledge.menuSections)
+        ? (structuredWebsiteKnowledge.menuSections as KnowledgeProgram["structuredWebsiteKnowledge"]["menuSections"])
+        : fallback.structuredWebsiteKnowledge.menuSections,
+      reservations: {
+        ...fallback.structuredWebsiteKnowledge.reservations,
+        ...(asObject(structuredWebsiteKnowledge.reservations) as Partial<KnowledgeProgram["structuredWebsiteKnowledge"]["reservations"]>),
+      },
+      memberships: {
+        ...fallback.structuredWebsiteKnowledge.memberships,
+        ...(asObject(structuredWebsiteKnowledge.memberships) as Partial<KnowledgeProgram["structuredWebsiteKnowledge"]["memberships"]>),
+      },
+    },
   };
 }
 
@@ -186,6 +271,7 @@ export function toKnowledgeConfig(program: KnowledgeProgram) {
     importedFaqs: program.faqs,
     importedPolicies: program.policies,
     importedInsights: program.importedInsights,
+    structuredWebsiteKnowledge: program.structuredWebsiteKnowledge,
   };
 }
 

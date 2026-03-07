@@ -224,6 +224,16 @@ function KnowledgeEditor() {
   const applyImportedContent = (payload: ImportedKnowledgePayload) => {
     setProgram((current) => {
       if (!current) return current;
+      const eventSummary = payload.structured?.events
+        ?.map((entry) => `${entry.title}${entry.date ? ` (${entry.date}${entry.time ? ` ${entry.time}` : ""})` : ""}`)
+        .slice(0, 4)
+        .join("; ");
+
+      const menuSummary = payload.structured?.menuSections
+        ?.map((section) => `${section.title}: ${section.items.slice(0, 3).map((item) => item.name).join(", ")}`)
+        .slice(0, 3)
+        .join(" | ");
+
       return {
         ...current,
         fields: {
@@ -231,10 +241,10 @@ function KnowledgeEditor() {
           businessOverview: payload.shortDescription ?? current.fields.businessOverview,
           locationDetails: payload.address ?? current.fields.locationDetails,
           hours: payload.hours ?? current.fields.hours,
-          menuHighlights: payload.insights?.menuSummary ?? current.fields.menuHighlights,
-          reservationsGuidance: payload.insights?.reservationGuidance ?? current.fields.reservationsGuidance,
-          upcomingEvents: payload.insights?.eventHighlights ?? current.fields.upcomingEvents,
-          memberships: payload.insights?.membershipNotes ?? current.fields.memberships,
+          menuHighlights: menuSummary ?? payload.insights?.menuSummary ?? current.fields.menuHighlights,
+          reservationsGuidance: payload.structured?.reservations.instructions || payload.insights?.reservationGuidance || current.fields.reservationsGuidance,
+          upcomingEvents: eventSummary ?? payload.insights?.eventHighlights ?? current.fields.upcomingEvents,
+          memberships: payload.structured?.memberships.benefits || payload.insights?.membershipNotes || current.fields.memberships,
         },
         importedInsights: {
           eventHighlights: payload.insights?.eventHighlights,
@@ -242,6 +252,21 @@ function KnowledgeEditor() {
           membershipNotes: payload.insights?.membershipNotes,
           menuSummary: payload.insights?.menuSummary,
         },
+        structuredWebsiteKnowledge: payload.structured
+          ? {
+              pageClassification: payload.structured.pageClassification,
+              events: payload.structured.events,
+              menuSections: payload.structured.menuSections,
+              reservations: {
+                ...current.structuredWebsiteKnowledge.reservations,
+                ...payload.structured.reservations,
+              },
+              memberships: {
+                ...current.structuredWebsiteKnowledge.memberships,
+                ...payload.structured.memberships,
+              },
+            }
+          : current.structuredWebsiteKnowledge,
         faqs: payload.faqs.length ? payload.faqs : current.faqs,
         policies: payload.policies.length ? payload.policies : current.policies,
       };
@@ -379,6 +404,27 @@ function KnowledgeEditor() {
 
       <SectionCard title="Website crawl and imported intelligence" description="Import website content and merge it into your knowledge program.">
         <WebsiteImportPanel business={business} onApplyImportedContent={applyImportedContent} />
+      </SectionCard>
+
+      <SectionCard title="Imported structured website knowledge" description="Tandem groups extracted website data by restaurant knowledge type.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Events</p>
+            <p className="mt-1">{program.structuredWebsiteKnowledge.events.length} detected</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Menus</p>
+            <p className="mt-1">{program.structuredWebsiteKnowledge.menuSections.length} sections detected</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Reservations</p>
+            <p className="mt-1">{program.structuredWebsiteKnowledge.reservations.instructions ? "Detected" : "Not detected"}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900">Memberships</p>
+            <p className="mt-1">{program.structuredWebsiteKnowledge.memberships.benefits ? "Detected" : "Not detected"}</p>
+          </div>
+        </div>
       </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-2">

@@ -121,6 +121,11 @@ export async function POST(
       })
       .eq("id", run.id);
 
+    const appliedKnowledgeConfig = asObject(applied.knowledgeConfig);
+    const structuredWebsiteKnowledge = asObject(appliedKnowledgeConfig.structuredWebsiteKnowledge);
+    const structuredEvents = Array.isArray(structuredWebsiteKnowledge.events) ? structuredWebsiteKnowledge.events : [];
+    const structuredMenus = Array.isArray(structuredWebsiteKnowledge.menuSections) ? structuredWebsiteKnowledge.menuSections : [];
+
     return NextResponse.json({
       ok: true,
       runId,
@@ -129,6 +134,8 @@ export async function POST(
       summary: {
         faqCount: applied.faqs.length,
         policyCount: applied.policies.length,
+        eventCount: structuredEvents.length,
+        menuSectionCount: structuredMenus.length,
         theme: applied.theme,
         profile: {
           name: draft.businessProfile.name.value,
@@ -138,7 +145,7 @@ export async function POST(
           hours: draft.businessProfile.hours.value,
         },
       },
-      knowledgeConfig: asObject(applied.knowledgeConfig),
+      knowledgeConfig: appliedKnowledgeConfig,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {

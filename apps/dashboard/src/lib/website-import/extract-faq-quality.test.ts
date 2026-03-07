@@ -8,6 +8,7 @@ const emptySignals: ImportSignals = {
   phones: [],
   addresses: [],
   hours: [],
+  bookingLinks: [],
   socialLinks: [],
   logoCandidates: [],
   faviconCandidates: [],

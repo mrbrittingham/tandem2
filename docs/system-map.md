@@ -2,6 +2,8 @@
 
 This document describes what is actually running in this repo today.
 
+For current website-import classification/extraction/apply details and structured-knowledge chat preference behavior, use `docs/architecture.md` as the canonical reference.
+
 ## Monorepo layout
 
 - `apps/dashboard`: Next.js App Router app (operator console + API surface).

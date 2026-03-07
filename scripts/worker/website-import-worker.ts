@@ -180,11 +180,20 @@ async function processRun(client: WorkerSupabaseClient, run: ClaimedRun) {
     const result = await runWebsiteImport(run.url);
     await markRunSucceeded(client, run, result);
 
+    const pageTypeCounts = result.draft.pageClassification.reduce<Record<string, number>>((accumulator, page) => {
+      accumulator[page.pageType] = (accumulator[page.pageType] ?? 0) + 1;
+      return accumulator;
+    }, {});
+
     console.info("[import-worker] run succeeded", {
       workerId: WORKER_ID,
       runId: run.id,
       locationId: run.location_id,
       pages: result.pages.length,
+      pageTypeCounts,
+      events: result.draft.restaurantKnowledge.events.length,
+      menuSections: result.draft.restaurantKnowledge.menuSections.length,
+      bookingDetected: Boolean(result.draft.restaurantKnowledge.reservations.bookingUrl || result.draft.restaurantKnowledge.reservations.instructions),
       faqs: result.draft.faqs.length,
       policies: result.draft.policies.length,
     });

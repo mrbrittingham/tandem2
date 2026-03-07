@@ -13,6 +13,7 @@ type ChatScopeInput = {
 
 type ChatPostBody = ChatScopeInput & {
   messages?: Array<{ role?: unknown; content?: unknown }>;
+  system?: string;
 };
 
 type LocationRow = {
@@ -36,6 +37,125 @@ type ScopeResolutionFailure = {
 };
 
 type ScopeResolution = ScopeResolutionSuccess | ScopeResolutionFailure;
+
+function asObject(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+export function buildKnowledgeSystemPrompt(knowledgeConfig: unknown): string {
+  const root = asObject(knowledgeConfig);
+  const structured = asObject(root.structured);
+  const fields = asObject(structured.fields);
+  const imported = asObject(root.structuredWebsiteKnowledge);
+  const contact = asObject(root.contact);
+  const importedPolicies = Array.isArray(root.importedPolicies) ? root.importedPolicies : [];
+  const reservations = asObject(imported.reservations);
+  const memberships = asObject(imported.memberships);
+  const events = Array.isArray(imported.events) ? imported.events.slice(0, 12) : [];
+  const menuSections = Array.isArray(imported.menuSections) ? imported.menuSections.slice(0, 6) : [];
+
+  const eventLines = events
+    .map((entry) => {
+      const object = asObject(entry);
+      const title = asString(object.title);
+      if (!title) {
+        return "";
+      }
+      const date = asString(object.date);
+      const time = asString(object.time);
+      const description = asString(object.description).slice(0, 180);
+      const sourceUrl = asString(object.sourceUrl);
+      const bookingInfo = asString(object.bookingInfo);
+      const category = asString(object.category);
+      return [
+        `- ${title}${date ? ` | ${date}` : ""}${time ? ` ${time}` : ""}`,
+        category ? `  category: ${category}` : "",
+        description ? `  summary: ${description}` : "",
+        bookingInfo ? `  booking: ${bookingInfo}` : "",
+        sourceUrl ? `  url: ${sourceUrl}` : "",
+      ].filter(Boolean).join("\n");
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const menuLines = menuSections
+    .map((entry) => {
+      const object = asObject(entry);
+      const sectionTitle = asString(object.title);
+      const items = Array.isArray(object.items) ? object.items.slice(0, 5) : [];
+      const names = items.map((item) => asString(asObject(item).name)).filter(Boolean);
+      if (!sectionTitle && !names.length) {
+        return "";
+      }
+      return `- ${sectionTitle || "Menu"}: ${names.join(", ")}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const policyLines = importedPolicies
+    .slice(0, 6)
+    .map((entry) => {
+      const object = asObject(entry);
+      const title = asString(object.title);
+      const description = asString(object.description);
+      if (!title || !description) {
+        return "";
+      }
+      return `- ${title}: ${description.slice(0, 180)}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const reservationBookingUrl = asString(reservations.bookingUrl);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const sections = [
+    "You are a restaurant concierge assistant. Prioritize structured website-derived knowledge over generic assumptions.",
+    "If data is missing, say you are not sure and offer the best next step.",
+    "When asked to book, provide the reservation URL/platform if available.",
+    `Current date: ${todayIso}`,
+    "Event answer rules: Use only the event records listed below for event-specific answers; do not invent events.",
+    "Event answer rules: For general event questions, prioritize nearest upcoming events first and avoid past events unless asked.",
+    "Event answer rules: For 'this weekend', interpret weekend as Friday-Sunday relative to the current date.",
+    "Event answer rules: If a named event is requested (for example, a wine club pickup party), return that event's date, time, summary, booking guidance, and event URL first.",
+    `Business overview: ${asString(fields.businessOverview)}`,
+    `Cuisine/service style: ${asString(fields.cuisineServiceStyle)}`,
+    `Hours: ${asString(fields.hours) || asString(contact.hours)}`,
+    `Location details: ${asString(fields.locationDetails) || asString(contact.address)}`,
+    `Phone: ${asString(contact.phone)}`,
+    `Email: ${asString(contact.email)}`,
+    `Reservation guidance: ${asString(fields.reservationsGuidance) || asString(reservations.instructions)}`,
+    reservationBookingUrl ? `Reservation booking URL: ${reservationBookingUrl}` : "",
+    `Membership guidance: ${asString(fields.memberships) || asString(memberships.benefits)}`,
+    `Menu highlights: ${asString(fields.menuHighlights)}`,
+    eventLines ? `Upcoming events:\n${eventLines}` : "",
+    menuLines ? `Menu sections:\n${menuLines}` : "",
+    policyLines ? `Policies:\n${policyLines}` : "",
+  ].filter((entry) => entry.trim().length > 0);
+
+  return sections.join("\n\n");
+}
+
+async function loadLocationKnowledgeConfig(locationId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase
+      .from("business_location_configs")
+      .select("knowledge_config")
+      .eq("location_id", locationId)
+      .maybeSingle<{ knowledge_config: Record<string, unknown> | null }>();
+    return data?.knowledge_config ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function readScopeValue(value: unknown): string | undefined {
   if (typeof value !== "string") {
@@ -250,12 +370,16 @@ export async function POST(request: Request) {
       });
     }
 
+    const locationKnowledgeConfig = await loadLocationKnowledgeConfig(resolvedScope.locationId);
+    const knowledgeSystem = locationKnowledgeConfig ? buildKnowledgeSystemPrompt(locationKnowledgeConfig) : "";
+
     const nextBody = {
       ...body,
       businessId: resolvedScope.businessId,
       businessSlug: resolvedScope.businessSlug,
       locationId: resolvedScope.locationId,
       locationSlug: resolvedScope.locationSlug,
+      system: [knowledgeSystem, body.system].filter((entry) => typeof entry === "string" && entry.trim().length > 0).join("\n\n"),
     };
 
     const nextRequest = new Request(request.url, {

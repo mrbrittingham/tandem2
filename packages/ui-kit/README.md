@@ -31,3 +31,11 @@ Embeddable React UI package for Tandem chat surfaces.
 
 - This package assumes host APIs are compatible with dashboard chat routes.
 - For full app setup and environment requirements, use root docs: `README.md` and `RUNBOOK.md`.
+
+## Contributor Guidance
+
+For repository-level architecture and agent workflow guidance, use:
+- `AGENTS.md`
+- `docs/architecture.md`
+- `docs/DATABASE_SCHEMA.md`
+- `docs/REPO_INDEX.md`
