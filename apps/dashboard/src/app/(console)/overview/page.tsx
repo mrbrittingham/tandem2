@@ -103,24 +103,22 @@ function OverviewPageClient() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const hasScope = Boolean(businessId && locationSlug);
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!businessId || !locationSlug) {
-      setSessions([]);
-      setSessionsError(null);
-      setSessionsLoading(false);
+    if (!hasScope) {
       return;
     }
 
     let cancelled = false;
     const controller = new AbortController();
-    setSessionsLoading(true);
-    setSessionsError(null);
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setSessionsLoading(true);
+      setSessionsError(null);
+    });
 
     const url = `/api/conversations?businessId=${encodeURIComponent(businessId)}&locationSlug=${encodeURIComponent(locationSlug)}&range=${selectedRange}`;
     fetch(url, { signal: controller.signal })
@@ -153,7 +151,7 @@ function OverviewPageClient() {
       cancelled = true;
       controller.abort();
     };
-  }, [businessId, locationSlug, selectedRange]);
+  }, [businessId, hasScope, locationSlug, selectedRange]);
 
   const updateRange = (nextRange: RangeKey) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -161,54 +159,26 @@ function OverviewPageClient() {
     router.replace(`${pathname}?${next.toString()}`);
   };
 
-  if (!business) {
-    return (
-      <EmptyState
-        title="Create your first location assistant"
-        description="Add a location to unlock setup checklists, preview, and install docs."
-        actionLabel="Add location"
-        onAction={openCreateLocation}
-      />
-    );
-  }
-
-  const enabledFaqs = business.faqs.filter((faq) => faq.showInHelp);
-  const enabledPolicies = business.policies.filter((policy) => policy.showInHelp);
-  const liveContacts = business.handoff.contactMethods.filter((method) => method.enabled);
-  const widgetIntegration = business.integrations.find((integration) =>
-    integration.category.toLowerCase().includes("website") || integration.name.toLowerCase().includes("widget"),
-  );
-
-  const locationComplete = Boolean((business.locationName ?? "").trim());
-  const faqsComplete = enabledFaqs.length >= 3;
-  const contactComplete = liveContacts.length > 0;
-  const widgetInstalled = widgetIntegration?.status === "connected";
-  const assistantTested = business.intents.length >= 1;
-  const assistantLive = locationComplete && faqsComplete && contactComplete && widgetInstalled && assistantTested;
-
-  const checklistProgress: Record<(typeof checklistConfig)[number]["key"], boolean> = {
-    location: locationComplete,
-    faqs: faqsComplete,
-    handoff: contactComplete,
-    widget: widgetInstalled,
-    test: assistantTested,
-  };
-
-  const checklistState = checklistConfig.map((item) => ({
-    ...item,
-    completed: checklistProgress[item.key],
-  }));
-  const completedCount = checklistState.filter((item) => item.completed).length;
-  const onboardingComplete = completedCount === checklistState.length;
-
   const snippet = useMemo(() => {
-    const snippetBusinessId = business.businessSlug ?? business.slug;
-    const snippetLocationSlug = business.locationSlug ?? business.slug;
+    const snippetBusinessId = business?.businessSlug ?? business?.slug ?? "business";
+    const snippetLocationSlug = business?.locationSlug ?? business?.slug ?? "location";
     return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${snippetBusinessId}" data-location="${snippetLocationSlug}"></script>`;
-  }, [business.businessSlug, business.locationSlug, business.slug]);
+  }, [business?.businessSlug, business?.locationSlug, business?.slug]);
+
+  const latestKnowledgeUpdate = useMemo(() => {
+    if (!business) {
+      return undefined;
+    }
+
+    return [...business.faqs, ...business.policies]
+      .map((item) => item.updatedAt)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+  }, [business]);
 
   const rangeSessionData = useMemo(() => {
-    if (!sessions.length) {
+    const sessionsForRange = hasScope ? sessions : [];
+    if (!sessionsForRange.length) {
       return {
         filtered: [] as ConversationSession[],
         daily: [] as Array<{ label: string; count: number }>,
@@ -216,7 +186,7 @@ function OverviewPageClient() {
       };
     }
 
-    const newestTimestamp = sessions.reduce((latest, session) => {
+    const newestTimestamp = sessionsForRange.reduce((latest, session) => {
       const timestamp = toTimestamp(session.createdAt);
       if (Number.isNaN(timestamp)) {
         return latest;
@@ -236,7 +206,7 @@ function OverviewPageClient() {
     const oneDayMs = 24 * 60 * 60 * 1000;
     const start = newestTimestamp - (days - 1) * oneDayMs;
 
-    const filtered = sessions.filter((session) => {
+    const filtered = sessionsForRange.filter((session) => {
       const timestamp = toTimestamp(session.createdAt);
       return !Number.isNaN(timestamp) && timestamp >= start && timestamp <= newestTimestamp;
     });
@@ -262,7 +232,7 @@ function OverviewPageClient() {
     const activeDays = daily.filter((entry) => entry.count > 0).length;
 
     return { filtered, daily, activeDays };
-  }, [selectedRange, sessions]);
+  }, [hasScope, selectedRange, sessions]);
 
   const totalConversations = rangeSessionData.filtered.length;
   const avgPerActiveDay = rangeSessionData.activeDays
@@ -285,17 +255,15 @@ function OverviewPageClient() {
     return formatUtcMDY(new Date(newest).toISOString());
   }, [rangeSessionData.filtered]);
 
-  const knowledgeCount = enabledFaqs.length + enabledPolicies.length;
-  const latestKnowledgeUpdate = [...business.faqs, ...business.policies]
-    .map((item) => item.updatedAt)
-    .filter(Boolean)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
-
-  const latestUpdateIso = [business.updatedAt, latestKnowledgeUpdate]
-    .filter(Boolean)
-    .sort((a, b) => toTimestamp(b) - toTimestamp(a))[0];
-
   const recentActivity = useMemo(() => {
+    if (!business) {
+      return [] as Array<{ eventKey: string; label: string; timestamp: string; timestampMs: number }>;
+    }
+
+    const latestWidgetSync = business.integrations.find((integration) =>
+      integration.category.toLowerCase().includes("website") || integration.name.toLowerCase().includes("widget"),
+    )?.lastSynced;
+
     const events = [
       business.updatedAt
         ? {
@@ -311,11 +279,11 @@ function OverviewPageClient() {
             timestamp: latestKnowledgeUpdate,
           }
         : null,
-      widgetIntegration?.lastSynced
+      latestWidgetSync
         ? {
             eventKey: "widget-synced",
             label: "Widget integration synced",
-            timestamp: widgetIntegration.lastSynced,
+            timestamp: latestWidgetSync,
           }
         : null,
       sessions[0]?.updatedAt
@@ -345,7 +313,49 @@ function OverviewPageClient() {
         return a.eventKey < b.eventKey ? -1 : 1;
       })
       .slice(0, 6);
-  }, [business.updatedAt, latestKnowledgeUpdate, sessions, widgetIntegration?.lastSynced]);
+  }, [business, latestKnowledgeUpdate, sessions]);
+
+  if (!business) {
+    return (
+      <EmptyState
+        title="Create your first location assistant"
+        description="Add a location to unlock setup checklists, preview, and install docs."
+        actionLabel="Add location"
+        onAction={openCreateLocation}
+      />
+    );
+  }
+
+  const enabledFaqs = business.faqs.filter((faq) => faq.showInHelp);
+  const enabledPolicies = business.policies.filter((policy) => policy.showInHelp);
+  const liveContacts = business.handoff.contactMethods.filter((method) => method.enabled);
+  const widgetIntegration = business.integrations.find((integration) =>
+    integration.category.toLowerCase().includes("website") || integration.name.toLowerCase().includes("widget"),
+  );
+
+  const locationComplete = Boolean((business.locationName ?? "").trim());
+  const faqsComplete = enabledFaqs.length >= 3;
+  const contactComplete = liveContacts.length > 0;
+  const widgetInstalled = widgetIntegration?.status === "connected";
+  const assistantTested = business.intents.length >= 1;
+  const checklistProgress: Record<(typeof checklistConfig)[number]["key"], boolean> = {
+    location: locationComplete,
+    faqs: faqsComplete,
+    handoff: contactComplete,
+    widget: widgetInstalled,
+    test: assistantTested,
+  };
+
+  const checklistState = checklistConfig.map((item) => ({
+    ...item,
+    completed: checklistProgress[item.key],
+  }));
+  const completedCount = checklistState.filter((item) => item.completed).length;
+  const onboardingComplete = completedCount === checklistState.length;
+
+  const latestUpdateIso = [business.updatedAt, latestKnowledgeUpdate]
+    .filter(Boolean)
+    .sort((a, b) => toTimestamp(b) - toTimestamp(a))[0];
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(snippet);
@@ -353,7 +363,8 @@ function OverviewPageClient() {
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const hasScope = Boolean(businessId && locationSlug);
+  const visibleSessionsLoading = hasScope ? sessionsLoading : false;
+  const visibleSessionsError = hasScope ? sessionsError : null;
 
   return (
     <div className="space-y-8">
@@ -385,8 +396,8 @@ function OverviewPageClient() {
           ) : (
             <p className="mt-4 text-sm text-slate-600">Select a location to load conversation performance.</p>
           )}
-          {sessionsLoading ? <p className="mt-3 text-xs text-slate-500">Loading conversation metrics…</p> : null}
-          {sessionsError ? <p className="mt-3 text-xs text-rose-600">{sessionsError}</p> : null}
+          {visibleSessionsLoading ? <p className="mt-3 text-xs text-slate-500">Loading conversation metrics…</p> : null}
+          {visibleSessionsError ? <p className="mt-3 text-xs text-rose-600">{visibleSessionsError}</p> : null}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -505,11 +516,7 @@ function OverviewPageClient() {
           <h2 className="text-lg font-semibold text-slate-900">Recent activity</h2>
           <p className="mt-1 text-sm text-slate-600">Latest known updates from existing dashboard data.</p>
           <div className="mt-4 space-y-2">
-            {!isMounted ? (
-              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-5 text-sm text-slate-600">
-                Loading recent activity…
-              </div>
-            ) : recentActivity.length ? (
+            {recentActivity.length ? (
               recentActivity.map((event) => (
                 <div key={event.eventKey} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
                   <p className="text-sm font-medium text-slate-900">{event.label}</p>

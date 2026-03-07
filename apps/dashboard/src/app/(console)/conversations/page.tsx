@@ -168,12 +168,10 @@ function ConversationsWorkspace({
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedSessionId(selectedSessionIdFromUrl);
     if (selectedSessionIdFromUrl) {
       setMobileView("detail");
@@ -187,7 +185,6 @@ function ConversationsWorkspace({
   useEffect(() => {
     let cancelled = false;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSessionsLoading(true);
     setSessionError(null);
 

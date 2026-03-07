@@ -115,33 +115,21 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [draftTheme, setDraftTheme] = useState<WidgetThemeSettings | undefined>(undefined);
   const [isClientMounted, setIsClientMounted] = useState(false);
-  const [headerSearch, setHeaderSearch] = useState("");
-  const [showPreviewCoachmark, setShowPreviewCoachmark] = useState(false);
+  const [previewCoachmarkDismissed, setPreviewCoachmarkDismissed] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.localStorage.getItem("tandem:preview-coachmark-dismissed") === "1";
+  });
   const isPreviewOpen = Boolean(activeBusiness) && previewOpen;
+  const headerSearch = pathname === "/conversations" ? (searchParams.get("query") ?? "") : "";
+  const showPreviewCoachmark = isClientMounted && pathname === "/overview" && !previewCoachmarkDismissed;
   const currentPageHeading = useMemo(() => resolvePageHeading(pathname), [pathname]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsClientMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (pathname !== "/conversations") {
-      setHeaderSearch("");
-      return;
-    }
-    setHeaderSearch(searchParams.get("query") ?? "");
-  }, [pathname, searchParams]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || pathname !== "/overview") {
-      setShowPreviewCoachmark(false);
-      return;
-    }
-
-    const dismissed = window.localStorage.getItem("tandem:preview-coachmark-dismissed") === "1";
-    setShowPreviewCoachmark(!dismissed);
-  }, [pathname]);
 
   useEffect(() => {
     const debugLocation = searchParams.get("debugLocation") === "1";
@@ -286,8 +274,10 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
 
   const handleHeaderSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const queryValue = formData.get("query");
     const next = new URLSearchParams();
-    const trimmed = headerSearch.trim();
+    const trimmed = typeof queryValue === "string" ? queryValue.trim() : "";
     if (trimmed) {
       next.set("query", trimmed);
     }
@@ -295,7 +285,7 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
   };
 
   const dismissPreviewCoachmark = () => {
-    setShowPreviewCoachmark(false);
+    setPreviewCoachmarkDismissed(true);
     if (typeof window !== "undefined") {
       window.localStorage.setItem("tandem:preview-coachmark-dismissed", "1");
     }
@@ -343,8 +333,9 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
                         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
                         <input
                           type="search"
-                          value={headerSearch}
-                          onChange={(event) => setHeaderSearch(event.target.value)}
+                          key={`${pathname}:${headerSearch}`}
+                          name="query"
+                          defaultValue={headerSearch}
                           placeholder="Search conversations (name, email, phone, keywords)..."
                           aria-label="Search conversations"
                           className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[var(--console-primary)] focus:outline-none"
@@ -424,7 +415,7 @@ function ConsoleLayoutClient({ children }: { children: React.ReactNode }) {
           <span className="sr-only">Open preview</span>
         </button>
 
-        {isClientMounted && pathname === "/overview" && showPreviewCoachmark ? (
+        {showPreviewCoachmark ? (
           <div className="fixed bottom-20 right-24 z-40">
             <div className="flex items-end gap-2">
               <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg shadow-slate-900/10">

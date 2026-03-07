@@ -431,7 +431,7 @@ export default function LocationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLocation?.id, selectedLocation?.locationSlug, selectedLocation?.businessSlug, activeLocation?.id]);
+  }, [selectedLocation, activeLocation?.id]);
 
   const syncEditForm = (locationId: string) => {
     const location = locations.find((entry) => entry.id === locationId);
