@@ -105,6 +105,12 @@ export function buildKnowledgeImportPayload(runId: string, sourceUrl: string, dr
       importedSummary: importDocument,
       importedFaqs: faqs,
       importedPolicies: policies,
+      importedInsights: {
+        eventHighlights: draft.restaurantInsights?.eventHighlights ?? null,
+        reservationGuidance: draft.restaurantInsights?.reservationGuidance ?? null,
+        membershipNotes: draft.restaurantInsights?.membershipNotes ?? null,
+        menuSummary: draft.restaurantInsights?.menuSummary ?? null,
+      },
       contact: {
         phone: draft.businessProfile.phone.value,
         email: draft.businessProfile.email.value,

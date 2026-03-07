@@ -29,8 +29,21 @@ type RawDraft = {
   social_links?: unknown;
   faqs?: unknown;
   policies?: unknown;
+  event_highlights?: unknown;
+  reservation_guidance?: unknown;
+  membership_notes?: unknown;
+  menu_summary?: unknown;
   brand?: unknown;
 };
+
+function bestPageSnippet(pages: CrawledPage[], matcher: RegExp, fallbackLength = 220): string | null {
+  const page = pages.find((entry) => matcher.test(`${entry.url} ${entry.title} ${entry.textExcerpt}`.toLowerCase()));
+  if (!page) {
+    return null;
+  }
+  const compact = page.textExcerpt.replace(/\s+/g, " ").trim();
+  return compact.slice(0, fallbackLength) || null;
+}
 
 const POLICY_HINT_REGEX = /(policy|policies|terms|privacy|return|refund|shipping|reservation|booking|cancellation|cancel)/i;
 const POLICY_NOISE_REGEX = /(skip\s+to\s+content|main\s+menu|see\s+more|share\b|comments?|likes?|copy\s+link|facebook|instagram|x\.com|twitter|pinterest|utm_|cookie\s+policy|newsletter)/i;
@@ -370,6 +383,12 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
         confidence: logo ? 0.7 : 0,
       },
     },
+    restaurantInsights: {
+      eventHighlights: bestPageSnippet(pages, /event|music|calendar|happenings|what'?s on/, 260),
+      reservationGuidance: bestPageSnippet(pages, /reserv|book|table|opentable|resy/, 260),
+      membershipNotes: bestPageSnippet(pages, /club|membership|wine club|loyalty/, 260),
+      menuSummary: bestPageSnippet(pages, /menu|dining|food|drink|tasting/, 260),
+    },
     evidence: {
       pages: pages.map((page) => ({ url: page.url, title: page.title })),
     },
@@ -586,6 +605,12 @@ function parseLlmDraft(input: {
         confidence: typeof brandObj.logo_confidence === "number" ? brandObj.logo_confidence : deterministic.brand.logoUrl.confidence,
       },
     },
+    restaurantInsights: {
+      eventHighlights: asString(llm.event_highlights) ?? deterministic.restaurantInsights?.eventHighlights ?? null,
+      reservationGuidance: asString(llm.reservation_guidance) ?? deterministic.restaurantInsights?.reservationGuidance ?? null,
+      membershipNotes: asString(llm.membership_notes) ?? deterministic.restaurantInsights?.membershipNotes ?? null,
+      menuSummary: asString(llm.menu_summary) ?? deterministic.restaurantInsights?.menuSummary ?? null,
+    },
     evidence: {
       pages: input.pages.map((page) => ({ url: page.url, title: page.title })),
     },
@@ -627,6 +652,10 @@ async function extractWithLlm(args: { sourceUrl: string; pages: CrawledPage[]; s
     '  "social_links": [{"platform": string, "url": string, "source_url": string}],',
     '  "faqs": [{"question": string, "answer": string, "source_url": string}],',
     '  "policies": [{"title": string, "summary": string, "source_url": string}],',
+    '  "event_highlights": string|null,',
+    '  "reservation_guidance": string|null,',
+    '  "membership_notes": string|null,',
+    '  "menu_summary": string|null,',
     '  "brand": {',
     '    "primary_color": string|null,',
     '    "accent_color": string|null,',

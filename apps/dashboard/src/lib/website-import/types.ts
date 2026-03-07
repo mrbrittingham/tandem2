@@ -69,6 +69,12 @@ export type WebsiteImportDraft = {
     fontFamily: ImportClaim<string>;
     logoUrl: ImportClaim<string>;
   };
+  restaurantInsights?: {
+    eventHighlights?: string | null;
+    reservationGuidance?: string | null;
+    membershipNotes?: string | null;
+    menuSummary?: string | null;
+  };
   evidence: {
     pages: Array<{ url: string; title: string }>;
   };

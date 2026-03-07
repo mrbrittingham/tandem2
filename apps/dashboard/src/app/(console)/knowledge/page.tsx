@@ -1,61 +1,48 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import type { BusinessProfile, FAQItem, PolicyItem } from "@tandem/shared";
+import { useEffect, useState } from "react";
+import type { FAQItem, PolicyItem } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
-import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { SaveBar } from "@/components/SaveBar";
 import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
 import { ToggleSwitch } from "@/components/ToggleSwitch";
-import { SegmentedControl } from "@/components/SegmentedControl";
-import { DataTableShell } from "@/components/DataTableShell";
-import { StatusBadge } from "@/components/StatusBadge";
 import { WebsiteImportPanel, type ImportedKnowledgePayload } from "@/components/WebsiteImportPanel";
-import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
+import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
+import {
+  applyAiSetupPrompt,
+  buildKnowledgeProgramFromBusiness,
+  hydrateKnowledgeProgram,
+  toKnowledgeConfig,
+  type KnowledgeProgram,
+} from "@/lib/knowledge-program";
 import { saveLocationConfig } from "@/lib/location-config-client";
+import { updateBusiness, useActiveBusiness } from "@/lib/store-hooks";
 
-type ContentTab = "questions" | "policies";
+type SourceKind = "menu" | "events" | "policies" | "faq" | "other";
 
-type BusinessInfoForm = {
-  businessName: string;
-  shortDescription: string;
-  phone: string;
-  email: string;
-  address: string;
-  hours: string;
+type EntryForm = {
+  title: string;
+  body: string;
+  category: string;
+  showInHelp: boolean;
 };
 
-const defaultFaq: Pick<FAQItem, "question" | "answer" | "category" | "showInHelp"> = {
-  question: "",
-  answer: "",
+const defaultFaqForm: EntryForm = {
+  title: "",
+  body: "",
   category: "General",
   showInHelp: true,
 };
 
-const defaultPolicy: Pick<PolicyItem, "title" | "description" | "category" | "showInHelp"> = {
+const defaultPolicyForm: EntryForm = {
   title: "",
-  description: "",
+  body: "",
   category: "Policies",
   showInHelp: true,
 };
 
-const formatTimestamp = (value: string) =>
-  new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-
-function getBusinessFormFromProfile(business: BusinessProfile): BusinessInfoForm {
-  const phone = business.contacts.find((entry) => entry.type === "phone")?.value ?? "";
-  const email = business.contacts.find((entry) => entry.type === "email")?.value ?? "";
-
-  return {
-    businessName: business.businessName ?? business.name ?? "",
-    shortDescription: business.summary ?? "",
-    phone,
-    email,
-    address: business.location ?? "",
-    hours: business.handoff.supportHoursLabel || business.handoff.statusDetail || "",
-  };
-}
+const sourceKinds: SourceKind[] = ["menu", "events", "policies", "faq", "other"];
 
 export default function KnowledgePage() {
   const business = useActiveBusiness();
@@ -65,596 +52,386 @@ export default function KnowledgePage() {
     return (
       <EmptyState
         title="No location selected"
-        description="Create a location to start adding business details, customer answers, and policies."
+        description="Create a location to train your assistant with restaurant knowledge, events, and policies."
         actionLabel="Add location"
         onAction={openCreateLocation}
       />
     );
   }
 
-  return <KnowledgeEditor key={business.id} business={business} />;
+  return <KnowledgeEditor />;
 }
 
-function KnowledgeEditor({ business }: { business: BusinessProfile }) {
-  const [businessInfo, setBusinessInfo] = useState<BusinessInfoForm>(() => getBusinessFormFromProfile(business));
-  const [faqs, setFaqs] = useState<FAQItem[]>(() => business.faqs.map((entry) => ({ ...entry })));
-  const [policies, setPolicies] = useState<PolicyItem[]>(() => business.policies.map((entry) => ({ ...entry })));
-  const [faqForm, setFaqForm] = useState(defaultFaq);
-  const [policyForm, setPolicyForm] = useState(defaultPolicy);
+function KnowledgeEditor() {
+  const business = useActiveBusiness();
+  const [program, setProgram] = useState<KnowledgeProgram | null>(null);
+  const [initialSnapshot, setInitialSnapshot] = useState("");
+  const [faqForm, setFaqForm] = useState<EntryForm>(defaultFaqForm);
+  const [policyForm, setPolicyForm] = useState<EntryForm>(defaultPolicyForm);
   const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
-  const [activeContentTab, setActiveContentTab] = useState<ContentTab>("questions");
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceKind, setSourceKind] = useState<SourceKind>("other");
   const [saving, setSaving] = useState(false);
+  const [applyingPrompt, setApplyingPrompt] = useState(false);
 
-  const [initialSnapshot, setInitialSnapshot] = useState(() =>
-    JSON.stringify({
-      businessInfo: getBusinessFormFromProfile(business),
-      faqs: business.faqs,
-      policies: business.policies,
-    }),
-  );
+  useEffect(() => {
+    if (!business) {
+      setProgram(null);
+      setInitialSnapshot("");
+      return;
+    }
 
-  const isDirty = useMemo(
-    () => JSON.stringify({ businessInfo, faqs, policies }) !== initialSnapshot,
-    [businessInfo, faqs, policies, initialSnapshot],
-  );
+    const base = buildKnowledgeProgramFromBusiness(business);
+    setProgram(base);
+    setInitialSnapshot(JSON.stringify(base));
 
-  const sortedFaqs = useMemo(
-    () => [...faqs].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-    [faqs],
-  );
-  const sortedPolicies = useMemo(
-    () => [...policies].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-    [policies],
-  );
+    const hydrate = async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("locationId", business.id);
+        params.set("locationSlug", business.locationSlug ?? business.slug);
+        if (business.businessSlug) {
+          params.set("businessSlug", business.businessSlug);
+        }
 
-  const handleSave = async () => {
+        const response = await fetch(`/api/location-config?${params.toString()}`, { method: "GET" });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          config?: {
+            knowledgeConfig?: Record<string, unknown>;
+          };
+        };
+
+        const hydrated = hydrateKnowledgeProgram(payload.config?.knowledgeConfig, base);
+        setProgram(hydrated);
+        setInitialSnapshot(JSON.stringify(hydrated));
+      } catch {
+        // Keep local defaults if hydration fails.
+      }
+    };
+
+    void hydrate();
+  }, [business]);
+
+  if (!business || !program) {
+    return null;
+  }
+
+  const isDirty = JSON.stringify(program) !== initialSnapshot;
+
+  const updateField = (key: keyof KnowledgeProgram["fields"], value: string) => {
+    setProgram((current) => (current ? { ...current, fields: { ...current.fields, [key]: value } } : current));
+  };
+
+  const updateTraining = (key: keyof KnowledgeProgram["training"], value: string | string[]) => {
+    setProgram((current) => (current ? { ...current, training: { ...current.training, [key]: value } } : current));
+  };
+
+  const addOrUpdateFaq = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!faqForm.title.trim() || !faqForm.body.trim()) {
+      return;
+    }
+
+    const nextEntry: FAQItem = {
+      id: editingFaqId ?? crypto.randomUUID(),
+      question: faqForm.title.trim(),
+      answer: faqForm.body.trim(),
+      category: faqForm.category.trim() || "General",
+      showInHelp: faqForm.showInHelp,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProgram((current) => {
+      if (!current) return current;
+      const faqs = editingFaqId
+        ? current.faqs.map((item) => (item.id === editingFaqId ? nextEntry : item))
+        : [...current.faqs, nextEntry];
+      return { ...current, faqs };
+    });
+
+    setFaqForm(defaultFaqForm);
+    setEditingFaqId(null);
+  };
+
+  const addOrUpdatePolicy = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!policyForm.title.trim() || !policyForm.body.trim()) {
+      return;
+    }
+
+    const nextEntry: PolicyItem = {
+      id: editingPolicyId ?? crypto.randomUUID(),
+      title: policyForm.title.trim(),
+      description: policyForm.body.trim(),
+      category: policyForm.category.trim() || "Policies",
+      showInHelp: policyForm.showInHelp,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setProgram((current) => {
+      if (!current) return current;
+      const policies = editingPolicyId
+        ? current.policies.map((item) => (item.id === editingPolicyId ? nextEntry : item))
+        : [...current.policies, nextEntry];
+      return { ...current, policies };
+    });
+
+    setPolicyForm(defaultPolicyForm);
+    setEditingPolicyId(null);
+  };
+
+  const applyPrompt = () => {
+    if (!program.setupPrompt.trim()) {
+      return;
+    }
+    setApplyingPrompt(true);
+    setProgram((current) => (current ? applyAiSetupPrompt(current, current.setupPrompt) : current));
+    setTimeout(() => setApplyingPrompt(false), 350);
+  };
+
+  const addSource = () => {
+    if (!sourceLabel.trim() || !sourceUrl.trim()) {
+      return;
+    }
+
+    setProgram((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        uploadedSources: [
+          ...current.uploadedSources,
+          {
+            id: crypto.randomUUID(),
+            label: sourceLabel.trim(),
+            url: sourceUrl.trim(),
+            kind: sourceKind,
+          },
+        ],
+      };
+    });
+
+    setSourceLabel("");
+    setSourceUrl("");
+    setSourceKind("other");
+  };
+
+  const applyImportedContent = (payload: ImportedKnowledgePayload) => {
+    setProgram((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        fields: {
+          ...current.fields,
+          businessOverview: payload.shortDescription ?? current.fields.businessOverview,
+          locationDetails: payload.address ?? current.fields.locationDetails,
+          hours: payload.hours ?? current.fields.hours,
+          menuHighlights: payload.insights?.menuSummary ?? current.fields.menuHighlights,
+          reservationsGuidance: payload.insights?.reservationGuidance ?? current.fields.reservationsGuidance,
+          upcomingEvents: payload.insights?.eventHighlights ?? current.fields.upcomingEvents,
+          memberships: payload.insights?.membershipNotes ?? current.fields.memberships,
+        },
+        importedInsights: {
+          eventHighlights: payload.insights?.eventHighlights,
+          reservationGuidance: payload.insights?.reservationGuidance,
+          membershipNotes: payload.insights?.membershipNotes,
+          menuSummary: payload.insights?.menuSummary,
+        },
+        faqs: payload.faqs.length ? payload.faqs : current.faqs,
+        policies: payload.policies.length ? payload.policies : current.policies,
+      };
+    });
+  };
+
+  const saveAll = async () => {
     setSaving(true);
-
     try {
       updateBusiness(business.id, (draft) => {
-        const phoneValue = businessInfo.phone.trim();
-        const emailValue = businessInfo.email.trim();
-
-        draft.name = businessInfo.businessName.trim() || draft.name;
-        draft.businessName = businessInfo.businessName.trim() || draft.businessName || draft.name;
-        draft.summary = businessInfo.shortDescription;
-        draft.tagline = businessInfo.shortDescription;
-        draft.location = businessInfo.address;
-        draft.handoff.supportHoursLabel = businessInfo.hours;
-        draft.handoff.statusDetail = businessInfo.hours;
-        draft.faqs = faqs;
-        draft.policies = policies;
-
-        const existingPhone = draft.contacts.find((entry) => entry.type === "phone");
-        if (phoneValue) {
-          if (existingPhone) {
-            existingPhone.value = phoneValue;
-            existingPhone.enabled = true;
-          } else {
-            draft.contacts.unshift({
-              id: crypto.randomUUID(),
-              type: "phone",
-              label: "Phone",
-              value: phoneValue,
-              enabled: true,
-            });
-          }
-        } else if (existingPhone) {
-          existingPhone.enabled = false;
+        draft.summary = program.fields.businessOverview || draft.summary;
+        draft.tagline = program.fields.cuisineServiceStyle || draft.tagline;
+        draft.location = program.fields.locationDetails || draft.location;
+        draft.faqs = program.faqs;
+        draft.policies = program.policies;
+        if (program.fields.hours.trim()) {
+          draft.handoff.supportHoursLabel = program.fields.hours.trim();
+          draft.handoff.statusDetail = program.fields.hours.trim();
         }
-
-        const existingEmail = draft.contacts.find((entry) => entry.type === "email");
-        if (emailValue) {
-          if (existingEmail) {
-            existingEmail.value = emailValue;
-            existingEmail.enabled = true;
-          } else {
-            draft.contacts.push({
-              id: crypto.randomUUID(),
-              type: "email",
-              label: "Email",
-              value: emailValue,
-              enabled: true,
-            });
-          }
-        } else if (existingEmail) {
-          existingEmail.enabled = false;
-        }
-
-        draft.updatedAt = new Date().toISOString();
       });
 
-      // Persist knowledge and core business profile hints so refreshes stay in sync with server-backed data.
-      try {
-        await saveLocationConfig({
-          location: business,
-          knowledgeConfig: {
-            faqs,
-            policies,
-            businessProfile: {
-              businessName: businessInfo.businessName,
-              shortDescription: businessInfo.shortDescription,
-              phone: businessInfo.phone,
-              email: businessInfo.email,
-              address: businessInfo.address,
-              hours: businessInfo.hours,
-            },
-          },
-        });
-      } catch {
-        // Keep local save even if remote sync fails.
-      }
+      await saveLocationConfig({
+        location: business,
+        knowledgeConfig: toKnowledgeConfig(program),
+        assistantConfig: {
+          training: program.training,
+          setupPrompt: program.setupPrompt,
+        },
+      });
 
-      setInitialSnapshot(JSON.stringify({ businessInfo, faqs, policies }));
+      setInitialSnapshot(JSON.stringify(program));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleFaqSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const timestamp = new Date().toISOString();
-
-    if (editingFaqId) {
-      setFaqs((current) =>
-        current.map((entry) => (entry.id === editingFaqId ? { ...entry, ...faqForm, updatedAt: timestamp } : entry)),
-      );
-    } else {
-      setFaqs((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          question: faqForm.question,
-          answer: faqForm.answer,
-          category: faqForm.category,
-          showInHelp: faqForm.showInHelp,
-          updatedAt: timestamp,
-        },
-      ]);
-    }
-
-    setFaqForm(defaultFaq);
-    setEditingFaqId(null);
-    setActiveContentTab("questions");
-  };
-
-  const handlePolicySubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const timestamp = new Date().toISOString();
-
-    if (editingPolicyId) {
-      setPolicies((current) =>
-        current.map((entry) => (entry.id === editingPolicyId ? { ...entry, ...policyForm, updatedAt: timestamp } : entry)),
-      );
-    } else {
-      setPolicies((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          title: policyForm.title,
-          description: policyForm.description,
-          category: policyForm.category,
-          showInHelp: policyForm.showInHelp,
-          updatedAt: timestamp,
-        },
-      ]);
-    }
-
-    setPolicyForm(defaultPolicy);
-    setEditingPolicyId(null);
-    setActiveContentTab("policies");
-  };
-
-  const applyImportedContent = (payload: ImportedKnowledgePayload) => {
-    setBusinessInfo((current) => ({
-      businessName: payload.name ?? current.businessName,
-      shortDescription: payload.shortDescription ?? current.shortDescription,
-      phone: payload.phone ?? current.phone,
-      email: payload.email ?? current.email,
-      address: payload.address ?? current.address,
-      hours: payload.hours ?? current.hours,
-    }));
-
-    if (payload.faqs.length > 0) {
-      setFaqs(payload.faqs);
-    }
-
-    if (payload.policies.length > 0) {
-      setPolicies(payload.policies);
-    }
-  };
-
-  const scrollToAnswers = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const section = document.getElementById("answers-for-customers");
-    section?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const visibleFaqs = [...program.faqs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const visiblePolicies = [...program.policies].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
     <div className="space-y-10">
-      <SectionCard
-        eyebrow="Business Information"
-        title="Business Information"
-        description="Keep your business details up to date so your assistant can answer common questions accurately."
-      >
-        <div className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-            <h3 className="text-lg font-semibold text-slate-900">Business details</h3>
-            <p className="mt-1 text-sm text-slate-600">Update your core business information in one place.</p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <TextInput
-                label="Business name"
-                value={businessInfo.businessName}
-                onChange={(value) => setBusinessInfo((current) => ({ ...current, businessName: value }))}
-                placeholder="Windmill Creek Winery & Farm Kitchen"
-              />
-              <TextInput
-                label="Phone"
-                value={businessInfo.phone}
-                onChange={(value) => setBusinessInfo((current) => ({ ...current, phone: value }))}
-                placeholder="(410) 251-6122"
-              />
-              <div className="md:col-span-2">
-                <TextInput
-                  label="Short description"
-                  value={businessInfo.shortDescription}
-                  onChange={(value) => setBusinessInfo((current) => ({ ...current, shortDescription: value }))}
-                  placeholder="A winery and farm kitchen for relaxed meals and gatherings."
-                />
-              </div>
-              <TextInput
-                label="Email"
-                value={businessInfo.email}
-                onChange={(value) => setBusinessInfo((current) => ({ ...current, email: value }))}
-                placeholder="hello@example.com"
-              />
-              <TextInput
-                label="Hours"
-                value={businessInfo.hours}
-                onChange={(value) => setBusinessInfo((current) => ({ ...current, hours: value }))}
-                placeholder="Wednesday - Sunday 12PM - 8:30PM"
-              />
-              <div className="md:col-span-2">
-                <TextInput
-                  label="Address"
-                  value={businessInfo.address}
-                  onChange={(value) => setBusinessInfo((current) => ({ ...current, address: value }))}
-                  placeholder="11206 Worcester Hwy Berlin, MD 21811"
-                />
-              </div>
-            </div>
-          </div>
-
-          <WebsiteImportPanel business={business} onApplyImportedContent={applyImportedContent} />
+      <SectionCard title="AI setup assistant" description="Describe your business in plain language to prefill key knowledge fields.">
+        <TextInput
+          label="Describe your restaurant, services, and goals"
+          multiline
+          rows={5}
+          value={program.setupPrompt}
+          onChange={(value) => setProgram((current) => (current ? { ...current, setupPrompt: value } : current))}
+          placeholder="This is a winery restaurant with guided tastings, igloo dining, and live music on weekends. Answer menu questions, promote events, help guests reserve tables, and explain wine club pickup details."
+        />
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={applyPrompt} disabled={applyingPrompt || !program.setupPrompt.trim()} className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+            {applyingPrompt ? "Applying prompt..." : "Apply prompt to setup"}
+          </button>
+          <p className="text-sm text-slate-600">This updates structured fields, boundaries, and conversion goals. You can edit any result.</p>
         </div>
       </SectionCard>
 
-      <div id="answers-for-customers">
-        <SectionCard
-          eyebrow="Customer Knowledge"
-          title="Answers for Customers"
-          description="Add answers to common questions and important policies so your assistant can respond quickly."
-        >
-          <div className="grid gap-6 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-              <h3 className="text-lg font-semibold text-slate-900">Common Questions</h3>
-              <p className="mt-1 text-sm text-slate-600">Add answers to questions customers ask most often.</p>
+      <SectionCard title="Structured knowledge" description="Restaurant-first schema designed for clear, practical responses.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextInput label="Business overview" multiline rows={3} value={program.fields.businessOverview} onChange={(value) => updateField("businessOverview", value)} />
+          <TextInput label="Cuisine and service style" multiline rows={3} value={program.fields.cuisineServiceStyle} onChange={(value) => updateField("cuisineServiceStyle", value)} />
+          <TextInput label="Hours" multiline rows={3} value={program.fields.hours} onChange={(value) => updateField("hours", value)} />
+          <TextInput label="Location details" multiline rows={3} value={program.fields.locationDetails} onChange={(value) => updateField("locationDetails", value)} />
+          <TextInput label="Reservations guidance" multiline rows={3} value={program.fields.reservationsGuidance} onChange={(value) => updateField("reservationsGuidance", value)} />
+          <TextInput label="Menu highlights" multiline rows={3} value={program.fields.menuHighlights} onChange={(value) => updateField("menuHighlights", value)} />
+          <TextInput label="Dietary and allergy notes" multiline rows={3} value={program.fields.dietaryAllergyNotes} onChange={(value) => updateField("dietaryAllergyNotes", value)} />
+          <TextInput label="Private events" multiline rows={3} value={program.fields.privateEvents} onChange={(value) => updateField("privateEvents", value)} />
+          <TextInput label="Recurring events" multiline rows={3} value={program.fields.recurringEvents} onChange={(value) => updateField("recurringEvents", value)} />
+          <TextInput label="Upcoming events" multiline rows={3} value={program.fields.upcomingEvents} onChange={(value) => updateField("upcomingEvents", value)} />
+          <TextInput label="Memberships or wine club" multiline rows={3} value={program.fields.memberships} onChange={(value) => updateField("memberships", value)} />
+          <TextInput label="Parking and accessibility" multiline rows={3} value={program.fields.parkingAccessibility} onChange={(value) => updateField("parkingAccessibility", value)} />
+        </div>
+      </SectionCard>
 
-              <form className="mt-4 space-y-4" onSubmit={handleFaqSubmit}>
-                <TextInput
-                  label="Question"
-                  value={faqForm.question}
-                  onChange={(value) => setFaqForm((current) => ({ ...current, question: value }))}
-                  placeholder="Do you take walk-ins?"
-                />
-                <TextInput
-                  label="Answer"
-                  multiline
-                  rows={4}
-                  value={faqForm.answer}
-                  onChange={(value) => setFaqForm((current) => ({ ...current, answer: value }))}
-                  placeholder="Yes. We reserve a few tables for walk-ins every evening."
-                />
-                <TextInput
-                  label="Category (optional)"
-                  value={faqForm.category}
-                  onChange={(value) => setFaqForm((current) => ({ ...current, category: value }))}
-                  placeholder="Reservations"
-                />
-                <ToggleSwitch
-                  label="Visible to customers"
-                  helperText="Turn this off to keep it for internal use only."
-                  checked={faqForm.showInHelp}
-                  onChange={(next) => setFaqForm((current) => ({ ...current, showInHelp: next }))}
-                />
+      <SectionCard title="Training controls" description="Define voice, boundaries, escalation rules, and conversion goals.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextInput label="Tone and voice" multiline rows={3} value={program.training.toneVoice} onChange={(value) => updateTraining("toneVoice", value)} />
+          <TextInput label="What the assistant should answer" multiline rows={3} value={program.training.shouldAnswer} onChange={(value) => updateTraining("shouldAnswer", value)} />
+          <TextInput label="What the assistant should avoid" multiline rows={3} value={program.training.shouldAvoid} onChange={(value) => updateTraining("shouldAvoid", value)} />
+          <TextInput label="Escalation instructions" multiline rows={3} value={program.training.escalationInstructions} onChange={(value) => updateTraining("escalationInstructions", value)} />
+          <TextInput
+            label="Conversion goals (comma separated)"
+            value={program.training.conversionGoals.join(", ")}
+            onChange={(value) =>
+              updateTraining(
+                "conversionGoals",
+                value
+                  .split(",")
+                  .map((entry) => entry.trim())
+                  .filter(Boolean),
+              )
+            }
+          />
+        </div>
+      </SectionCard>
 
-                <div className="flex flex-wrap justify-end gap-3">
-                  {editingFaqId ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingFaqId(null);
-                        setFaqForm(defaultFaq);
-                      }}
-                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300"
-                    >
-                      Cancel
-                    </button>
-                  ) : null}
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]"
-                  >
-                    {editingFaqId ? "Update Answer" : "Save Answer"}
-                  </button>
+      <SectionCard title="Uploaded sources" description="Add menu, event, or policy links the assistant should rely on.">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] md:items-end">
+          <TextInput label="Label" value={sourceLabel} onChange={setSourceLabel} placeholder="Spring tasting menu" />
+          <TextInput label="URL" value={sourceUrl} onChange={setSourceUrl} placeholder="https://example.com/menu" />
+          <label className="flex flex-col gap-2 text-sm text-slate-600">
+            <span className="font-semibold text-slate-800">Type</span>
+            <select value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)} className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-900">
+              {sourceKinds.map((kind) => (
+                <option key={kind} value={kind}>{kind}</option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={addSource} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300">Add source</button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {program.uploadedSources.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No sources added yet.</p>
+          ) : (
+            program.uploadedSources.map((source) => (
+              <div key={source.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm">
+                <div>
+                  <p className="font-semibold text-slate-900">{source.label}</p>
+                  <p className="text-slate-600">{source.url}</p>
                 </div>
-              </form>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-              <h3 className="text-lg font-semibold text-slate-900">Policies &amp; House Rules</h3>
-              <p className="mt-1 text-sm text-slate-600">Add policies your assistant should reference when helping customers.</p>
-
-              <form className="mt-4 space-y-4" onSubmit={handlePolicySubmit}>
-                <TextInput
-                  label="Policy title"
-                  value={policyForm.title}
-                  onChange={(value) => setPolicyForm((current) => ({ ...current, title: value }))}
-                  placeholder="Cancellation policy"
-                />
-                <TextInput
-                  label="Policy details"
-                  multiline
-                  rows={4}
-                  value={policyForm.description}
-                  onChange={(value) => setPolicyForm((current) => ({ ...current, description: value }))}
-                  placeholder="Cancellations are free up to 24 hours before the reservation time."
-                />
-                <TextInput
-                  label="Category (optional)"
-                  value={policyForm.category}
-                  onChange={(value) => setPolicyForm((current) => ({ ...current, category: value }))}
-                  placeholder="Reservations"
-                />
-                <ToggleSwitch
-                  label="Visible to customers"
-                  helperText="Turn this off to keep it for internal use only."
-                  checked={policyForm.showInHelp}
-                  onChange={(next) => setPolicyForm((current) => ({ ...current, showInHelp: next }))}
-                />
-
-                <div className="flex flex-wrap justify-end gap-3">
-                  {editingPolicyId ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingPolicyId(null);
-                        setPolicyForm(defaultPolicy);
-                      }}
-                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300"
-                    >
-                      Cancel
-                    </button>
-                  ) : null}
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]"
-                  >
-                    {editingPolicyId ? "Update Policy" : "Save Policy"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </SectionCard>
-      </div>
-
-      <SectionCard
-        eyebrow="Saved Content"
-        title="Saved Content"
-        description="Review and manage the answers your assistant can use."
-      >
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <SegmentedControl
-              value={activeContentTab}
-              ariaLabel="Saved content tabs"
-              options={[
-                { value: "questions", label: "Questions" },
-                { value: "policies", label: "Policies" },
-              ]}
-              onChange={(next) => setActiveContentTab(next)}
-            />
-          </div>
-
-          {activeContentTab === "questions" ? (
-            sortedFaqs.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
-                <h4 className="text-base font-semibold text-slate-900">No questions added yet</h4>
-                <p className="mt-2 text-sm text-slate-600">Start by adding answers to the questions customers ask most often.</p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveContentTab("questions");
-                    scrollToAnswers();
-                  }}
-                  className="mt-4 rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white"
+                  onClick={() => setProgram((current) => current ? { ...current, uploadedSources: current.uploadedSources.filter((entry) => entry.id !== source.id) } : current)}
+                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-rose-600"
                 >
-                  Add Question
+                  Remove
                 </button>
               </div>
-            ) : (
-              <DataTableShell>
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Question</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3">Visibility</th>
-                      <th className="px-4 py-3">Last updated</th>
-                      <th className="px-4 py-3">Edit</th>
-                      <th className="px-4 py-3">Delete</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {sortedFaqs.map((faq) => (
-                      <tr key={faq.id}>
-                        <td className="px-4 py-3 font-medium text-slate-900">{faq.question}</td>
-                        <td className="px-4 py-3 text-slate-600">{faq.category}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const timestamp = new Date().toISOString();
-                              setFaqs((current) =>
-                                current.map((entry) =>
-                                  entry.id === faq.id ? { ...entry, showInHelp: !entry.showInHelp, updatedAt: timestamp } : entry,
-                                ),
-                              );
-                            }}
-                            className="rounded-full"
-                          >
-                            <StatusBadge label={faq.showInHelp ? "Visible" : "Internal"} tone={faq.showInHelp ? "success" : "neutral"} />
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">{formatTimestamp(faq.updatedAt)}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFaqForm({
-                                question: faq.question,
-                                answer: faq.answer,
-                                category: faq.category,
-                                showInHelp: faq.showInHelp,
-                              });
-                              setEditingFaqId(faq.id);
-                              scrollToAnswers();
-                            }}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFaqs((current) => current.filter((entry) => entry.id !== faq.id));
-                              if (editingFaqId === faq.id) {
-                                setEditingFaqId(null);
-                                setFaqForm(defaultFaq);
-                              }
-                            }}
-                            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </DataTableShell>
-            )
-          ) : sortedPolicies.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
-              <h4 className="text-base font-semibold text-slate-900">No policies added yet</h4>
-              <p className="mt-2 text-sm text-slate-600">Add your key policies so customers can get clear answers quickly.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveContentTab("policies");
-                  scrollToAnswers();
-                }}
-                className="mt-4 rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white"
-              >
-                Add Policy
-              </button>
-            </div>
-          ) : (
-            <DataTableShell>
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Title</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3">Visibility</th>
-                    <th className="px-4 py-3">Last updated</th>
-                    <th className="px-4 py-3">Edit</th>
-                    <th className="px-4 py-3">Delete</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {sortedPolicies.map((policy) => (
-                    <tr key={policy.id}>
-                      <td className="px-4 py-3 font-medium text-slate-900">{policy.title}</td>
-                      <td className="px-4 py-3 text-slate-600">{policy.category}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const timestamp = new Date().toISOString();
-                            setPolicies((current) =>
-                              current.map((entry) =>
-                                entry.id === policy.id
-                                  ? { ...entry, showInHelp: !entry.showInHelp, updatedAt: timestamp }
-                                  : entry,
-                              ),
-                            );
-                          }}
-                            className="rounded-full"
-                        >
-                            <StatusBadge label={policy.showInHelp ? "Visible" : "Internal"} tone={policy.showInHelp ? "success" : "neutral"} />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{formatTimestamp(policy.updatedAt)}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPolicyForm({
-                              title: policy.title,
-                              description: policy.description,
-                              category: policy.category,
-                              showInHelp: policy.showInHelp,
-                            });
-                            setEditingPolicyId(policy.id);
-                            scrollToAnswers();
-                          }}
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPolicies((current) => current.filter((entry) => entry.id !== policy.id));
-                            if (editingPolicyId === policy.id) {
-                              setEditingPolicyId(null);
-                              setPolicyForm(defaultPolicy);
-                            }
-                          }}
-                          className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </DataTableShell>
+            ))
           )}
         </div>
       </SectionCard>
 
-      <SaveBar visible={isDirty} onSave={handleSave} saving={saving} label="You have unsaved updates" />
+      <SectionCard title="Website crawl and imported intelligence" description="Import website content and merge it into your knowledge program.">
+        <WebsiteImportPanel business={business} onApplyImportedContent={applyImportedContent} />
+      </SectionCard>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard title="FAQs" description="Customer-ready answers used directly in chat.">
+          <form className="space-y-3" onSubmit={addOrUpdateFaq}>
+            <TextInput label="Question" value={faqForm.title} onChange={(value) => setFaqForm((current) => ({ ...current, title: value }))} />
+            <TextInput label="Answer" multiline rows={4} value={faqForm.body} onChange={(value) => setFaqForm((current) => ({ ...current, body: value }))} />
+            <TextInput label="Category" value={faqForm.category} onChange={(value) => setFaqForm((current) => ({ ...current, category: value }))} />
+            <ToggleSwitch label="Visible to guests" checked={faqForm.showInHelp} onChange={(next) => setFaqForm((current) => ({ ...current, showInHelp: next }))} />
+            <div className="flex justify-end gap-2">
+              {editingFaqId ? (
+                <button type="button" onClick={() => { setEditingFaqId(null); setFaqForm(defaultFaqForm); }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">Cancel</button>
+              ) : null}
+              <button type="submit" className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white">{editingFaqId ? "Update FAQ" : "Add FAQ"}</button>
+            </div>
+          </form>
+
+          <div className="mt-4 space-y-2">
+            {visibleFaqs.map((entry) => (
+              <article key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <p className="font-semibold text-slate-900">{entry.question}</p>
+                <p className="mt-1 text-sm text-slate-700">{entry.answer}</p>
+              </article>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Policies" description="Rules and constraints the assistant should cite.">
+          <form className="space-y-3" onSubmit={addOrUpdatePolicy}>
+            <TextInput label="Title" value={policyForm.title} onChange={(value) => setPolicyForm((current) => ({ ...current, title: value }))} />
+            <TextInput label="Details" multiline rows={4} value={policyForm.body} onChange={(value) => setPolicyForm((current) => ({ ...current, body: value }))} />
+            <TextInput label="Category" value={policyForm.category} onChange={(value) => setPolicyForm((current) => ({ ...current, category: value }))} />
+            <ToggleSwitch label="Visible to guests" checked={policyForm.showInHelp} onChange={(next) => setPolicyForm((current) => ({ ...current, showInHelp: next }))} />
+            <div className="flex justify-end gap-2">
+              {editingPolicyId ? (
+                <button type="button" onClick={() => { setEditingPolicyId(null); setPolicyForm(defaultPolicyForm); }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">Cancel</button>
+              ) : null}
+              <button type="submit" className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white">{editingPolicyId ? "Update policy" : "Add policy"}</button>
+            </div>
+          </form>
+
+          <div className="mt-4 space-y-2">
+            {visiblePolicies.map((entry) => (
+              <article key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <p className="font-semibold text-slate-900">{entry.title}</p>
+                <p className="mt-1 text-sm text-slate-700">{entry.description}</p>
+              </article>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+
+      <SaveBar visible={isDirty || saving} onSave={saveAll} saving={saving} />
     </div>
   );
 }

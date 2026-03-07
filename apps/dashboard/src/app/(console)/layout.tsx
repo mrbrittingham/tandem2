@@ -17,13 +17,13 @@ import { widgetThemeToChatTheme } from "@/lib/widget-theme";
 const navItems = [
   { label: "Overview", href: "/overview" },
   { label: "Inbox", href: "/conversations" },
-  { label: "Assistant", href: "/intents" },
   { label: "Knowledge", href: "/knowledge" },
+  { label: "Assistant", href: "/intents" },
   { label: "Handoff", href: "/handoff" },
-  { label: "Widget", href: "/widget" },
+  { label: "Appearance", href: "/widget" },
   { label: "Integrations", href: "/integrations" },
   { label: "Locations", href: "/locations" },
-  { label: "Settings", href: "/branding" },
+  { label: "Settings", href: "/settings" },
 ];
 
 type ConsolePageHeading = {
@@ -45,24 +45,24 @@ const pageHeadingMap: Record<string, ConsolePageHeading> = {
     description: "Set suggested actions and how your assistant responds.",
   },
   "/knowledge": {
-    title: "Knowledge Base",
-    description: "Manage the information your assistant uses to answer customer questions.",
+    title: "Knowledge",
+    description: "Train your assistant with business context, events, policies, and conversion goals.",
   },
   "/handoff": {
     title: "Handoff",
-    description: "Set how customers can reach a person when needed.",
+    description: "Define when chats route to your team and how guests can contact you.",
   },
   "/widget": {
-    title: "Widget",
-    description: "Customize and install chat on your website.",
+    title: "Appearance",
+    description: "Style your website chat and embed it on your site.",
   },
   "/integrations": {
     title: "Integrations",
     description: "Connect tools that keep customer answers accurate.",
   },
-  "/branding": {
+  "/settings": {
     title: "Settings",
-    description: "Manage your business profile and assistant defaults.",
+    description: "Manage business defaults, notifications, deployment details, and permissions.",
   },
   "/locations": {
     title: "Locations",

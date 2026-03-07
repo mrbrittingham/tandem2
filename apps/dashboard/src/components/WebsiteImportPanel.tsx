@@ -58,6 +58,12 @@ export type ImportedKnowledgePayload = {
   hours?: string;
   faqs: FAQItem[];
   policies: PolicyItem[];
+  insights?: {
+    eventHighlights?: string;
+    reservationGuidance?: string;
+    membershipNotes?: string;
+    menuSummary?: string;
+  };
 };
 
 function getFriendlyImportError(error?: string, code?: string) {
@@ -499,6 +505,12 @@ export function WebsiteImportPanel({
         hours: draft.businessProfile.hours.value ?? undefined,
         faqs: importedFaqs,
         policies: importedPolicies,
+        insights: {
+          eventHighlights: draft.restaurantInsights?.eventHighlights ?? undefined,
+          reservationGuidance: draft.restaurantInsights?.reservationGuidance ?? undefined,
+          membershipNotes: draft.restaurantInsights?.membershipNotes ?? undefined,
+          menuSummary: draft.restaurantInsights?.menuSummary ?? undefined,
+        },
       });
 
       setSuccess("Imported details saved.");
@@ -557,7 +569,7 @@ export function WebsiteImportPanel({
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-slate-900">Import from your website</h3>
-          <p className="mt-1 text-sm text-slate-600">Pull details from your website to save time. You can review and edit everything before saving.</p>
+          <p className="mt-1 text-sm text-slate-600">Crawl key pages like menus, reservations, and events. Review everything before applying.</p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">

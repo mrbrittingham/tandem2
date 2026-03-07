@@ -51,6 +51,17 @@ const HIGH_SIGNAL_PATHS = [
   "/menu",
   "/menus",
   "/events",
+  "/calendar",
+  "/what-s-on",
+  "/whatson",
+  "/happenings",
+  "/wine-club",
+  "/membership",
+  "/club",
+  "/private-events",
+  "/catering",
+  "/order-online",
+  "/delivery",
   "/policies",
   "/privacy",
   "/terms",
@@ -112,7 +123,6 @@ function normalizeCrawlUrl(raw: string, baseUrl: string): string | null {
       /\/tag\//.test(lowerPath)
       || /\/category\//.test(lowerPath)
       || /\/page\/\d+/.test(lowerPath)
-      || /\/calendar/.test(lowerPath)
       || /\/wp-admin/.test(lowerPath)
       || /\/wp-json/.test(lowerPath)
     ) {

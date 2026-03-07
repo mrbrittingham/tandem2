@@ -1,6 +1,6 @@
 export const WEBSITE_IMPORT_LIMITS = {
-  maxPages: Number(process.env.WEBSITE_IMPORT_MAX_PAGES ?? 22),
-  maxChars: 250_000,
+  maxPages: Number(process.env.WEBSITE_IMPORT_MAX_PAGES ?? 36),
+  maxChars: 320_000,
   perPageChars: 20_000,
   requestTimeoutMs: 12_000,
 };
@@ -89,6 +89,14 @@ const PRIORITY_PATH_HINTS = [
   "menu",
   "reservation",
   "booking",
+  "opentable",
+  "resy",
+  "event",
+  "calendar",
+  "music",
+  "wine",
+  "club",
+  "membership",
   "service",
   "pricing",
   "policy",

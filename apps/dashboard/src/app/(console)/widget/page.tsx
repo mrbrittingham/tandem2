@@ -68,7 +68,7 @@ export default function WidgetPage() {
     return (
       <EmptyState
         title="No location selected"
-        description="Create a location to customize the widget look and grab the install snippet."
+        description="Create a location to customize chat appearance and grab the install snippet."
         actionLabel="Add location"
         onAction={openCreateLocation}
       />
@@ -106,6 +106,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
     setTheme(baseTheme);
     setLogoUrl(baseTheme.logoUrl ?? "");
     setPersistedTheme(baseTheme);
+    setLoadingTheme(false);
     setSaveError(null);
     setSaveSuccess(null);
   }, [business.id, business.theme]);
@@ -147,13 +148,10 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
           return;
         }
 
-        const merged = mergeTheme(normalizeWidgetTheme({ ...business.theme }), payload.theme);
+          const merged = mergeTheme(normalizeWidgetTheme({ ...business.theme }), payload.theme);
         setTheme(merged);
         setLogoUrl(merged.logoUrl ?? "");
         setPersistedTheme(merged);
-        updateBusiness(business.id, (draft) => {
-          draft.theme = merged;
-        });
       } catch {
         // no-op on load failure; keep local defaults
       } finally {
@@ -232,7 +230,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
   return (
     <div className="space-y-10">
       <SectionCard
-        title="Website chat appearance"
+        title="Chat appearance"
         description="Keep your website chat experience on-brand and easy to use."
       >
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleThemeSubmit}>
@@ -310,8 +308,8 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
             <div className="text-sm">
               {saveError ? <p className="text-red-600">{saveError}</p> : null}
               {saveSuccess ? <p className="text-emerald-600">{saveSuccess}</p> : null}
-              {loadingTheme ? <p className="text-slate-500">Loading saved theme…</p> : null}
-              {!hasLocationScope ? <p className="text-amber-600">Select a location to configure the widget.</p> : null}
+              {loadingTheme ? <p className="text-slate-500">Loading saved appearance…</p> : null}
+              {!hasLocationScope ? <p className="text-amber-600">Select a location to configure appearance.</p> : null}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -327,7 +325,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
                 disabled={savingTheme || loadingTheme || !isDirty || !hasLocationScope}
                 className="rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {savingTheme ? "Saving…" : "Save theme"}
+                {savingTheme ? "Saving…" : "Save appearance"}
               </button>
             </div>
           </div>
