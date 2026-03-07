@@ -45,11 +45,6 @@ export function Sidebar({ header, footer, children, className }: SidebarProps) {
         collapsed ? "w-[var(--sidebar-collapsed-width)]" : "w-[var(--sidebar-width)]",
         className,
       )}
-      style={{
-        "--sidebar-current-width": collapsed
-          ? "var(--sidebar-collapsed-width)"
-          : "var(--sidebar-width)",
-      } as React.CSSProperties}
     >
       {/* Brand / header area */}
       <div className={cn("px-4 pt-5 pb-2", collapsed && "px-2 items-center")}>
