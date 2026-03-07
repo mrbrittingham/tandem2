@@ -15,13 +15,13 @@ export type SidebarGroupProps = {
 export function SidebarGroup({ label, children, className }: SidebarGroupProps) {
   const { collapsed } = useSidebar();
   return (
-    <div className={cn("mt-3 first:mt-0", className)}>
+    <div className={cn("mt-4 first:mt-0", className)}>
       {label && !collapsed ? (
-        <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-sidebar-text-muted)]">
+        <p className="mb-1.5 px-2.5 text-[11px] font-medium uppercase tracking-wider text-[var(--color-sidebar-text-muted)]">
           {label}
         </p>
       ) : label && collapsed ? (
-        <div className="mx-auto my-1 h-px w-6 bg-[var(--color-sidebar-divider)]" />
+        <div className="mx-auto my-2 h-px w-5 bg-[var(--color-sidebar-divider)]" />
       ) : null}
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
@@ -59,11 +59,11 @@ export function SidebarItem({
       tabIndex={0}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex items-center gap-2.5 rounded-[var(--radius-md)] px-2.5 py-2 text-[var(--text-sm)] font-medium",
-        "outline-none transition-colors",
+        "group relative flex items-center gap-2.5 rounded-[var(--radius-md)] px-2.5 py-[7px] text-[var(--text-sm)] font-medium",
+        "outline-none transition-colors duration-[var(--duration-fast)]",
         "focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-1",
         active
-          ? "bg-[var(--color-sidebar-active)] text-[var(--color-sidebar-text-active)] shadow-[0_0_0_1px_rgba(49,112,252,0.3)]"
+          ? "bg-[var(--color-sidebar-active)] text-[var(--color-sidebar-text-active)]"
           : "text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text-active)]",
         collapsed && "justify-center px-0",
         className,

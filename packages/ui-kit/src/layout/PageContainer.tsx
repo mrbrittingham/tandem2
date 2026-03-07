@@ -12,12 +12,12 @@ export function PageContainer({ children, className, maxWidth }: PageContainerPr
   return (
     <main
       className={cn(
-        "flex-1 px-[var(--page-pad-x)] py-[var(--page-pad-y)]",
+        "flex-1 bg-[var(--color-bg)] px-6 py-6 lg:px-8 lg:py-7",
         className,
       )}
     >
       <div
-        className="mx-auto w-full space-y-8"
+        className="mx-auto w-full space-y-6"
         style={{ maxWidth: maxWidth ?? "var(--content-max-width)" }}
       >
         {children}

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../../packages/ui-kit/src/**/*.{ts,tsx}";
 @import "@tandem/ui-kit/src/tokens/tokens.css";
 @import "./tandem-console-tokens.css";
 

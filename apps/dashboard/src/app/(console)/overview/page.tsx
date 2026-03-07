@@ -383,7 +383,7 @@ function OverviewPageClient() {
               aria-label="Date range"
               value={selectedRange}
               onChange={(event) => updateRange(event.target.value as RangeKey)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+              className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[var(--text-sm)] text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)]"
             >
               {RANGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -399,10 +399,10 @@ function OverviewPageClient() {
               <MetricTile label="Latest conversation" value={latestConversation} helper="Most recent conversation update" />
             </div>
           ) : (
-            <p className="text-sm text-slate-600">Select a location to load conversation performance.</p>
+            <p className="text-[var(--text-sm)] text-[var(--color-text-secondary)]">Select a location to load conversation performance.</p>
           )}
-          {visibleSessionsLoading ? <p className="mt-3 text-xs text-slate-500">Loading conversation metrics…</p> : null}
-          {visibleSessionsError ? <p className="mt-3 text-xs text-rose-600">{visibleSessionsError}</p> : null}
+          {visibleSessionsLoading ? <p className="mt-3 text-[var(--text-xs)] text-[var(--color-text-muted)]">Loading conversation metrics…</p> : null}
+          {visibleSessionsError ? <p className="mt-3 text-[var(--text-xs)] text-[var(--color-danger)]">{visibleSessionsError}</p> : null}
         </SectionCard>
 
         <SectionCard
@@ -412,35 +412,35 @@ function OverviewPageClient() {
           headerClassName="mb-4 pb-4"
           bodyClassName="space-y-0"
         >
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Install status</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{widgetInstalled ? "Installed" : "Not detected"}</p>
-            <p className="text-xs text-slate-600">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Install status</p>
+            <p className="mt-1 text-[var(--text-lg)] font-semibold text-[var(--color-text)]">{widgetInstalled ? "Installed" : "Not detected"}</p>
+            <p className="text-[var(--text-xs)] text-[var(--color-text-secondary)]">
               We detect installation when your website integration reports as connected.
             </p>
             {widgetIntegration?.lastSynced ? (
-              <p className="mt-1 text-xs text-slate-500">Last signal: {formatUtcMDY(widgetIntegration.lastSynced)}</p>
+              <p className="mt-1 text-[var(--text-xs)] text-[var(--color-text-muted)]">Last signal: {formatUtcMDY(widgetIntegration.lastSynced)}</p>
             ) : null}
           </div>
-          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Embed snippet</p>
-          <pre className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-900 p-3 text-xs text-slate-100">
+          <p className="mt-4 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Embed snippet</p>
+          <pre className="mt-2 overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-code-bg)] p-3 text-[var(--text-xs)] text-[var(--color-text-inverse)]">
             <code suppressHydrationWarning>{snippet}</code>
           </pre>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={handleCopy}
-              className="rounded-xl bg-[var(--console-primary)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]"
+              className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
             >
               {copied ? "Copied" : "Copy code"}
             </button>
-            <Link href="/widget" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">
+            <Link href="/widget" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">
               View widget settings
             </Link>
             <button
               type="button"
               onClick={() => previewDock.open()}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+              className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
             >
               Preview
             </button>
@@ -453,7 +453,7 @@ function OverviewPageClient() {
           titleClassName="text-lg"
           headerClassName="mb-4 pb-4"
           bodyClassName="space-y-0"
-          actions={!onboardingComplete ? <span className="text-xs text-slate-500">{completedCount}/{checklistState.length} complete</span> : undefined}
+          actions={!onboardingComplete ? <span className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{completedCount}/{checklistState.length} complete</span> : undefined}
         >
           {!onboardingComplete ? (
             <>
@@ -462,15 +462,15 @@ function OverviewPageClient() {
                   <Link
                     key={item.label}
                     href={item.href}
-                    className={`flex items-center justify-between rounded-xl border px-3 py-2 transition ${
-                      item.completed ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white hover:border-slate-300"
+                    className={`flex items-center justify-between rounded-[var(--radius-lg)] border px-3 py-2.5 transition-colors ${
+                      item.completed ? "border-[var(--color-success-light)] bg-[var(--color-success-light)]" : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-strong)]"
                     }`}
                   >
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{item.label}</p>
-                      <p className="text-xs text-slate-500">{item.description}</p>
+                      <p className="text-[var(--text-sm)] font-medium text-[var(--color-text)]">{item.label}</p>
+                      <p className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{item.description}</p>
                     </div>
-                    <span className={`ml-3 text-sm font-semibold ${item.completed ? "text-emerald-700" : "text-slate-400"}`}>
+                    <span className={`ml-3 text-[var(--text-sm)] font-medium ${item.completed ? "text-[var(--color-success)]" : "text-[var(--color-text-disabled)]"}`}>
                       {item.completed ? "✓" : "→"}
                     </span>
                   </Link>
@@ -503,13 +503,13 @@ function OverviewPageClient() {
                 aria-label="Conversation activity range"
                 value={selectedRange}
                 onChange={(event) => updateRange(event.target.value as RangeKey)}
-                className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1 text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)]"
               >
                 <option value="7d">7d</option>
                 <option value="30d">30d</option>
                 <option value="90d">90d</option>
               </select>
-              <Link href="/conversations" className="text-sm font-semibold text-[var(--console-primary)] hover:underline">
+              <Link href="/conversations" className="text-[var(--text-sm)] font-medium text-[var(--color-primary)] hover:underline">
                 Open conversations
               </Link>
             </div>
@@ -534,26 +534,26 @@ function OverviewPageClient() {
           <div className="space-y-2">
             {recentActivity.length ? (
               recentActivity.map((event) => (
-                <div key={event.eventKey} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                  <p className="text-sm font-medium text-slate-900">{event.label}</p>
-                  <p className="text-xs text-slate-500">{formatUtcMDY(event.timestamp)}</p>
+                <div key={event.eventKey} className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-3 py-2.5">
+                  <p className="text-[var(--text-sm)] font-medium text-[var(--color-text)]">{event.label}</p>
+                  <p className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{formatUtcMDY(event.timestamp)}</p>
                 </div>
               ))
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+              <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-5 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
                 No recent activity yet. Use Preview to send a test message.
               </div>
             )}
           </div>
           <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Link href="/conversations" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Open conversations</Link>
-            <Link href="/knowledge" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Update Knowledge</Link>
-            <Link href="/handoff" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Configure Handoff</Link>
-            <Link href="/widget" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300">Website chat setup</Link>
+            <Link href="/conversations" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Open conversations</Link>
+            <Link href="/knowledge" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Update Knowledge</Link>
+            <Link href="/handoff" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Configure Handoff</Link>
+            <Link href="/widget" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Website chat setup</Link>
             <button
               type="button"
               onClick={() => previewDock.open()}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-300 sm:col-span-2"
+              className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-left text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] sm:col-span-2"
             >
               Preview
             </button>
@@ -574,26 +574,26 @@ export default function OverviewPage() {
 
 function MetricTile({ label, value, helper }: { label: string; value: string; helper: string }) {
   return (
-    <article className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{helper}</p>
+    <article className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-3.5 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">{label}</p>
+      <p className="mt-1 text-[var(--text-xl)] font-semibold tracking-tight text-[var(--color-text)]">{value}</p>
+      <p className="mt-0.5 text-[var(--text-xs)] text-[var(--color-text-muted)]">{helper}</p>
     </article>
   );
 }
 
 function HealthRow({ label, value, href }: { label: string; value: string; href: string }) {
   return (
-    <Link href={href} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 transition hover:border-slate-300">
-      <span className="text-sm text-slate-700">{label}</span>
-      <span className="text-sm font-semibold text-slate-900">{value}</span>
+    <Link href={href} className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-3.5 py-2.5 transition-colors hover:border-[var(--color-border-strong)]">
+      <span className="text-[var(--text-sm)] text-[var(--color-text-secondary)]">{label}</span>
+      <span className="text-[var(--text-sm)] font-medium text-[var(--color-text)]">{value}</span>
     </Link>
   );
 }
 
 function ActivityLineChart({ data }: { data: Array<{ label: string; count: number }> }) {
   if (!data.length) {
-    return <p className="text-sm text-slate-600">No conversations available for this range.</p>;
+    return <p className="text-[var(--text-sm)] text-[var(--color-text-secondary)]">No conversations available for this range.</p>;
   }
 
   const width = 640;
@@ -623,17 +623,17 @@ function ActivityLineChart({ data }: { data: Array<{ label: string; count: numbe
       <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full" role="img" aria-label="Conversation activity line chart">
         <defs>
           <linearGradient id="conversationActivityFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--console-primary)" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="var(--console-primary)" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.02" />
           </linearGradient>
         </defs>
-        <line x1={leftPad} y1={topPad + chartHeight} x2={width - rightPad} y2={topPad + chartHeight} stroke="rgb(226 232 240)" />
+        <line x1={leftPad} y1={topPad + chartHeight} x2={width - rightPad} y2={topPad + chartHeight} stroke="var(--color-border)" />
         <path d={areaPath} fill="url(#conversationActivityFill)" />
-        <path d={linePath} fill="none" stroke="var(--console-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={linePath} fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((point) => (
           <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r="2.5" fill="var(--console-primary)" />
-            <text x={point.x} y={height - 10} textAnchor="middle" fontSize="10" fill="rgb(100 116 139)">{point.label}</text>
+            <circle cx={point.x} cy={point.y} r="2" fill="var(--color-primary)" />
+            <text x={point.x} y={height - 10} textAnchor="middle" fontSize="10" fill="var(--color-text-muted)">{point.label}</text>
           </g>
         ))}
       </svg>

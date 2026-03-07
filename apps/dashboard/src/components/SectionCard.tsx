@@ -30,21 +30,21 @@ export function SectionCard({
   children,
 }: SectionCardProps) {
   const sectionClassName = [
-    "rounded-3xl border border-[var(--console-card-border)] bg-[var(--console-bg-card)] p-6 shadow-[var(--console-card-shadow)] md:p-7",
+    "rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-sm)] md:p-6",
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
   const computedHeaderClassName = [
-    "mb-6 space-y-2 pb-5",
-    headerDivider ? "border-b border-[var(--console-border-light)]" : "",
+    "mb-5 space-y-1 pb-4",
+    headerDivider ? "border-b border-[var(--color-border-subtle)]" : "",
     headerClassName,
   ]
     .filter(Boolean)
     .join(" ");
 
-  const computedBodyClassName = ["space-y-4 text-[var(--console-text-primary)]", bodyClassName]
+  const computedBodyClassName = ["space-y-4 text-[var(--color-text)]", bodyClassName]
     .filter(Boolean)
     .join(" ");
 
@@ -54,13 +54,13 @@ export function SectionCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             {eyebrow ? (
-              <p className={["text-xs font-semibold uppercase tracking-[0.18em] text-[var(--console-text-tertiary)]", eyebrowClassName].filter(Boolean).join(" ")}>{eyebrow}</p>
+              <p className={["text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]", eyebrowClassName].filter(Boolean).join(" ")}>{eyebrow}</p>
             ) : null}
-            <h2 className={["text-2xl font-semibold text-[var(--console-text-primary)]", titleClassName].filter(Boolean).join(" ")}>{title}</h2>
-            {description ? <p className={["max-w-3xl text-sm text-[var(--console-text-secondary)]", descriptionClassName].filter(Boolean).join(" ")}>{description}</p> : null}
+            <h2 className={["text-[var(--text-lg)] font-semibold tracking-tight text-[var(--color-text)]", titleClassName].filter(Boolean).join(" ")}>{title}</h2>
+            {description ? <p className={["max-w-3xl text-[var(--text-sm)] text-[var(--color-text-secondary)]", descriptionClassName].filter(Boolean).join(" ")}>{description}</p> : null}
           </div>
           {actions ? (
-            <div className="flex items-center gap-3 text-sm text-[var(--console-text-secondary)]">
+            <div className="flex items-center gap-3 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
               {actions}
             </div>
           ) : null}

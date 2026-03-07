@@ -36,7 +36,7 @@ export function ConsoleTopbar({ leading }: Props) {
       center={
         <button
           type="button"
-          className="flex h-8 w-full max-w-md items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 text-[var(--text-sm)] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-strong)]"
+          className="flex h-8 w-full max-w-sm items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-3 text-[var(--text-sm)] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border)]"
           aria-label="Open command palette"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-50">

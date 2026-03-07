@@ -39,7 +39,7 @@ export function Sidebar({ header, footer, children, className }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "hidden lg:flex flex-col border-r border-[var(--color-sidebar-divider)]",
+        "hidden lg:flex flex-col overflow-hidden",
         "[background:var(--color-sidebar-bg-gradient)]",
         "transition-[width] duration-[var(--duration-normal)] ease-[var(--ease-out)]",
         collapsed ? "w-[var(--sidebar-collapsed-width)]" : "w-[var(--sidebar-width)]",
@@ -47,14 +47,14 @@ export function Sidebar({ header, footer, children, className }: SidebarProps) {
       )}
     >
       {/* Brand / header area */}
-      <div className={cn("px-4 pt-5 pb-2", collapsed && "px-2 items-center")}>
+      <div className={cn("px-4 pt-5 pb-4", collapsed && "px-2 items-center")}>
         {header ?? (
-          <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
-            <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-sm font-bold text-white">
+          <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
+            <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--text-xs)] font-bold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.1)]">
               T
             </span>
             {!collapsed && (
-              <span className="text-sm font-semibold text-[var(--color-sidebar-text-active)]">
+              <span className="text-[var(--text-sm)] font-semibold tracking-tight text-[var(--color-sidebar-text-active)]">
                 Tandem
               </span>
             )}
@@ -62,14 +62,24 @@ export function Sidebar({ header, footer, children, className }: SidebarProps) {
         )}
       </div>
 
+      {/* Navigation */}
+      <nav
+        ref={navRef}
+        onKeyDown={handleKeyDown}
+        className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-1"
+        aria-label="Main navigation"
+      >
+        {children}
+      </nav>
+
       {/* Collapse toggle */}
-      <div className={cn("px-4 py-1", collapsed && "px-2 flex justify-center")}>
+      <div className={cn("border-t border-[var(--color-sidebar-divider)] px-3 py-2.5", collapsed && "px-2 flex justify-center")}>
         <button
           type="button"
           onClick={toggle}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
-            "inline-flex h-7 items-center gap-1.5 rounded-[var(--radius-md)] px-2 text-[var(--text-xs)] font-medium",
+            "inline-flex h-7 w-full items-center gap-1.5 rounded-[var(--radius-md)] px-2 text-[var(--text-xs)] font-medium",
             "text-[var(--color-sidebar-text-muted)] hover:text-[var(--color-sidebar-text-active)] hover:bg-[var(--color-sidebar-hover)]",
             "transition-colors",
           )}
@@ -92,16 +102,6 @@ export function Sidebar({ header, footer, children, className }: SidebarProps) {
           {!collapsed && <span>Collapse</span>}
         </button>
       </div>
-
-      {/* Navigation */}
-      <nav
-        ref={navRef}
-        onKeyDown={handleKeyDown}
-        className="mt-1 flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-1"
-        aria-label="Main navigation"
-      >
-        {children}
-      </nav>
 
       {/* Footer */}
       {footer ? (
