@@ -205,3 +205,9 @@ Active migration path: `supabase/migrations/` (9 migrations as of March 2026).
 | `TANDEM_DATA_DIR` | No | Override file store path |
 | `TANDEM_API_KEY` | No | API authentication |
 | `SUPABASE_SERVICE_ROLE_KEY` | For worker | Import worker auth |
+
+## Related Documentation
+
+This document (`docs/repo-map.md`) describes **repository structure** — where files live and what they contain.
+
+For **system behavior** — how data flows, how subsystems interact, and how the platform works at runtime — see `docs/system-architecture.md`.

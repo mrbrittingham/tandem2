@@ -16,6 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "..");
 const REPO_MAP = path.join(ROOT, "docs", "repo-map.md");
+const SYSTEM_ARCH = path.join(ROOT, "docs", "system-architecture.md");
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -305,6 +306,31 @@ function main() {
   } else {
     fs.writeFileSync(REPO_MAP, updated, "utf-8");
     console.log("✅ docs/repo-map.md updated.");
+  }
+
+  // Ensure system-architecture.md exists (never overwrite)
+  if (!fs.existsSync(SYSTEM_ARCH)) {
+    const placeholder = [
+      "# Tandem System Architecture",
+      "",
+      "This document explains how the entire Tandem platform works.",
+      "",
+      "## Sections to complete",
+      "",
+      "- Platform Overview",
+      "- High-Level System Diagram",
+      "- Major Subsystems",
+      "- Data Flow",
+      "- Runtime Components",
+      "- Future Architecture Direction",
+      "",
+      "See `docs/repo-map.md` for repository structure.",
+      "",
+    ].join("\n");
+    fs.writeFileSync(SYSTEM_ARCH, placeholder, "utf-8");
+    console.log("📝 docs/system-architecture.md created (placeholder).");
+  } else {
+    console.log("✅ docs/system-architecture.md already exists.");
   }
 
   // Summary output

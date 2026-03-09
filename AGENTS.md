@@ -2,6 +2,8 @@
 
 This file is the comprehensive orientation for AI coding agents working in this monorepo.
 
+> **First step**: Before scanning the repository, read `/docs/repo-map.md` to understand the architecture and locate key files efficiently.
+
 ---
 
 ## 1. Project Overview
@@ -12,6 +14,8 @@ Tandem is a restaurant-focused operator platform providing:
 - **Shared Domain Logic** (`packages/shared`) — Types, mock store, LLM clients, chat storage, auth guards, and server utilities.
 
 Product direction: restaurant-first workflows, structured knowledge over FAQ-only, classification-first website import, LLM chat grounded in imported knowledge.
+
+For a deep dive into how the entire platform works (data flows, subsystems, runtime components), see `docs/system-architecture.md`.
 
 ---
 
@@ -32,6 +36,14 @@ Product direction: restaurant-first workflows, structured knowledge over FAQ-onl
 - **Website import**: queue via API → worker polls DB → crawl + classify + extract → structured draft → operator review → apply to location config
 - **Dashboard state**: `MockState` in `localStorage` (`tandem:mock-state`), bound to React via `useSyncExternalStore`
 - **Canonical scope**: `businessId + locationSlug` pair across all read/write paths
+
+### Chatbot design documentation
+
+- `docs/chatbot-operating-model.md` — response decision flow, tone, handoff, recommendation logic
+- `docs/chatbot-safety-and-boundaries.md` — scope limits, hallucination prevention, abuse handling
+- `docs/chatbot-test-suite.md` — structured test prompts across categories
+- `docs/chatbot-evaluation-rubric.md` — scoring criteria for response quality
+- `docs/chatbot-gap-log.md` — tracked issues and recommended fixes
 
 ---
 
@@ -202,6 +214,8 @@ All migrations live in `supabase/migrations/`. Legacy migrations under `packages
 
 ## 9. Crawler & Ingestion Architecture
 
+For the full specification of how website content becomes chatbot knowledge, see `docs/knowledge-ingestion-spec.md`.
+
 ### Pipeline stages
 
 1. **Queue**: `POST /api/website-import/start` creates `onboarding_import_runs` row (status: `queued`).
@@ -232,6 +246,7 @@ All migrations live in `supabase/migrations/`. Legacy migrations under `packages
 2. Identify the subsystem affected.
 3. Read only the relevant source files.
 4. Check `docs/DATABASE_SCHEMA.md` if the task touches persistence.
+5. For chatbot behavior work, read `docs/chatbot-operating-model.md` and `docs/chatbot-safety-and-boundaries.md`.
 
 ### Making changes
 

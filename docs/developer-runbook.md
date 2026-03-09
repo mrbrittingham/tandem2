@@ -140,6 +140,16 @@ Requires `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
 - **Knowledge config** — stored as JSONB in `business_location_configs.knowledge_config`
 - **Manual authoring** — operators edit knowledge directly on the Knowledge page
 
+### Chatbot Operating Model
+
+For chatbot behavior design and quality assurance:
+
+- `docs/chatbot-operating-model.md` — response decision flow, tone, handoff logic, recommendation rules
+- `docs/chatbot-safety-and-boundaries.md` — scope boundaries, hallucination prevention, prompt injection defense
+- `docs/chatbot-test-suite.md` — structured test prompts across all question categories
+- `docs/chatbot-evaluation-rubric.md` — scoring criteria for evaluating response quality
+- `docs/chatbot-gap-log.md` — tracked issues and recommended fixes
+
 ### LLM Configuration
 
 ```
@@ -267,6 +277,8 @@ npm run smoke:chat:dev     # Test chat locally
 
 | Document | Purpose |
 |----------|---------|
+| `docs/system-architecture.md` | System behavior & data flows |
+| `docs/knowledge-ingestion-spec.md` | Crawler & knowledge pipeline spec |
 | `AGENTS.md` | AI agent orientation |
 | `docs/repo-map.md` | Full repository map |
 | `docs/REPO_INDEX.md` | Quick navigation |

@@ -14,6 +14,7 @@
   2. `docs/architecture.md`
   3. `docs/REPO_INDEX.md`
   4. only then the relevant module files for the task
+  5. For chatbot behavior work, also read `docs/chatbot-operating-model.md` and `docs/chatbot-safety-and-boundaries.md`
 
 ## Core data flows you should preserve
 - Dashboard state is mock-first and browser-persistent:

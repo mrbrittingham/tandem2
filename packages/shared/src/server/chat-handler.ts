@@ -5,6 +5,8 @@ import { asGuardResponse, requireApiKey, requireBusinessAllowed } from "./auth";
 const SESSION_COOKIE = "tandem_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const MESSAGE_CONTEXT_LIMIT = 50;
+const MAX_USER_MESSAGE_LENGTH = 2000;
+const DEFAULT_MAX_TOKENS = 400;
 type ChatRequestBody = {
   businessId?: string;
   locationSlug?: string;
@@ -17,6 +19,63 @@ type ChatRequestBody = {
 type ChatHandlerOptions = {
   requireRequestApiKey?: boolean;
 };
+
+// ---------------------------------------------------------------------------
+// Input screening — lightweight pre-LLM guardrails
+// ---------------------------------------------------------------------------
+
+type ScreenResult =
+  | { ok: true }
+  | { ok: false; reply: string };
+
+const INJECTION_PATTERNS = [
+  /ignore\s+(all\s+)?(your\s+)?(previous|prior|above)\s+(instructions|rules|prompts)/i,
+  /you\s+are\s+now\s+(a|an|DAN|jailbr)/i,
+  /forget\s+(everything|all|your)\s+(above|instructions|rules)/i,
+  /repeat\s+(your|the)\s+(system\s+)?prompt/i,
+  /reveal\s+(your|the)\s+(system\s+)?(prompt|instructions)/i,
+  /(?:^|\.\s*)act\s+as\s+(if\s+you\s+(are|were)\s+|a\s+|an\s+)/i,
+  /(?:^|\.\s*)pretend\s+(you\s+are|to\s+be)\s+/i,
+];
+
+function screenUserInput(text: string): ScreenResult {
+  const trimmed = text.trim();
+
+  // Empty or near-empty
+  if (trimmed.length < 2) {
+    return { ok: false, reply: "I'm here to help! What would you like to know about our business?" };
+  }
+
+  // Excessively long input — truncate silently (the message is still persisted in full)
+  // but the screening itself passes; the truncation happens at the LLM call site.
+
+  // Gibberish detection: very few real words in a long message
+  if (trimmed.length > 30) {
+    const wordChars = trimmed.replace(/[^a-zA-Z\s]/g, "");
+    const words = wordChars.split(/\s+/).filter((w) => w.length >= 2);
+    const ratio = words.length / (trimmed.length / 5);
+    // Also check if average "word" length is unreasonably high (random char sequences)
+    const avgWordLen = words.length > 0 ? words.reduce((s, w) => s + w.length, 0) / words.length : 0;
+    if (ratio < 0.15 || (words.length > 0 && avgWordLen > 10)) {
+      return { ok: false, reply: "I didn't quite catch that. Could you rephrase your question about our business?" };
+    }
+  }
+
+  // Prompt injection detection
+  for (const pattern of INJECTION_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return { ok: false, reply: "I'm here to help with questions about our business — like hours, menu, events, and reservations. What can I look up for you?" };
+    }
+  }
+
+  return { ok: true };
+}
+
+/** Truncate user message content for LLM context to stay within token budget */
+function truncateForLLM(text: string): string {
+  if (text.length <= MAX_USER_MESSAGE_LENGTH) return text;
+  return text.slice(0, MAX_USER_MESSAGE_LENGTH) + "…";
+}
 
 function buildFallbackReply(userText: string): string {
   const trimmed = userText.trim();
@@ -176,6 +235,10 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
       return Response.json({ error: "messages are required" }, { status: 400 });
     }
 
+    // --- Input screening (pre-LLM guardrail) ---
+    const lastUserContent = userMessages[userMessages.length - 1]?.content ?? "";
+    const screenResult = screenUserInput(lastUserContent);
+
     const llmConfig = validateLLMServerConfig();
 
     const { session, store, created } = await ensureSession(req, businessId, locationSlug);
@@ -210,10 +273,26 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
       return new Response(fallbackText, { status: 200, headers });
     }
 
+    // --- If input screening failed, return canned reply without consuming LLM tokens ---
+    if (!screenResult.ok) {
+      const reply = screenResult.reply;
+      await store.appendMessage(session.id, {
+        role: "assistant",
+        content: reply,
+      });
+
+      const headers = new Headers({ "content-type": "text/plain; charset=utf-8" });
+      if (created) {
+        headers.append("Set-Cookie", buildSessionCookie(session.id));
+      }
+
+      return new Response(reply, { status: 200, headers });
+    }
+
     const history = await store.listMessages(session.id);
     const recentHistory = history.slice(-MESSAGE_CONTEXT_LIMIT).map((message) => ({
       role: message.role,
-      content: message.content,
+      content: message.role === "user" ? truncateForLLM(message.content) : message.content,
     }));
 
     const lastUserText = userMessages[userMessages.length - 1]?.content ?? "";
@@ -224,7 +303,7 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
         messages: recentHistory,
         system: body.system,
         temperature: body.temperature,
-        maxTokens: body.maxTokens,
+        maxTokens: body.maxTokens ?? DEFAULT_MAX_TOKENS,
         stream: true,
       });
 

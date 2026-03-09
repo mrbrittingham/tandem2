@@ -112,12 +112,28 @@ These live in `apps/dashboard/src/components/` and should not be duplicated:
 
 ---
 
+## Understanding Tandem Architecture
+
+Before modifying code, AI agents should read these documents in order:
+
+1. `docs/repo-map.md` — repository structure and file locations
+2. `docs/system-architecture.md` — system behavior, data flows, and subsystem interactions
+3. `docs/knowledge-ingestion-spec.md` — how website content becomes chatbot knowledge
+4. `AGENTS.md` — agent-specific rules, safe editing guidelines, and non-negotiables
+5. `docs/chatbot-operating-model.md` — chatbot response design, tone, handoff, and decision flow
+6. `docs/chatbot-safety-and-boundaries.md` — scope limits, hallucination prevention, abuse handling
+
+This ensures agents understand both **where** code lives and **how** the system works before making changes.
+
+---
+
 ## Incremental File Scanning Strategy
 
 ### Phase 1: Orientation (always)
 ```
 AGENTS.md                              (~200 lines)
 docs/repo-map.md                       (~200 lines)
+docs/system-architecture.md            (~200 lines)
 ```
 
 ### Phase 2: Task-specific context

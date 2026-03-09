@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { refreshSupabaseSession } from "@/lib/supabase/middleware";
 
-const PUBLIC_PATHS = new Set(["/api/health"]);
+const PUBLIC_PATHS = new Set(["/api/health", "/api/chat"]);
 
 function isStaticAsset(pathname: string) {
   return (
