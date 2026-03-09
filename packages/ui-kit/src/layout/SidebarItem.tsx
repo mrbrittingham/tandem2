@@ -60,12 +60,13 @@ export function SidebarItem({
       aria-current={active ? "page" : undefined}
       className={cn(
         "group relative flex items-center gap-2.5 rounded-[var(--radius-md)] px-2.5 py-[7px] text-[var(--text-sm)] font-medium",
-        "outline-none transition-colors duration-[var(--duration-fast)]",
+        "outline-none transition-all duration-[var(--duration-fast)]",
         "focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-1",
         active
-          ? "bg-[var(--color-sidebar-active)] text-[var(--color-sidebar-text-active)]"
+          ? "bg-[var(--color-sidebar-active)] text-[var(--color-sidebar-text-active)] shadow-[inset_3px_0_0_var(--color-primary)]"
           : "text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text-active)]",
         collapsed && "justify-center px-0",
+        collapsed && active && "shadow-none bg-[var(--color-sidebar-active)]",
         className,
       )}
     >

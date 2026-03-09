@@ -370,25 +370,31 @@ function OverviewPageClient() {
   const visibleSessionsError = hasScope ? sessionsError : null;
 
   return (
-    <div className="space-y-10">
-      <div className="grid gap-6 lg:grid-cols-3">
+    <div className="space-y-8">
+      <div className="grid gap-5 lg:grid-cols-3">
         <SectionCard
           title="Assistant performance"
-          description="Track customer conversation trends for this location."
-          titleClassName="text-lg"
-          headerClassName="mb-4 pb-4"
+          description="Conversation trends for this location."
+          headerDivider={false}
+          headerClassName="mb-3 pb-0"
           bodyClassName="space-y-0"
           actions={
-            <select
-              aria-label="Date range"
-              value={selectedRange}
-              onChange={(event) => updateRange(event.target.value as RangeKey)}
-              className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[var(--text-sm)] text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)]"
-            >
+            <div className="flex items-center gap-0.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5">
               {RANGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => updateRange(option.value)}
+                  className={`rounded-[var(--radius-sm)] px-2.5 py-1 text-[var(--text-xs)] font-medium transition-all ${
+                    selectedRange === option.value
+                      ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-xs)]"
+                      : "text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                  }`}
+                >
+                  {option.label.replace("Last ", "")}
+                </button>
               ))}
-            </select>
+            </div>
           }
         >
           {hasScope ? (
@@ -407,40 +413,42 @@ function OverviewPageClient() {
 
         <SectionCard
           title="Website chat setup"
-          description="Check installation status and copy your website install code."
-          titleClassName="text-lg"
-          headerClassName="mb-4 pb-4"
+          description="Installation status and embed code."
+          headerDivider={false}
+          headerClassName="mb-3 pb-0"
           bodyClassName="space-y-0"
         >
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Install status</p>
-            <p className="mt-1 text-[var(--text-lg)] font-semibold text-[var(--color-text)]">{widgetInstalled ? "Installed" : "Not detected"}</p>
-            <p className="text-[var(--text-xs)] text-[var(--color-text-secondary)]">
-              We detect installation when your website integration reports as connected.
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-4 py-3.5">
+            <div className="flex items-center gap-2">
+              <span className={`flex h-2 w-2 rounded-full ${widgetInstalled ? "bg-[var(--color-success)]" : "bg-[var(--color-warning)]"}`} />
+              <p className="text-[var(--text-sm)] font-semibold text-[var(--color-text)]">{widgetInstalled ? "Installed" : "Not detected"}</p>
+            </div>
+            <p className="mt-1 text-[var(--text-xs)] text-[var(--color-text-muted)]">
+              Detected when your site integration reports as connected.
             </p>
             {widgetIntegration?.lastSynced ? (
-              <p className="mt-1 text-[var(--text-xs)] text-[var(--color-text-muted)]">Last signal: {formatUtcMDY(widgetIntegration.lastSynced)}</p>
+              <p className="mt-1 text-[var(--text-xs)] tabular-nums text-[var(--color-text-muted)]">Last signal: {formatUtcMDY(widgetIntegration.lastSynced)}</p>
             ) : null}
           </div>
-          <p className="mt-4 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Embed snippet</p>
-          <pre className="mt-2 overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-code-bg)] p-3 text-[var(--text-xs)] text-[var(--color-text-inverse)]">
+          <pre className="mt-3 overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-code-bg)] p-3 text-[var(--text-xs)] leading-relaxed text-[var(--color-text-inverse)]">
             <code suppressHydrationWarning>{snippet}</code>
           </pre>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={handleCopy}
-              className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-white shadow-[var(--shadow-xs)] transition-all hover:bg-[var(--color-primary-hover)] hover:shadow-[var(--shadow-sm)] active:scale-[0.98]"
             >
-              {copied ? "Copied" : "Copy code"}
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5" /><path d="M2 9V2.5A.5.5 0 0 1 2.5 2H9" /></svg>
+              {copied ? "Copied!" : "Copy code"}
             </button>
-            <Link href="/widget" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">
-              View widget settings
+            <Link href="/widget" className="inline-flex items-center rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)]">
+              Widget settings
             </Link>
             <button
               type="button"
               onClick={() => previewDock.open()}
-              className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+              className="inline-flex items-center rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1.5 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)]"
             >
               Preview
             </button>
@@ -449,11 +457,23 @@ function OverviewPageClient() {
 
         <SectionCard
           title={!onboardingComplete ? "Launch checklist" : "Assistant health"}
-          description={!onboardingComplete ? "Complete these steps to launch with confidence." : "Current readiness signals for this location."}
-          titleClassName="text-lg"
-          headerClassName="mb-4 pb-4"
+          description={!onboardingComplete ? "Complete these steps to go live." : "Current readiness signals."}
+          headerDivider={false}
+          headerClassName="mb-3 pb-0"
           bodyClassName="space-y-0"
-          actions={!onboardingComplete ? <span className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{completedCount}/{checklistState.length} complete</span> : undefined}
+          actions={!onboardingComplete ? (
+            <div className="flex items-center gap-2">
+              <div className="flex h-5 items-center">
+                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--color-border)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500"
+                    style={{ width: `${(completedCount / checklistState.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <span className="text-[var(--text-xs)] font-medium text-[var(--color-text-muted)]">{completedCount}/{checklistState.length}</span>
+            </div>
+          ) : undefined}
         >
           {!onboardingComplete ? (
             <>
@@ -462,17 +482,28 @@ function OverviewPageClient() {
                   <Link
                     key={item.label}
                     href={item.href}
-                    className={`flex items-center justify-between rounded-[var(--radius-lg)] border px-3 py-2.5 transition-colors ${
-                      item.completed ? "border-[var(--color-success-light)] bg-[var(--color-success-light)]" : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-strong)]"
+                    className={`group flex items-center gap-3 rounded-[var(--radius-lg)] border px-3.5 py-3 transition-all ${
+                      item.completed
+                        ? "border-[var(--color-success)]/20 bg-[var(--color-success-light)]"
+                        : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-xs)]"
                     }`}
                   >
-                    <div>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                      item.completed
+                        ? "bg-[var(--color-success)] text-white"
+                        : "border-2 border-[var(--color-border-strong)] text-transparent group-hover:border-[var(--color-primary)]"
+                    }`}>
+                      {item.completed ? "✓" : ""}
+                    </span>
+                    <div className="min-w-0 flex-1">
                       <p className="text-[var(--text-sm)] font-medium text-[var(--color-text)]">{item.label}</p>
                       <p className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{item.description}</p>
                     </div>
-                    <span className={`ml-3 text-[var(--text-sm)] font-medium ${item.completed ? "text-[var(--color-success)]" : "text-[var(--color-text-disabled)]"}`}>
-                      {item.completed ? "✓" : "→"}
-                    </span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={`shrink-0 transition-transform group-hover:translate-x-0.5 ${
+                      item.completed ? "text-[var(--color-success)]" : "text-[var(--color-text-disabled)]"
+                    }`}>
+                      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </Link>
                 ))}
               </div>
@@ -490,27 +521,33 @@ function OverviewPageClient() {
         </SectionCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <SectionCard
           title="Conversation activity"
-          description="Daily conversation volume for the selected time range."
-          titleClassName="text-lg"
-          headerClassName="mb-4 pb-4"
+          description="Daily volume for the selected range."
+          headerDivider={false}
+          headerClassName="mb-3 pb-0"
           bodyClassName="space-y-0"
           actions={
             <div className="flex items-center gap-3">
-              <select
-                aria-label="Conversation activity range"
-                value={selectedRange}
-                onChange={(event) => updateRange(event.target.value as RangeKey)}
-                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1 text-[var(--text-xs)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)]"
-              >
-                <option value="7d">7d</option>
-                <option value="30d">30d</option>
-                <option value="90d">90d</option>
-              </select>
+              <div className="flex items-center gap-0.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-0.5">
+                {(["7d", "30d", "90d"] as RangeKey[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => updateRange(r)}
+                    className={`rounded-[var(--radius-sm)] px-2 py-1 text-[var(--text-xs)] font-medium transition-all ${
+                      selectedRange === r
+                        ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-xs)]"
+                        : "text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
               <Link href="/conversations" className="text-[var(--text-sm)] font-medium text-[var(--color-primary)] hover:underline">
-                Open conversations
+                View all
               </Link>
             </div>
           }
@@ -526,17 +563,22 @@ function OverviewPageClient() {
 
         <SectionCard
           title="Recent updates"
-          description="Latest changes across your assistant setup and customer activity."
-          titleClassName="text-lg"
-          headerClassName="mb-4 pb-4"
+          description="Latest changes across your setup."
+          headerDivider={false}
+          headerClassName="mb-3 pb-0"
           bodyClassName="space-y-0"
         >
           <div className="space-y-2">
             {recentActivity.length ? (
               recentActivity.map((event) => (
-                <div key={event.eventKey} className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-3 py-2.5">
-                  <p className="text-[var(--text-sm)] font-medium text-[var(--color-text)]">{event.label}</p>
-                  <p className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{formatUtcMDY(event.timestamp)}</p>
+                <div key={event.eventKey} className="flex items-center justify-between rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-4 py-3 transition-colors hover:border-[var(--color-border)]">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-light)]">
+                      <div className="h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]"></div>
+                    </div>
+                    <p className="text-[var(--text-sm)] font-medium text-[var(--color-text)]">{event.label}</p>
+                  </div>
+                  <p className="text-[var(--text-xs)] tabular-nums text-[var(--color-text-muted)]">{formatUtcMDY(event.timestamp)}</p>
                 </div>
               ))
             ) : (
@@ -546,15 +588,28 @@ function OverviewPageClient() {
             )}
           </div>
           <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Link href="/conversations" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Open conversations</Link>
-            <Link href="/knowledge" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Update Knowledge</Link>
-            <Link href="/handoff" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Configure Handoff</Link>
-            <Link href="/widget" className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]">Website chat setup</Link>
+            <Link href="/conversations" className="group flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)]">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><path d="M3 7h3.6a1 1 0 0 1 .8.4l.6.8a1 1 0 0 0 .8.4h.4a1 1 0 0 0 .8-.4l.6-.8a1 1 0 0 1 .8-.4H14" /><rect x="1" y="1" width="12" height="12" rx="2" /></svg>
+              Open conversations
+            </Link>
+            <Link href="/knowledge" className="group flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)]">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><path d="M2 11V3a1.5 1.5 0 0 1 1.5-1.5H12v9H3.5A1.5 1.5 0 0 0 2 12Z" /><path d="M2 11a1.5 1.5 0 0 1 1.5-1.5H12v3H3.5A1.5 1.5 0 0 1 2 11Z" /></svg>
+              Update Knowledge
+            </Link>
+            <Link href="/handoff" className="group flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)]">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><path d="M11 3 6 8" /><path d="M11 3h-3" /><path d="M11 3v3" /><path d="M3 11l5-5" /></svg>
+              Configure Handoff
+            </Link>
+            <Link href="/widget" className="group flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)]">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><circle cx="7" cy="7" r="5.5" /><circle cx="5.5" cy="5.5" r="0.75" fill="currentColor" /><circle cx="8.5" cy="5.5" r="0.75" fill="currentColor" /></svg>
+              Widget settings
+            </Link>
             <button
               type="button"
               onClick={() => previewDock.open()}
-              className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-left text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] sm:col-span-2"
+              className="group flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-left text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] hover:shadow-[var(--shadow-xs)] sm:col-span-2"
             >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><rect x="1" y="2" width="12" height="10" rx="2" /><path d="M1 5h12" /></svg>
               Preview
             </button>
           </div>
@@ -574,10 +629,10 @@ export default function OverviewPage() {
 
 function MetricTile({ label, value, helper }: { label: string; value: string; helper: string }) {
   return (
-    <article className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-3.5 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">{label}</p>
-      <p className="mt-1 text-[var(--text-xl)] font-semibold tracking-tight text-[var(--color-text)]">{value}</p>
-      <p className="mt-0.5 text-[var(--text-xs)] text-[var(--color-text-muted)]">{helper}</p>
+    <article className="group rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] px-4 py-3.5 transition-colors hover:border-[var(--color-border)]">
+      <p className="text-[var(--text-xs)] font-medium text-[var(--color-text-muted)]">{label}</p>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-[var(--color-text)]">{value}</p>
+      <p className="mt-1 text-[var(--text-xs)] text-[var(--color-text-muted)]">{helper}</p>
     </article>
   );
 }

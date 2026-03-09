@@ -30,14 +30,14 @@ export function SectionCard({
   children,
 }: SectionCardProps) {
   const sectionClassName = [
-    "rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-sm)] md:p-6",
+    "rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-sm)] md:p-6 transition-shadow hover:shadow-[var(--shadow-md)]",
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
   const computedHeaderClassName = [
-    "mb-5 space-y-1 pb-4",
+    "mb-4 space-y-0.5 pb-3",
     headerDivider ? "border-b border-[var(--color-border-subtle)]" : "",
     headerClassName,
   ]
