@@ -113,10 +113,10 @@ function ConversationsPageClient() {
 
   if (!activeLocation || !businessId || !locationSlug) {
     return (
-      <section className="rounded-3xl border border-dashed border-[var(--console-border)] bg-[var(--console-bg-card)] p-8 text-[var(--console-text-secondary)]">
+      <section className="rounded-[var(--radius-xl)] border border-dashed border-[var(--console-border)] bg-[var(--console-bg-card)] p-8 text-[var(--console-text-secondary)]">
         <h2 className="text-lg font-semibold text-[var(--console-text-primary)]">Select a location</h2>
         <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">
-          Pick or create a location from the header switcher to review conversations.
+          Choose a location from the header to review customer conversations.
         </p>
       </section>
     );
@@ -428,7 +428,7 @@ function ConversationsWorkspace({
         <MetricCard
           label="Avg Response Time"
           value="—"
-          subtext="TODO: derive from assistant reply deltas"
+          subtext="Coming soon"
         />
         <MetricCard
           label="Resolution Rate"
@@ -447,7 +447,7 @@ function ConversationsWorkspace({
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <section className={`${showListPanel ? "block" : "hidden"} rounded-3xl border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm lg:block`}>
+      <section className={`${showListPanel ? "block" : "hidden"} rounded-[var(--radius-xl)] border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm lg:block`}>
         <div className="border-b border-[var(--console-border-light)] p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-lg font-semibold text-[var(--console-text-primary)]">Conversations</p>
@@ -459,12 +459,12 @@ function ConversationsWorkspace({
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
               placeholder="Search conversations"
-              className="w-full rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)]"
+              className="w-full rounded-[var(--radius-lg)] border border-[var(--console-border)] bg-[var(--console-bg-card)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)]"
             />
             <select
               value={filterValue}
               onChange={(event) => setFilterValue(event.target.value as ConversationFilter)}
-              className="w-full rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-3 py-2 text-sm text-[var(--console-text-primary)]"
+              className="w-full rounded-[var(--radius-lg)] border border-[var(--console-border)] bg-[var(--console-bg-card)] px-3 py-2 text-sm text-[var(--console-text-primary)]"
             >
               <option value="all">All</option>
               <option value="unread">Unread</option>
@@ -476,7 +476,7 @@ function ConversationsWorkspace({
 
         <div className="max-h-[calc(100vh-260px)] overflow-y-auto p-2">
           {sessionError ? (
-            <p className="rounded-2xl bg-[var(--console-warning-light)] px-3 py-2 text-sm text-[var(--console-warning)]">{sessionError}</p>
+            <p className="rounded-[var(--radius-lg)] bg-[var(--console-warning-light)] px-3 py-2 text-sm text-[var(--console-warning)]">{sessionError}</p>
           ) : null}
 
           {sessionsLoading ? (
@@ -500,7 +500,7 @@ function ConversationsWorkspace({
                         onSessionChange(session.id);
                         setMobileView("detail");
                       }}
-                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                      className={`w-full rounded-[var(--radius-lg)] border px-3 py-2.5 text-left transition ${
                         isActive
                           ? "border-[var(--console-primary)] bg-[var(--console-primary-light)]"
                           : "border-transparent hover:border-[var(--console-border)] hover:bg-[var(--console-bg-hover)]"
@@ -530,7 +530,7 @@ function ConversationsWorkspace({
         </div>
       </section>
 
-      <section className={`${showDetailPanel ? "block" : "hidden"} min-h-[420px] rounded-3xl border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm lg:block`}>
+      <section className={`${showDetailPanel ? "block" : "hidden"} min-h-[420px] rounded-[var(--radius-xl)] border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm lg:block`}>
         {selectedSessionId ? (
           <ConversationDetail
             key={selectedSessionId}
@@ -553,7 +553,7 @@ function ConversationsWorkspace({
 
 function MetricCard({ label, value, subtext }: { label: string; value: string; subtext: string }) {
   return (
-    <article className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3">
+    <article className="rounded-[var(--radius-lg)] border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--console-text-tertiary)]">{label}</p>
       <p className="mt-1 text-2xl font-semibold leading-tight text-[var(--console-text-primary)]">{value}</p>
       <p className="mt-1 text-xs text-[var(--console-text-tertiary)]">{subtext}</p>
@@ -571,7 +571,7 @@ function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <article className="rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3">
+    <article className="rounded-[var(--radius-lg)] border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--console-text-tertiary)]">{title}</p>
       <p className="mt-1 text-xs text-[var(--console-text-tertiary)]">{subtitle}</p>
       <div className="mt-3">{children}</div>
@@ -730,7 +730,7 @@ function ConversationDetail({
 
       <div className="flex-1 overflow-y-auto p-4">
         {messageError ? (
-          <p className="rounded-2xl bg-[var(--console-warning-light)] px-3 py-2 text-sm text-[var(--console-warning)]">{messageError}</p>
+          <p className="rounded-[var(--radius-lg)] bg-[var(--console-warning-light)] px-3 py-2 text-sm text-[var(--console-warning)]">{messageError}</p>
         ) : null}
 
         {messagesLoading ? (
@@ -748,7 +748,7 @@ function ConversationDetail({
                     </span>
                     <span>{formatTimestamp(message.createdAt, isMounted)}</span>
                   </div>
-                  <div className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${bubbleStyle}`}>
+                  <div className={`max-w-[90%] rounded-[var(--radius-lg)] px-3 py-2 text-sm leading-relaxed ${bubbleStyle}`}>
                     <p className="whitespace-pre-line">{message.content}</p>
                   </div>
                 </li>

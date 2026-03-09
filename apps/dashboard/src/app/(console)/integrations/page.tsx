@@ -80,10 +80,10 @@ export default function IntegrationsPage() {
     >
       <div className="grid gap-5 md:grid-cols-2">
         {business.integrations.map((integration) => (
-          <article key={integration.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{integration.category}</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">{integration.name}</h3>
-            <p className="mt-1 text-sm text-slate-600">{integration.description}</p>
+          <article key={integration.id} className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-5">
+            <p className="text-[var(--text-xs)] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">{integration.category}</p>
+            <h3 className="mt-1 text-[var(--text-lg)] font-semibold text-[var(--color-text)]">{integration.name}</h3>
+            <p className="mt-1 text-[var(--text-sm)] text-[var(--color-text-secondary)]">{integration.description}</p>
             <div className="mt-3">
               <StatusBadge
                 label={integration.status === "connected" ? "Connected" : integration.status === "syncing" ? "Syncing" : "Not connected"}
@@ -91,26 +91,26 @@ export default function IntegrationsPage() {
               />
             </div>
             {integration.lastSynced ? (
-              <p className="mt-2 text-xs text-slate-500">Last synced: {new Date(integration.lastSynced).toLocaleString()}</p>
+              <p className="mt-2 text-[var(--text-xs)] text-[var(--color-text-muted)]">Last synced: {new Date(integration.lastSynced).toLocaleString()}</p>
             ) : null}
             {integration.status !== "connected" ? (
-              <label className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
+              <label className="mt-4 flex flex-col gap-2 text-[var(--text-xs)] text-[var(--color-text-secondary)]">
                 {integration.credentialLabel}
                 <input
                   value={credentials[integration.id] ?? ""}
                   onChange={(event) => setCredentials((prev) => ({ ...prev, [integration.id]: event.target.value }))}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900"
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                 />
               </label>
             ) : null}
-            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+            <div className="mt-4 flex flex-wrap gap-3 text-[var(--text-sm)]">
               <button
                 type="button"
                 onClick={() => handleConnect(integration.id)}
-                className={`rounded-2xl px-4 py-2 font-semibold ${
+                className={`rounded-[var(--radius-md)] px-4 py-2 font-semibold ${
                   integration.status === "connected"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-[var(--console-primary)] text-white hover:bg-[var(--console-primary-hover)]"
+                    ? "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+                    : "bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]"
                 }`}
               >
                 {integration.status === "connected" ? "Connected" : "Connect account"}
@@ -118,7 +118,7 @@ export default function IntegrationsPage() {
               <button
                 type="button"
                 onClick={() => handleSync(integration.id)}
-                className="rounded-2xl border border-slate-200 px-4 py-2 text-slate-700 hover:border-slate-300"
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]"
               >
                 Sync now
               </button>

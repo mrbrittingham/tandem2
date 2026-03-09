@@ -95,12 +95,14 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
   return (
     <form className="space-y-8" onSubmit={handleSave}>
       <SectionCard
-        title="How handoff works"
-        description="When guests ask for a person, Tandem shows your primary contact method and fallback message."
+        title="Handoff overview"
+        description="When customers ask for a person, your assistant shows your preferred contact method and a fallback message."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
-          <p className="font-semibold text-slate-900">Current readiness</p>
-          <p className="mt-1">{enabledCount > 0 ? `${enabledCount} live contact method${enabledCount === 1 ? "" : "s"} configured.` : "No live methods configured yet."}</p>
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+          <p className="font-semibold text-[var(--color-text)]">Current status</p>
+          <p className="mt-1">{enabledCount > 0 ? `${enabledCount} active contact method${enabledCount === 1 ? "" : "s"}.` : "No contact methods enabled yet."}</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -110,33 +112,33 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
             onChange={(value) => updateField("headline", value)}
             placeholder="Guest services team"
           />
-          <label className="flex flex-col gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Availability</span>
+          <label className="flex flex-col gap-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Availability</span>
             <select
               value={handoff.status}
               onChange={(event) => updateField("status", event.target.value as HandoffConfig["status"])}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+              className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)]"
             >
               <option value="online">Online now</option>
               <option value="offline">Offline now</option>
             </select>
           </label>
           <TextInput
-            label="Typical response window"
+            label="Typical response time"
             value={handoff.statusDetail}
             onChange={(value) => updateField("statusDetail", value)}
-            placeholder="Replies within 5-10 minutes"
+            placeholder="Replies within 5–10 minutes"
           />
           <TextInput
-            label="Live support hours"
+            label="Support hours"
             value={handoff.supportHoursLabel}
             onChange={(value) => updateField("supportHoursLabel", value)}
-            placeholder="Daily 10:00 AM - 10:00 PM"
+            placeholder="Daily 10:00 AM – 10:00 PM"
           />
         </div>
 
         <TextInput
-          label="Offline fallback message"
+          label="Offline message"
           multiline
           rows={3}
           value={handoff.offlineMessage}
@@ -146,33 +148,35 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
       </SectionCard>
 
       <SectionCard
-        title="Contact channels"
-        description="Choose channels guests can use when escalation is needed."
+        title="Contact methods"
+        description="Choose how customers can reach your team when they need a person."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
         actions={
           <button
             type="button"
             onClick={addContact}
-            className="rounded-2xl border border-slate-200 px-3 py-1 text-sm font-medium text-slate-700 hover:border-slate-300"
+            className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1 text-[var(--text-sm)] font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]"
           >
-            Add channel
+            Add method
           </button>
         }
       >
         <div className="space-y-4">
           {handoff.contactMethods.map((method) => (
-            <article key={method.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+            <article key={method.id} className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-xs)]">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">{method.label || "Unnamed channel"}</p>
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{supportState(method)}</span>
+                <p className="text-[var(--text-sm)] font-semibold text-[var(--color-text)]">{method.label || "Unnamed method"}</p>
+                <span className="rounded-full bg-[var(--color-bg)] px-2 py-1 text-[var(--text-xs)] font-semibold text-[var(--color-text-secondary)]">{supportState(method)}</span>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[140px_1fr_1fr_auto]">
-                <label className="flex flex-col gap-2 text-sm text-slate-600">
-                  <span className="font-semibold text-slate-800">Type</span>
+                <label className="flex flex-col gap-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+                  <span className="font-semibold text-[var(--color-text)]">Type</span>
                   <select
                     value={method.type}
                     onChange={(event) => updateContact(method.id, { type: event.target.value as ContactMethod["type"] })}
-                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-slate-900"
+                    className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--color-text)]"
                   >
                     <option value="email">Email</option>
                     <option value="phone">Phone</option>
@@ -187,12 +191,12 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
                   value={method.value}
                   onChange={(value) => updateContact(method.id, { value })}
                 />
-                <div className="flex flex-col gap-3 text-sm">
+                <div className="flex flex-col gap-3 text-[var(--text-sm)]">
                   <ToggleSwitch label="Enabled" checked={method.enabled} onChange={(next) => updateContact(method.id, { enabled: next })} />
                   <button
                     type="button"
                     onClick={() => removeContact(method.id)}
-                    className="rounded-2xl border border-slate-200 px-3 py-1 text-xs font-medium text-rose-600 hover:border-rose-200"
+                    className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-1 text-[var(--text-xs)] font-medium text-[var(--color-danger)] hover:border-[var(--color-danger)]"
                   >
                     Remove
                   </button>

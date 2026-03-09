@@ -22,10 +22,10 @@
   /* ── Sidebar ───────────────────────────────────── */
   --color-sidebar-bg:     #0C1B2E;
   --color-sidebar-bg-gradient: linear-gradient(180deg, #101E33 0%, #0A1525 100%);
-  --color-sidebar-text:   rgba(255, 255, 255, 0.88);
-  --color-sidebar-text-muted: rgba(255, 255, 255, 0.50);
+  --color-sidebar-text:   rgba(255, 255, 255, 0.92);
+  --color-sidebar-text-muted: rgba(255, 255, 255, 0.64);
   --color-sidebar-text-active: #FFFFFF;
-  --color-sidebar-icon:   rgba(255, 255, 255, 0.65);
+  --color-sidebar-icon:   rgba(255, 255, 255, 0.78);
   --color-sidebar-icon-active: #FFFFFF;
   --color-sidebar-hover:  rgba(255, 255, 255, 0.10);
   --color-sidebar-active: rgba(99, 152, 255, 0.22);

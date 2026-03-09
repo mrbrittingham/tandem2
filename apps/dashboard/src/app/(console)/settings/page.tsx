@@ -208,10 +208,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <SectionCard
-        title="Business defaults"
-        description="Set location-wide account defaults used across Knowledge, Handoff, and Appearance."
+        title="Business details"
+        description="Core information used across your assistant, widget, and customer interactions."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput label="Business display name" value={form.businessName} onChange={(value) => update("businessName", value)} />
@@ -222,35 +224,37 @@ export default function SettingsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Assistant operations"
-        description="Tune behavior controls that apply across all conversations."
+        title="Assistant behavior"
+        description="Control how your assistant responds to customers."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="flex flex-col gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Response style</span>
+          <label className="flex flex-col gap-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Response style</span>
             <select
               value={form.responseStyle}
               onChange={(event) => update("responseStyle", event.target.value as SettingsForm["responseStyle"])}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+              className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)]"
             >
               <option value="concise">Concise</option>
               <option value="balanced">Balanced</option>
               <option value="detailed">Detailed</option>
             </select>
           </label>
-          <label className="flex flex-col gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Escalation policy</span>
+          <label className="flex flex-col gap-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Escalation policy</span>
             <select
               value={form.escalationMode}
               onChange={(event) => update("escalationMode", event.target.value as SettingsForm["escalationMode"])}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+              className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)]"
             >
               <option value="smart">Escalate when customer requests a person</option>
               <option value="always_when_uncertain">Escalate when uncertain</option>
             </select>
           </label>
           <TextInput
-            label="Confidence threshold (0.0-1.0)"
+            label="Confidence threshold (0.0–1.0)"
             value={String(form.confidenceThreshold)}
             onChange={(value) => {
               const parsed = Number.parseFloat(value);
@@ -270,7 +274,9 @@ export default function SettingsPage() {
 
       <SectionCard
         title="Notifications"
-        description="Choose what operational alerts your team receives."
+        description="Choose what alerts your team receives."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput
@@ -279,26 +285,28 @@ export default function SettingsPage() {
             onChange={(value) => update("notificationEmail", value)}
             placeholder="ops@example.com"
           />
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="space-y-3 rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4">
             <ToggleSwitch label="Daily performance digest" checked={form.enableDailyDigest} onChange={(next) => update("enableDailyDigest", next)} />
             <ToggleSwitch label="Missed handoff alerts" checked={form.enableMissedHandoffAlerts} onChange={(next) => update("enableMissedHandoffAlerts", next)} />
-            <ToggleSwitch label="Website import failure alerts" checked={form.enableImportFailureAlerts} onChange={(next) => update("enableImportFailureAlerts", next)} />
+            <ToggleSwitch label="Import failure alerts" checked={form.enableImportFailureAlerts} onChange={(next) => update("enableImportFailureAlerts", next)} />
           </div>
         </div>
       </SectionCard>
 
       <SectionCard
-        title="Deployment and permissions"
-        description="Track where chat is deployed and add lightweight team access scaffolding."
+        title="Website chat installation"
+        description="Where your chat widget is installed and who can manage this location."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput label="Website domain" value={form.websiteDomain} onChange={(value) => update("websiteDomain", value)} placeholder="www.example.com" />
-          <label className="flex flex-col gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Embed environment</span>
+          <label className="flex flex-col gap-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Environment</span>
             <select
               value={form.embedEnvironment}
               onChange={(event) => update("embedEnvironment", event.target.value as SettingsForm["embedEnvironment"])}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900"
+              className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)]"
             >
               <option value="production">Production</option>
               <option value="staging">Staging</option>
@@ -307,27 +315,29 @@ export default function SettingsPage() {
         </div>
 
         <ToggleSwitch
-          label="Require confirmation before publishing major changes"
-          helperText="Adds an extra confirmation step before applying large knowledge updates."
+          label="Confirm before publishing major changes"
+          helperText="Adds an extra step before applying large knowledge updates."
           checked={form.requirePublishConfirmation}
           onChange={(next) => update("requirePublishConfirmation", next)}
         />
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
-          <p className="font-semibold text-slate-900">Team access</p>
-          <p className="mt-1">Role-based invitations are partially scaffolded in this release. Current workspace supports owner-managed access only.</p>
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+          <p className="font-semibold text-[var(--color-text)]">Team access</p>
+          <p className="mt-1">This location is managed by the account owner. Team invitations are coming soon.</p>
         </div>
       </SectionCard>
 
       <SectionCard
-        title="Setup status"
-        description="Simple completion score for this location."
+        title="Setup progress"
+        description="How complete your location setup is."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
         <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-          <div className="h-3 overflow-hidden rounded-full bg-slate-200">
-            <div className="h-full bg-[var(--console-primary)]" style={{ width: `${completion}%` }} />
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--color-border)]">
+            <div className="h-full rounded-full bg-[var(--color-primary)] transition-all duration-500" style={{ width: `${completion}%` }} />
           </div>
-          <p className="text-sm font-semibold text-slate-700">{completion}% complete</p>
+          <p className="text-[var(--text-sm)] font-semibold text-[var(--color-text)]">{completion}% complete</p>
         </div>
       </SectionCard>
 

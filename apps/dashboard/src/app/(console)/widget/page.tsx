@@ -228,10 +228,12 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <SectionCard
         title="Chat appearance"
         description="Keep your website chat experience on-brand and easy to use."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleThemeSubmit}>
           {colorFields.map((field) => (
@@ -305,25 +307,25 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
             placeholder="https://cdn.tandem.dev/logo.svg"
           />
           <div className="md:col-span-2 flex items-center justify-between gap-3">
-            <div className="text-sm">
-              {saveError ? <p className="text-red-600">{saveError}</p> : null}
-              {saveSuccess ? <p className="text-emerald-600">{saveSuccess}</p> : null}
-              {loadingTheme ? <p className="text-slate-500">Loading saved appearance…</p> : null}
-              {!hasLocationScope ? <p className="text-amber-600">Select a location to configure appearance.</p> : null}
+            <div className="text-[var(--text-sm)]">
+              {saveError ? <p className="text-[var(--color-danger)]">{saveError}</p> : null}
+              {saveSuccess ? <p className="text-[var(--color-success)]">{saveSuccess}</p> : null}
+              {loadingTheme ? <p className="text-[var(--color-text-muted)]">Loading saved appearance…</p> : null}
+              {!hasLocationScope ? <p className="text-[var(--color-warning)]">Select a location to configure appearance.</p> : null}
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleReset}
                 disabled={savingTheme || loadingTheme || !isDirty || !hasLocationScope}
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-3 text-[var(--text-sm)] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Reset to saved
               </button>
               <button
                 type="submit"
                 disabled={savingTheme || loadingTheme || !isDirty || !hasLocationScope}
-                className="rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-6 py-3 text-[var(--text-sm)] font-semibold text-white transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingTheme ? "Saving…" : "Save appearance"}
               </button>
@@ -333,17 +335,19 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
       </SectionCard>
 
       <SectionCard
-        title="Add chat to your website"
-        description="Paste this install code in your site header on pages where chat should appear."
+        title="Install snippet"
+        description="Paste this code in your site header on pages where the chat widget should appear."
+        headerDivider={false}
+        headerClassName="mb-3 pb-0"
       >
-        <pre className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-900 p-4 text-sm text-slate-100">
+        <pre className="mt-2 overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-inverse)] p-4 text-[var(--text-sm)] text-[var(--color-text-inverse)]">
           <code suppressHydrationWarning>{snippet}</code>
         </pre>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleCopy}
-            className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]"
+            className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-5 py-2 text-[var(--text-sm)] font-semibold text-white transition hover:bg-[var(--color-primary-hover)]"
           >
             {copied ? "Copied" : "Copy snippet"}
           </button>
@@ -351,7 +355,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
             href="https://docs.tandem.dev/widget-install"
             target="_blank"
             rel="noreferrer"
-            className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-5 py-2 text-[var(--text-sm)] font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]"
           >
             View docs
           </a>

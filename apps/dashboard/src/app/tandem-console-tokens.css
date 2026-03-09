@@ -22,11 +22,11 @@
   --console-bg-code: #0F172A;
 
   --console-sidebar-bg: #0A2239;
-  --console-sidebar-text: color-mix(in srgb, var(--console-text-inverse) 82%, transparent);
-  --console-sidebar-text-muted: color-mix(in srgb, var(--console-text-inverse) 62%, transparent);
-  --console-sidebar-text-active: var(--console-text-inverse);
-  --console-sidebar-icon: var(--console-sidebar-text-muted);
-  --console-sidebar-icon-active: var(--console-sidebar-text-active);
+  --console-sidebar-text: rgba(255, 255, 255, 0.92);
+  --console-sidebar-text-muted: rgba(255, 255, 255, 0.64);
+  --console-sidebar-text-active: #FFFFFF;
+  --console-sidebar-icon: rgba(255, 255, 255, 0.78);
+  --console-sidebar-icon-active: #FFFFFF;
   --console-sidebar-hover-bg: color-mix(in srgb, var(--console-primary) 22%, transparent);
   --console-sidebar-active-bg: color-mix(in srgb, var(--console-primary) 36%, transparent);
   --console-sidebar-active-glow: 0 0 0 1px color-mix(in srgb, var(--console-primary) 46%, transparent), 0 12px 24px -18px color-mix(in srgb, var(--console-primary) 90%, transparent);

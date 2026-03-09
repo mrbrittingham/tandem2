@@ -308,7 +308,7 @@ function KnowledgeEditor() {
 
   return (
     <div className="space-y-10">
-      <SectionCard title="AI setup assistant" description="Describe your business in plain language to prefill key knowledge fields.">
+      <SectionCard title="AI setup assistant" description="Describe your business to automatically fill in knowledge fields.">
         <TextInput
           label="Describe your restaurant, services, and goals"
           multiline
@@ -318,14 +318,14 @@ function KnowledgeEditor() {
           placeholder="This is a winery restaurant with guided tastings, igloo dining, and live music on weekends. Answer menu questions, promote events, help guests reserve tables, and explain wine club pickup details."
         />
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button type="button" onClick={applyPrompt} disabled={applyingPrompt || !program.setupPrompt.trim()} className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-            {applyingPrompt ? "Applying prompt..." : "Apply prompt to setup"}
+          <button type="button" onClick={applyPrompt} disabled={applyingPrompt || !program.setupPrompt.trim()} className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-5 py-2 text-[var(--text-sm)] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+            {applyingPrompt ? "Applying…" : "Apply to setup"}
           </button>
-          <p className="text-sm text-slate-600">This updates structured fields, boundaries, and conversion goals. You can edit any result.</p>
+          <p className="text-[var(--text-sm)] text-[var(--color-text-secondary)]">Updates structured fields, boundaries, and conversion goals. You can edit any result.</p>
         </div>
       </SectionCard>
 
-      <SectionCard title="Structured knowledge" description="Restaurant-first schema designed for clear, practical responses.">
+      <SectionCard title="Structured knowledge" description="Restaurant knowledge your assistant uses to answer customer questions.">
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput label="Business overview" multiline rows={3} value={program.fields.businessOverview} onChange={(value) => updateField("businessOverview", value)} />
           <TextInput label="Cuisine and service style" multiline rows={3} value={program.fields.cuisineServiceStyle} onChange={(value) => updateField("cuisineServiceStyle", value)} />
@@ -342,7 +342,7 @@ function KnowledgeEditor() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Training controls" description="Define voice, boundaries, escalation rules, and conversion goals.">
+      <SectionCard title="Training controls" description="Set your assistant's voice, boundaries, escalation rules, and goals.">
         <div className="grid gap-4 md:grid-cols-2">
           <TextInput label="Tone and voice" multiline rows={3} value={program.training.toneVoice} onChange={(value) => updateTraining("toneVoice", value)} />
           <TextInput label="What the assistant should answer" multiline rows={3} value={program.training.shouldAnswer} onChange={(value) => updateTraining("shouldAnswer", value)} />
@@ -364,35 +364,35 @@ function KnowledgeEditor() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Uploaded sources" description="Add menu, event, or policy links the assistant should rely on.">
+      <SectionCard title="Uploaded sources" description="Add links to menus, events, or policies your assistant should reference.">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] md:items-end">
           <TextInput label="Label" value={sourceLabel} onChange={setSourceLabel} placeholder="Spring tasting menu" />
           <TextInput label="URL" value={sourceUrl} onChange={setSourceUrl} placeholder="https://example.com/menu" />
-          <label className="flex flex-col gap-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Type</span>
-            <select value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)} className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-900">
+          <label className="flex flex-col gap-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Type</span>
+            <select value={sourceKind} onChange={(event) => setSourceKind(event.target.value as SourceKind)} className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-[var(--color-text)]">
               {sourceKinds.map((kind) => (
                 <option key={kind} value={kind}>{kind}</option>
               ))}
             </select>
           </label>
-          <button type="button" onClick={addSource} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300">Add source</button>
+          <button type="button" onClick={addSource} className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-3 text-[var(--text-sm)] font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]">Add source</button>
         </div>
 
         <div className="mt-4 space-y-2">
           {program.uploadedSources.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No sources added yet.</p>
+            <p className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-[var(--text-sm)] text-[var(--color-text-secondary)]">No sources added yet.</p>
           ) : (
             program.uploadedSources.map((source) => (
-              <div key={source.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm">
+              <div key={source.id} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-[var(--text-sm)]">
                 <div>
-                  <p className="font-semibold text-slate-900">{source.label}</p>
-                  <p className="text-slate-600">{source.url}</p>
+                  <p className="font-semibold text-[var(--color-text)]">{source.label}</p>
+                  <p className="text-[var(--color-text-secondary)]">{source.url}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setProgram((current) => current ? { ...current, uploadedSources: current.uploadedSources.filter((entry) => entry.id !== source.id) } : current)}
-                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-rose-600"
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-2 py-1 text-[var(--text-xs)] font-semibold text-[var(--color-danger)]"
                 >
                   Remove
                 </button>
@@ -402,33 +402,33 @@ function KnowledgeEditor() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Website crawl and imported intelligence" description="Import website content and merge it into your knowledge program.">
+      <SectionCard title="Website import" description="Import website content to enrich your assistant's knowledge.">
         <WebsiteImportPanel business={business} onApplyImportedContent={applyImportedContent} />
       </SectionCard>
 
-      <SectionCard title="Imported structured website knowledge" description="Tandem groups extracted website data by restaurant knowledge type.">
+      <SectionCard title="Detected website content" description="Content automatically extracted from your website, organized by type.">
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900">Events</p>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <p className="font-semibold text-[var(--color-text)]">Events</p>
             <p className="mt-1">{program.structuredWebsiteKnowledge.events.length} detected</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900">Menus</p>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <p className="font-semibold text-[var(--color-text)]">Menus</p>
             <p className="mt-1">{program.structuredWebsiteKnowledge.menuSections.length} sections detected</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900">Reservations</p>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <p className="font-semibold text-[var(--color-text)]">Reservations</p>
             <p className="mt-1">{program.structuredWebsiteKnowledge.reservations.instructions ? "Detected" : "Not detected"}</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900">Memberships</p>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-4 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
+            <p className="font-semibold text-[var(--color-text)]">Memberships</p>
             <p className="mt-1">{program.structuredWebsiteKnowledge.memberships.benefits ? "Detected" : "Not detected"}</p>
           </div>
         </div>
       </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <SectionCard title="FAQs" description="Customer-ready answers used directly in chat.">
+        <SectionCard title="FAQs" description="Answers your assistant uses directly in customer conversations.">
           <form className="space-y-3" onSubmit={addOrUpdateFaq}>
             <TextInput label="Question" value={faqForm.title} onChange={(value) => setFaqForm((current) => ({ ...current, title: value }))} />
             <TextInput label="Answer" multiline rows={4} value={faqForm.body} onChange={(value) => setFaqForm((current) => ({ ...current, body: value }))} />
@@ -436,23 +436,23 @@ function KnowledgeEditor() {
             <ToggleSwitch label="Visible to guests" checked={faqForm.showInHelp} onChange={(next) => setFaqForm((current) => ({ ...current, showInHelp: next }))} />
             <div className="flex justify-end gap-2">
               {editingFaqId ? (
-                <button type="button" onClick={() => { setEditingFaqId(null); setFaqForm(defaultFaqForm); }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">Cancel</button>
+                <button type="button" onClick={() => { setEditingFaqId(null); setFaqForm(defaultFaqForm); }} className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">Cancel</button>
               ) : null}
-              <button type="submit" className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white">{editingFaqId ? "Update FAQ" : "Add FAQ"}</button>
+              <button type="submit" className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2 text-[var(--text-sm)] font-semibold text-white">{editingFaqId ? "Update FAQ" : "Add FAQ"}</button>
             </div>
           </form>
 
           <div className="mt-4 space-y-2">
             {visibleFaqs.map((entry) => (
-              <article key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <p className="font-semibold text-slate-900">{entry.question}</p>
-                <p className="mt-1 text-sm text-slate-700">{entry.answer}</p>
+              <article key={entry.id} className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-3">
+                <p className="font-semibold text-[var(--color-text)]">{entry.question}</p>
+                <p className="mt-1 text-[var(--text-sm)] text-[var(--color-text-secondary)]">{entry.answer}</p>
               </article>
             ))}
           </div>
         </SectionCard>
 
-        <SectionCard title="Policies" description="Rules and constraints the assistant should cite.">
+        <SectionCard title="Policies" description="Rules and guidelines your assistant can reference.">
           <form className="space-y-3" onSubmit={addOrUpdatePolicy}>
             <TextInput label="Title" value={policyForm.title} onChange={(value) => setPolicyForm((current) => ({ ...current, title: value }))} />
             <TextInput label="Details" multiline rows={4} value={policyForm.body} onChange={(value) => setPolicyForm((current) => ({ ...current, body: value }))} />
@@ -460,17 +460,17 @@ function KnowledgeEditor() {
             <ToggleSwitch label="Visible to guests" checked={policyForm.showInHelp} onChange={(next) => setPolicyForm((current) => ({ ...current, showInHelp: next }))} />
             <div className="flex justify-end gap-2">
               {editingPolicyId ? (
-                <button type="button" onClick={() => { setEditingPolicyId(null); setPolicyForm(defaultPolicyForm); }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">Cancel</button>
+                <button type="button" onClick={() => { setEditingPolicyId(null); setPolicyForm(defaultPolicyForm); }} className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">Cancel</button>
               ) : null}
-              <button type="submit" className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white">{editingPolicyId ? "Update policy" : "Add policy"}</button>
+              <button type="submit" className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2 text-[var(--text-sm)] font-semibold text-white">{editingPolicyId ? "Update policy" : "Add policy"}</button>
             </div>
           </form>
 
           <div className="mt-4 space-y-2">
             {visiblePolicies.map((entry) => (
-              <article key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <p className="font-semibold text-slate-900">{entry.title}</p>
-                <p className="mt-1 text-sm text-slate-700">{entry.description}</p>
+              <article key={entry.id} className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg)] p-3">
+                <p className="font-semibold text-[var(--color-text)]">{entry.title}</p>
+                <p className="mt-1 text-[var(--text-sm)] text-[var(--color-text-secondary)]">{entry.description}</p>
               </article>
             ))}
           </div>

@@ -826,15 +826,15 @@ export default function LocationsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-10">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
       <div className="grid gap-6 lg:grid-cols-[minmax(300px,380px)_1fr]">
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <section className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-xs)]">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Locations</h2>
+            <h2 className="text-[var(--text-lg)] font-semibold text-[var(--color-text)]">Locations</h2>
             <button
               type="button"
               onClick={openCreateMode}
-              className="rounded-xl bg-[var(--console-primary)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)]"
+              className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-[var(--text-sm)] font-semibold text-white transition hover:bg-[var(--color-primary-hover)]"
             >
               Add location
             </button>
@@ -849,20 +849,20 @@ export default function LocationsPage() {
                   key={location.id}
                   type="button"
                   onClick={() => handleSelectLocation(location.id)}
-                  className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                  className={`w-full rounded-[var(--radius-lg)] border px-3 py-3 text-left transition ${
                     isSelected
-                      ? "border-blue-200 bg-blue-50"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      ? "border-[var(--color-primary-border)] bg-[var(--color-primary-subtle)]"
+                      : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-alt)]"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{deriveBusinessTitle(location)}</p>
-                      <p className="text-sm text-slate-600">{deriveStreetAddress(location)}</p>
-                      <p className="text-xs text-slate-500">{location.timezone || "UTC"}</p>
+                      <p className="text-[var(--text-sm)] font-semibold text-[var(--color-text)]">{deriveBusinessTitle(location)}</p>
+                      <p className="text-[var(--text-sm)] text-[var(--color-text-secondary)]">{deriveStreetAddress(location)}</p>
+                      <p className="text-[var(--text-xs)] text-[var(--color-text-muted)]">{location.timezone || "UTC"}</p>
                     </div>
                     {isCurrent ? (
-                      <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">Current</span>
+                      <span className="rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[var(--text-xs)] font-semibold text-white">Current</span>
                     ) : null}
                   </div>
                 </button>
@@ -871,7 +871,7 @@ export default function LocationsPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-900/5">
+        <section className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-xs)]">
           {panelMode === "create" ? (
             <form
               className="mx-auto w-full max-w-3xl space-y-4"
@@ -881,41 +881,41 @@ export default function LocationsPage() {
               }}
             >
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Add location</h2>
-                <p className="mt-1 text-sm text-slate-600">Add a location so your assistant can answer with the right local details.</p>
+                <h2 className="text-[var(--text-lg)] font-semibold text-[var(--color-text)]">Add location</h2>
+                <p className="mt-1 text-[var(--text-sm)] text-[var(--color-text-secondary)]">Add a location so your assistant can answer with the right local details.</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Location name</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Location name</span>
                   <input
                     value={createForm.locationName}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, locationName: event.target.value }))}
                     placeholder="Trademark Ave"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
                 </label>
                 <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Street address</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Street address</span>
                   <input
                     value={createForm.streetAddress}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, streetAddress: event.target.value }))}
                     placeholder="640 Trademark Ave"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">City</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">City</span>
                   <input
                     value={createForm.city}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, city: event.target.value }))}
                     placeholder="San Francisco"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
-                  {createErrors.city ? <p className="mt-1 text-xs text-rose-600">{createErrors.city}</p> : null}
+                  {createErrors.city ? <p className="mt-1 text-[var(--text-xs)] text-[var(--color-danger)]">{createErrors.city}</p> : null}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Country</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Country</span>
                   <select
                     value={createForm.country}
                     onChange={(event) => {
@@ -926,7 +926,7 @@ export default function LocationsPage() {
                         state: defaultRegion(country),
                       }));
                     }}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   >
                     {COUNTRY_OPTIONS.map((country) => (
                       <option key={country} value={country}>{country}</option>
@@ -934,44 +934,44 @@ export default function LocationsPage() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">State</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">State</span>
                   <select
                     value={createForm.state}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, state: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   >
                     <option value="">Select state</option>
                     {regionOptions(createForm.country).map((region) => (
                       <option key={region} value={region}>{region}</option>
                     ))}
                   </select>
-                  {createErrors.state ? <p className="mt-1 text-xs text-rose-600">{createErrors.state}</p> : null}
+                  {createErrors.state ? <p className="mt-1 text-[var(--text-xs)] text-[var(--color-danger)]">{createErrors.state}</p> : null}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">ZIP code</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">ZIP code</span>
                   <input
                     value={createForm.zip}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, zip: event.target.value }))}
                     placeholder="94107"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
-                  {createErrors.zip ? <p className="mt-1 text-xs text-rose-600">{createErrors.zip}</p> : null}
+                  {createErrors.zip ? <p className="mt-1 text-[var(--text-xs)] text-[var(--color-danger)]">{createErrors.zip}</p> : null}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Phone</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Phone</span>
                   <input
                     value={createForm.phone}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, phone: event.target.value }))}
                     placeholder="(410) 555-0123"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
                 </label>
                 <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Timezone</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Timezone</span>
                   <select
                     value={createForm.timezone}
                     onChange={(event) => setCreateForm((prev) => ({ ...prev, timezone: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   >
                     {createTimezoneOptions.map((timezone) => (
                       <option key={timezone} value={timezone}>{timezone}</option>
@@ -984,19 +984,19 @@ export default function LocationsPage() {
                 <button
                   type="submit"
                   disabled={!canCreate || hasCreateErrors || isCreatingLocation}
-                  className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2 text-[var(--text-sm)] font-semibold text-white transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isCreatingLocation ? "Creating…" : "Create"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setPanelMode("edit")}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--text-sm)] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)]"
                 >
                   Cancel
                 </button>
               </div>
-              {createStatus ? <p className="text-xs text-slate-600">{createStatus}</p> : null}
+              {createStatus ? <p className="text-[var(--text-xs)] text-[var(--color-text-secondary)]">{createStatus}</p> : null}
             </form>
           ) : selectedLocation ? (
             <form
@@ -1007,38 +1007,38 @@ export default function LocationsPage() {
               }}
             >
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Update location</h2>
-                <p className="mt-1 text-sm text-slate-600">Keep this location accurate so customers receive the right information.</p>
+                <h2 className="text-[var(--text-lg)] font-semibold text-[var(--color-text)]">Update location</h2>
+                <p className="mt-1 text-[var(--text-sm)] text-[var(--color-text-secondary)]">Keep this location accurate so customers receive the right information.</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Location name</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Location name</span>
                   <input
                     value={editForm.locationName}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, locationName: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
                 </label>
                 <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Street address</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Street address</span>
                   <input
                     value={editForm.streetAddress}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, streetAddress: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">City</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">City</span>
                   <input
                     value={editForm.city}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, city: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
-                  {editErrors.city ? <p className="mt-1 text-xs text-rose-600">{editErrors.city}</p> : null}
+                  {editErrors.city ? <p className="mt-1 text-[var(--text-xs)] text-[var(--color-danger)]">{editErrors.city}</p> : null}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Country</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Country</span>
                   <select
                     value={editForm.country}
                     onChange={(event) => {
@@ -1049,7 +1049,7 @@ export default function LocationsPage() {
                         state: defaultRegion(country),
                       }));
                     }}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   >
                     {COUNTRY_OPTIONS.map((country) => (
                       <option key={country} value={country}>{country}</option>
@@ -1057,43 +1057,43 @@ export default function LocationsPage() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">State</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">State</span>
                   <select
                     value={editForm.state}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, state: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   >
                     <option value="">Select state</option>
                     {regionOptions(editForm.country).map((region) => (
                       <option key={region} value={region}>{region}</option>
                     ))}
                   </select>
-                  {editErrors.state ? <p className="mt-1 text-xs text-rose-600">{editErrors.state}</p> : null}
+                  {editErrors.state ? <p className="mt-1 text-[var(--text-xs)] text-[var(--color-danger)]">{editErrors.state}</p> : null}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">ZIP code</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">ZIP code</span>
                   <input
                     value={editForm.zip}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, zip: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
-                  {editErrors.zip ? <p className="mt-1 text-xs text-rose-600">{editErrors.zip}</p> : null}
+                  {editErrors.zip ? <p className="mt-1 text-[var(--text-xs)] text-[var(--color-danger)]">{editErrors.zip}</p> : null}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Phone</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Phone</span>
                   <input
                     value={editForm.phone}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, phone: event.target.value }))}
                     placeholder="(410) 555-0123"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   />
                 </label>
                 <label className="block md:col-span-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Timezone</span>
+                  <span className="text-[var(--text-xs)] font-semibold text-[var(--color-text-muted)]">Timezone</span>
                   <select
                     value={editForm.timezone}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, timezone: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                    className="mt-1 w-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--text-sm)] text-[var(--color-text)]"
                   >
                     {editTimezoneOptions.map((timezone) => (
                       <option key={timezone} value={timezone}>{timezone}</option>
@@ -1106,14 +1106,14 @@ export default function LocationsPage() {
                 <button
                   type="submit"
                   disabled={!canSaveEdit || hasEditErrors || isSavingEdit}
-                  className="rounded-xl bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2 text-[var(--text-sm)] font-semibold text-white transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSavingEdit ? "Saving…" : "Save"}
                 </button>
                 <button
                   type="button"
                   onClick={cancelEdit}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--text-sm)] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)]"
                 >
                   Cancel
                 </button>
@@ -1121,22 +1121,22 @@ export default function LocationsPage() {
                   type="button"
                   onClick={() => requestDeleteLocation(selectedLocation.id)}
                   disabled={isDeletingLocation}
-                  className="ml-auto rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="ml-auto rounded-[var(--radius-md)] border border-[var(--color-danger-border)] px-4 py-2 text-[var(--text-sm)] font-semibold text-[var(--color-danger)] transition hover:border-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Delete location
                 </button>
               </div>
-              {editStatus ? <p className="text-xs text-slate-600">{editStatus}</p> : null}
+              {editStatus ? <p className="text-[var(--text-xs)] text-[var(--color-text-secondary)]">{editStatus}</p> : null}
             </form>
           ) : (
-            <p className="text-sm text-slate-600">Select a location to edit details.</p>
+            <p className="text-[var(--text-sm)] text-[var(--color-text-secondary)]">Select a location to edit details.</p>
           )}
         </section>
       </div>
 
       {deleteTarget ? (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-surface-inverse)]/30 px-4 backdrop-blur-sm"
           onClick={() => {
             if (!isDeletingLocation) {
               setDeleteTargetId(null);
@@ -1144,22 +1144,22 @@ export default function LocationsPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-900/20"
+            className="w-full max-w-md rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-lg)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-500">Delete location</p>
-            <h3 className="mt-2 text-xl font-semibold text-slate-900">Delete {deriveBusinessTitle(deleteTarget)}?</h3>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="text-[var(--text-xs)] font-semibold uppercase tracking-[0.18em] text-[var(--color-danger)]">Delete location</p>
+            <h3 className="mt-2 text-xl font-semibold text-[var(--color-text)]">Delete {deriveBusinessTitle(deleteTarget)}?</h3>
+            <p className="mt-2 text-[var(--text-sm)] text-[var(--color-text-secondary)]">
               This removes the location from your dashboard. This action cannot be undone.
             </p>
-            <p className="mt-1 text-xs text-slate-500">Address: {deriveStreetAddress(deleteTarget)}</p>
+            <p className="mt-1 text-[var(--text-xs)] text-[var(--color-text-muted)]">Address: {deriveStreetAddress(deleteTarget)}</p>
 
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setDeleteTargetId(null)}
                 disabled={isDeletingLocation}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--text-sm)] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Keep location
               </button>
@@ -1169,7 +1169,7 @@ export default function LocationsPage() {
                   void confirmDeleteLocation();
                 }}
                 disabled={isDeletingLocation}
-                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-[var(--radius-md)] bg-[var(--color-danger)] px-4 py-2 text-[var(--text-sm)] font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeletingLocation ? "Deleting…" : "Delete location"}
               </button>

@@ -18,14 +18,14 @@ type ConsolePageHeading = { title: string; description?: string };
 
 const pageHeadingMap: Record<string, ConsolePageHeading> = {
   "/overview": { title: "Overview", description: "Track setup progress and recent customer activity." },
-  "/conversations": { title: "Inbox", description: "Review and respond to recent customer chats." },
-  "/intents": { title: "Assistant", description: "Set suggested actions and how your assistant responds." },
-  "/knowledge": { title: "Knowledge", description: "Train your assistant with business context, events, policies, and conversion goals." },
-  "/handoff": { title: "Handoff", description: "Define when chats route to your team and how guests can contact you." },
-  "/widget": { title: "Appearance", description: "Style your website chat and embed it on your site." },
-  "/integrations": { title: "Integrations", description: "Connect tools that keep customer answers accurate." },
-  "/settings": { title: "Settings", description: "Manage business defaults, notifications, deployment details, and permissions." },
-  "/locations": { title: "Locations", description: "Update location details your assistant relies on." },
+  "/conversations": { title: "Inbox", description: "Review and respond to recent customer conversations." },
+  "/intents": { title: "Assistant", description: "Configure suggested actions and how your assistant responds." },
+  "/knowledge": { title: "Knowledge", description: "Manage the information your assistant uses to answer customers." },
+  "/handoff": { title: "Handoff", description: "Control when conversations route to your team and how customers reach you." },
+  "/widget": { title: "Appearance", description: "Customize your website chat widget and grab the install code." },
+  "/integrations": { title: "Integrations", description: "Connect tools that keep customer answers up to date." },
+  "/settings": { title: "Settings", description: "Manage your business details, assistant behavior, and installation." },
+  "/locations": { title: "Locations", description: "Keep location details accurate so your assistant gives the right answers." },
 };
 
 function resolvePageHeading(pathname: string) {
