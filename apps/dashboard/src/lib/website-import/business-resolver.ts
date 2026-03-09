@@ -53,6 +53,27 @@ export async function resolveBusinessId(args: {
 
     const business = data?.[0];
     if (!business) {
+      // Fallback: the client may be passing a business ID as the slug param.
+      const { data: byId, error: idError } = await args.supabase
+        .from("businesses")
+        .select("id,slug")
+        .eq("id", normalized)
+        .limit(1)
+        .returns<BusinessRow[]>();
+
+      if (idError) {
+        throw new BusinessResolutionError(`Failed to resolve business: ${idError.message}`, 500, "BUSINESS_RESOLVE_FAILED");
+      }
+
+      const fallback = byId?.[0];
+      if (fallback) {
+        return {
+          businessId: fallback.id,
+          businessSlug: fallback.slug,
+          inputMode: "slug",
+        };
+      }
+
       throw new BusinessResolutionError("Business not found", 404, "BUSINESS_NOT_FOUND");
     }
 
