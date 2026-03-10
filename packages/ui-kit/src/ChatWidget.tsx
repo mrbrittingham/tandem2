@@ -756,6 +756,25 @@ export function ChatWidget({
           throw new Error("No user message to send");
         }
 
+        const debugPayload = {
+            businessId: runtimeConfig.businessId,
+            businessSlug: runtimeConfig.businessSlug,
+            locationId: runtimeConfig.locationId,
+            locationSlug: runtimeConfig.locationSlug,
+            messages: [
+              {
+                role: latestUserMessage.role,
+                content: latestUserMessage.text,
+              },
+            ],
+          };
+        // TEMP DEBUG: Remove after diagnosing missing business identifier
+        console.log("CHAT DEBUG runtimeConfig", JSON.parse(JSON.stringify(runtimeConfig)));
+        console.log("CHAT DEBUG payload", JSON.parse(JSON.stringify(debugPayload)));
+        console.log("CHAT DEBUG businessId", runtimeConfig.businessId);
+        console.log("CHAT DEBUG businessSlug", runtimeConfig.businessSlug);
+        console.log("CHAT DEBUG isValid", runtimeConfig.isValid);
+        console.log("CHAT DEBUG chatApiUrl", chatApiUrl);
         const response = await fetch(chatApiUrl, {
           method: "POST",
           headers: {
