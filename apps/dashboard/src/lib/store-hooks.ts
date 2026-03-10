@@ -24,7 +24,7 @@ export function useConsoleStore(): MockState {
 
 export function useActiveBusiness(): BusinessProfile | undefined {
   const snapshot = useConsoleStore();
-  return getActiveLocation(snapshot);
+  return getActiveBusiness(snapshot);
 }
 
 export function useBusinesses(): BusinessProfile[] {

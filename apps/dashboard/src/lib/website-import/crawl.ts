@@ -4,6 +4,7 @@ import {
   decodeHtml,
   excerptText,
   extractTitle,
+  htmlToStructuredText,
   htmlToText,
   isSameDomain,
   linkPriorityScore,
@@ -58,15 +59,30 @@ const HIGH_SIGNAL_PATHS = [
   "/book",
   "/menu",
   "/menus",
+  "/food-menu",
+  "/dinner-menu",
+  "/lunch-menu",
+  "/brunch-menu",
+  "/drink-menu",
+  "/wine-list",
+  "/cocktails",
+  "/bar",
+  "/food",
+  "/dining",
+  "/kitchen",
   "/events",
   "/calendar",
   "/what-s-on",
   "/whatson",
   "/happenings",
+  "/upcoming-events",
+  "/live-music",
   "/wine-club",
   "/membership",
   "/club",
   "/private-events",
+  "/weddings",
+  "/group-dining",
   "/catering",
   "/order-online",
   "/delivery",
@@ -674,10 +690,15 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
       continue;
     }
 
+    const lowerUrl = nextUrl.toLowerCase();
+    const isContentPage = /menu|food|dining|drink|wine|cocktail|brunch|dinner|lunch/i.test(`${lowerUrl} ${title}`);
+    const structuredText = isContentPage ? excerptText(htmlToStructuredText(html), excerptLimit) : undefined;
+
     pages.push({
       url: nextUrl,
       title,
       textExcerpt,
+      structuredText,
       metaDescription: extractMetaDescription(html),
       headingText: extractHeadingText(html),
       sourceAnchorTexts: Array.from(anchorTextsByUrl.get(nextUrl) ?? []).slice(0, 12),

@@ -471,12 +471,32 @@ export function WebsiteImportPanel({
     } : current);
   };
 
+  const removeEvent = (id: string) => {
+    setDraft((current) => current ? {
+      ...current,
+      restaurantKnowledge: {
+        ...current.restaurantKnowledge,
+        events: current.restaurantKnowledge.events.filter((entry) => entry.id !== id),
+      },
+    } : current);
+  };
+
   const setMenuInclude = (id: string, include: boolean) => {
     setDraft((current) => current ? {
       ...current,
       restaurantKnowledge: {
         ...current.restaurantKnowledge,
         menuSections: current.restaurantKnowledge.menuSections.map((entry) => entry.id === id ? { ...entry, include } : entry),
+      },
+    } : current);
+  };
+
+  const removeMenu = (id: string) => {
+    setDraft((current) => current ? {
+      ...current,
+      restaurantKnowledge: {
+        ...current.restaurantKnowledge,
+        menuSections: current.restaurantKnowledge.menuSections.filter((entry) => entry.id !== id),
       },
     } : current);
   };
@@ -597,6 +617,7 @@ export function WebsiteImportPanel({
 
   return (
     <div className="space-y-5">
+      {/* Scan Controls */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
         <h3 className="text-lg font-semibold text-slate-900">Scan Website</h3>
         <p className="mt-1 text-sm text-slate-600">Tandem classifies pages first, then extracts structured restaurant knowledge by page type.</p>
@@ -622,7 +643,7 @@ export function WebsiteImportPanel({
         </div>
 
         <div className="mt-3">
-          <TextInput label="Website URL" value={url} onChange={setUrl} placeholder="https://windmillcreekvineyard.com/upcoming-events/" />
+          <TextInput label="Website URL" value={url} onChange={setUrl} placeholder="https://example.com" />
         </div>
 
         {run ? <p className="mt-3 text-xs text-slate-500">Last scan: {formatDate(run.finishedAt ?? run.createdAt)} ({run.status})</p> : null}
@@ -632,6 +653,7 @@ export function WebsiteImportPanel({
         {success ? <p className="mt-2 text-sm text-emerald-600">{success}</p> : null}
       </div>
 
+      {/* Page Type Breakdown */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
         <h3 className="text-lg font-semibold text-slate-900">Detected Page Types</h3>
         {!draft ? (
@@ -645,69 +667,59 @@ export function WebsiteImportPanel({
         )}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-          <h3 className="text-lg font-semibold text-slate-900">Detected Events</h3>
-          <div className="mt-3 space-y-3">
-            {(draft?.restaurantKnowledge.events ?? []).length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No events detected.</p>
-            ) : draft?.restaurantKnowledge.events.map((event) => (
-              <article key={event.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">{event.title}</p>
-                    <p className="text-sm text-slate-600">{event.date ?? "Date unknown"}{event.time ? ` • ${event.time}` : ""}</p>
-                    <p className="mt-1 text-sm text-slate-700">{event.description || "No event summary extracted."}</p>
-                    {event.category ? <p className="mt-1 text-xs text-slate-500">Category: {event.category}</p> : null}
-                    {event.pricing ? <p className="text-xs text-slate-500">Price: {event.pricing}</p> : null}
-                    {event.location ? <p className="text-xs text-slate-500">Location: {event.location}</p> : null}
-                    {event.bookingInfo ? <p className="text-xs text-slate-500">Booking notes: {event.bookingInfo}</p> : null}
-                    {event.bookingUrl ? <p className="text-xs text-slate-500">Booking URL: {event.bookingUrl}</p> : null}
-                    {event.sourceUrl ? <p className="text-xs text-slate-500">Event URL: {event.sourceUrl}</p> : null}
-                  </div>
-                  <button type="button" onClick={() => setEventInclude(event.id, !event.include)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">{event.include ? "Included" : "Excluded"}</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-          <h3 className="text-lg font-semibold text-slate-900">Detected Menus</h3>
-          <div className="mt-3 space-y-3">
-            {(draft?.restaurantKnowledge.menuSections ?? []).length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No menu sections detected.</p>
-            ) : draft?.restaurantKnowledge.menuSections.map((section) => (
-              <article key={section.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <p className="font-semibold text-slate-900">{section.title}</p>
-                  <button type="button" onClick={() => setMenuInclude(section.id, !section.include)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">{section.include ? "Included" : "Excluded"}</button>
-                </div>
-                <p className="text-sm text-slate-700">{section.items.slice(0, 4).map((item) => item.name).join(", ")}</p>
-              </article>
-            ))}
-          </div>
+      {/* Detected Events — collapsible cards */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <h3 className="text-lg font-semibold text-slate-900">Detected Events</h3>
+        <div className="mt-3 space-y-2">
+          {(draft?.restaurantKnowledge.events ?? []).length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No events detected.</p>
+          ) : draft?.restaurantKnowledge.events.map((event) => (
+            <CollapsibleEventCard
+              key={event.id}
+              event={event}
+              onToggleInclude={() => setEventInclude(event.id, !event.include)}
+              onDelete={() => removeEvent(event.id)}
+            />
+          ))}
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-          <h3 className="text-lg font-semibold text-slate-900">Detected Reservation Info</h3>
-          <p className="mt-2 text-sm text-slate-700">{draft?.restaurantKnowledge.reservations.instructions || "No reservation guidance detected."}</p>
-          {draft?.restaurantKnowledge.reservations.bookingUrl ? (
-            <p className="mt-1 text-xs text-slate-600">Booking URL: {draft.restaurantKnowledge.reservations.bookingUrl}</p>
-          ) : null}
-          {draft?.restaurantKnowledge.reservations.platforms?.length ? (
-            <p className="mt-1 text-xs text-slate-600">Platforms: {draft.restaurantKnowledge.reservations.platforms.join(", ")}</p>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-          <h3 className="text-lg font-semibold text-slate-900">Detected Membership Info</h3>
-          <p className="mt-2 text-sm text-slate-700">{draft?.restaurantKnowledge.memberships.benefits || "No membership information detected."}</p>
+      {/* Detected Menus — collapsible cards */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <h3 className="text-lg font-semibold text-slate-900">Detected Menus</h3>
+        <div className="mt-3 space-y-2">
+          {(draft?.restaurantKnowledge.menuSections ?? []).length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No menu sections detected.</p>
+          ) : draft?.restaurantKnowledge.menuSections.map((section) => (
+            <CollapsibleMenuCard
+              key={section.id}
+              section={section}
+              onToggleInclude={() => setMenuInclude(section.id, !section.include)}
+              onDelete={() => removeMenu(section.id)}
+            />
+          ))}
         </div>
       </div>
 
+      {/* Detected Reservations */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <h3 className="text-lg font-semibold text-slate-900">Detected Reservations</h3>
+        <p className="mt-2 text-sm text-slate-700">{draft?.restaurantKnowledge.reservations.instructions || "No reservation guidance detected."}</p>
+        {draft?.restaurantKnowledge.reservations.bookingUrl ? (
+          <p className="mt-1 text-xs text-slate-600">Booking URL: {draft.restaurantKnowledge.reservations.bookingUrl}</p>
+        ) : null}
+        {draft?.restaurantKnowledge.reservations.platforms?.length ? (
+          <p className="mt-1 text-xs text-slate-600">Platforms: {draft.restaurantKnowledge.reservations.platforms.join(", ")}</p>
+        ) : null}
+      </div>
+
+      {/* Detected Memberships */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+        <h3 className="text-lg font-semibold text-slate-900">Detected Memberships</h3>
+        <p className="mt-2 text-sm text-slate-700">{draft?.restaurantKnowledge.memberships.benefits || "No membership information detected."}</p>
+      </div>
+
+      {/* Detected Policies */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
         <h3 className="text-lg font-semibold text-slate-900">Detected Policies</h3>
         <div className="mt-3 space-y-2">
@@ -720,32 +732,36 @@ export function WebsiteImportPanel({
                   <p className="font-semibold text-slate-900">{policy.title}</p>
                   <p className="text-sm text-slate-700">{policy.summary}</p>
                 </div>
-                <button type="button" onClick={() => setPolicyInclude(policy.id, !policy.include)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">{policy.include ? "Included" : "Excluded"}</button>
+                <button type="button" onClick={() => setPolicyInclude(policy.id, !policy.include)} className={`shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold ${policy.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{policy.include ? "Included" : "Excluded"}</button>
               </div>
             </article>
           ))}
         </div>
       </div>
 
+      {/* FAQ Suggestions */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Secondary FAQ Suggestions</h3>
+        <h3 className="text-lg font-semibold text-slate-900">FAQ Suggestions</h3>
+        <p className="mt-1 text-sm text-slate-500">Generated from extracted knowledge. Toggle to include or exclude.</p>
         <div className="mt-3 space-y-2">
           {(draft?.faqs ?? []).length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No FAQ suggestions detected.</p>
           ) : draft?.faqs.map((faq) => (
             <article key={faq.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-slate-900">{faq.question}</p>
-                  <p className="text-sm text-slate-700">{faq.answer}</p>
+                  <p className="mt-0.5 text-sm text-slate-700">{faq.answer}</p>
+                  {faq.lowConfidence ? <p className="mt-1 text-xs text-amber-600">Low confidence extraction</p> : null}
                 </div>
-                <button type="button" onClick={() => setFaqInclude(faq.id, !faq.include)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">{faq.include ? "Included" : "Excluded"}</button>
+                <button type="button" onClick={() => setFaqInclude(faq.id, !faq.include)} className={`shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold ${faq.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{faq.include ? "Included" : "Excluded"}</button>
               </div>
             </article>
           ))}
         </div>
       </div>
 
+      {/* Review & Apply */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
         <h3 className="text-lg font-semibold text-slate-900">Review & Apply</h3>
         <div className="mt-4 flex flex-wrap justify-end gap-3">
@@ -756,5 +772,113 @@ export function WebsiteImportPanel({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Collapsible Event Card                                             */
+/* ------------------------------------------------------------------ */
+
+function CollapsibleEventCard({
+  event,
+  onToggleInclude,
+  onDelete,
+}: {
+  event: ImportEvent;
+  onToggleInclude: () => void;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <article className={`rounded-xl border bg-slate-50/70 p-3 ${event.include ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <svg className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-900">{event.title}</p>
+            <p className="text-xs text-slate-500">{event.date ?? "Date unknown"}{event.time ? ` • ${event.time}` : ""}{event.location ? ` • ${event.location}` : ""}</p>
+          </div>
+        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={onToggleInclude} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${event.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{event.include ? "Included" : "Excluded"}</button>
+          <button type="button" onClick={onDelete} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50" title="Remove event">✕</button>
+        </div>
+      </div>
+
+      {expanded ? (
+        <div className="mt-2 space-y-1 border-t border-slate-200 pt-2 text-sm text-slate-700">
+          {event.description ? <p>{event.description}</p> : null}
+          {event.category ? <p className="text-xs text-slate-500">Category: {event.category}</p> : null}
+          {event.pricing ? <p className="text-xs text-slate-500">Price: {event.pricing}</p> : null}
+          {event.bookingInfo ? <p className="text-xs text-slate-500">Booking notes: {event.bookingInfo}</p> : null}
+          {event.bookingUrl ? <p className="text-xs text-slate-500">Booking URL: <a href={event.bookingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{event.bookingUrl}</a></p> : null}
+          {event.sourceUrl ? <p className="text-xs text-slate-500">Source: <a href={event.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{event.sourceUrl}</a></p> : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Collapsible Menu Card                                              */
+/* ------------------------------------------------------------------ */
+
+function CollapsibleMenuCard({
+  section,
+  onToggleInclude,
+  onDelete,
+}: {
+  section: ImportMenuSection;
+  onToggleInclude: () => void;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const itemCount = section.items.length;
+  const previewItems = section.items.slice(0, 3).map((i) => i.name).join(", ");
+
+  return (
+    <article className={`rounded-xl border bg-slate-50/70 p-3 ${section.include ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <svg className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-900">{section.title}</p>
+            <p className="truncate text-xs text-slate-500">{itemCount} item{itemCount !== 1 ? "s" : ""}{previewItems ? ` — ${previewItems}` : ""}</p>
+          </div>
+        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={onToggleInclude} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${section.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{section.include ? "Included" : "Excluded"}</button>
+          <button type="button" onClick={onDelete} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50" title="Remove menu">✕</button>
+        </div>
+      </div>
+
+      {expanded ? (
+        <div className="mt-2 border-t border-slate-200 pt-2">
+          <div className="space-y-1">
+            {section.items.map((item) => (
+              <div key={item.id} className="flex items-baseline justify-between gap-2 text-sm">
+                <div className="min-w-0">
+                  <span className="font-medium text-slate-800">{item.name}</span>
+                  {item.description ? <span className="ml-1 text-slate-500">— {item.description}</span> : null}
+                </div>
+                {item.price ? <span className="shrink-0 font-medium text-slate-600">{item.price}</span> : null}
+              </div>
+            ))}
+          </div>
+          {section.sourceUrl ? (
+            <p className="mt-2 text-xs text-slate-500">Source: <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{section.sourceUrl}</a></p>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
   );
 }

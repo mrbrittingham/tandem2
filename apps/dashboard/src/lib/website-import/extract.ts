@@ -344,39 +344,217 @@ function extractMenuSectionsFromPages(pages: CrawledPage[]): ImportMenuSection[]
 
   for (const page of menuPages) {
     const text = compact(page.textExcerpt);
-    const headingCandidate = page.headingText?.find((entry) => /menu|food|wine|cocktail|brunch|dinner/i.test(entry));
-    const sectionTitle = headingCandidate || page.title || "Menu";
-    const priceMatches = Array.from(text.matchAll(/([^.$]{3,60})\s+\$\s?(\d{1,3}(?:\.\d{2})?)/g));
-    const items: ImportMenuItem[] = priceMatches.slice(0, 20).map((match) => ({
-      id: createId("menu_item"),
-      name: compact((match[1] ?? "Item").replace(/[^a-zA-Z0-9&,'\-\s]/g, "")).slice(-48) || "Menu item",
-      price: `$${match[2]}`,
-      description: "",
-      dietaryNotes: /vegan|vegetarian|gluten|allergy|dairy/i.test(text) ? "Contains dietary notes on page" : null,
-      include: true,
-    }));
+    const structuredText = page.structuredText ?? "";
 
-    if (!items.length) {
-      items.push({
+    // Try heading-based structured parsing first (## Section / - Item lines)
+    const structuredSections = parseStructuredMenuText(structuredText, page);
+    if (structuredSections.length > 0) {
+      sections.push(...structuredSections);
+      continue;
+    }
+
+    // Try price-pattern parsing
+    const priceSections = parsePricePatternMenu(text, page);
+    if (priceSections.length > 0) {
+      sections.push(...priceSections);
+      continue;
+    }
+
+    // Try text-block heuristic parsing (for plain text menus without prices)
+    const heuristicSections = parseTextBlockMenu(text, page);
+    if (heuristicSections.length > 0) {
+      sections.push(...heuristicSections);
+      continue;
+    }
+
+    // Final fallback: single overview section
+    sections.push({
+      id: createId("menu_section"),
+      title: page.title || "Menu",
+      sourceUrl: page.url,
+      include: true,
+      items: [{
         id: createId("menu_item"),
         name: "Menu overview",
         price: null,
         description: text.slice(0, 280),
         dietaryNotes: /vegan|vegetarian|gluten|allergy|dairy/i.test(text) ? "Contains dietary notes on page" : null,
         include: true,
-      });
+      }],
+    });
+  }
+
+  return sections.slice(0, 12);
+}
+
+function parseStructuredMenuText(structuredText: string, page: CrawledPage): ImportMenuSection[] {
+  if (!structuredText || !structuredText.includes("##")) {
+    return [];
+  }
+
+  const lines = structuredText.split("\n");
+  const sections: ImportMenuSection[] = [];
+  let currentSection: { title: string; items: ImportMenuItem[] } | null = null;
+  const dietaryText = structuredText.toLowerCase();
+  const hasDietaryNotes = /vegan|vegetarian|gluten|allergy|dairy/i.test(dietaryText);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Heading = new section
+    if (trimmed.startsWith("## ")) {
+      if (currentSection && currentSection.items.length > 0) {
+        sections.push({
+          id: createId("menu_section"),
+          title: currentSection.title,
+          sourceUrl: page.url,
+          include: true,
+          items: currentSection.items.slice(0, 20),
+        });
+      }
+      currentSection = { title: trimmed.slice(3).trim(), items: [] };
+      continue;
     }
+
+    if (!currentSection) continue;
+
+    // Parse item line: "- Item name" or "- Item name $12.99" or "Item name ... $12"
+    const itemText = trimmed.startsWith("- ") ? trimmed.slice(2).trim() : trimmed;
+    if (itemText.length < 3 || itemText.length > 120) continue;
+
+    // Skip noise lines
+    if (/^(skip to|main menu|cart|checkout|search|share|follow|copyright|all rights)/i.test(itemText)) continue;
+
+    const priceMatch = itemText.match(/^(.+?)\s+\$\s?(\d{1,3}(?:\.\d{2})?)\s*$/);
+    const name = priceMatch ? priceMatch[1].trim() : itemText;
+    const price = priceMatch ? `$${priceMatch[2]}` : null;
+
+    // Skip if name is too short or looks like navigation
+    if (name.length < 2 || /^(home|back|next|previous|menu|close)$/i.test(name)) continue;
+
+    // Try to extract description: text after a dash, period, or colon
+    const descMatch = name.match(/^([^–—:]{3,50})\s*[–—:]\s*(.+)$/);
+    const itemName = descMatch ? descMatch[1].trim() : name.slice(0, 60);
+    const description = descMatch ? descMatch[2].trim().slice(0, 160) : "";
+
+    currentSection.items.push({
+      id: createId("menu_item"),
+      name: itemName,
+      price,
+      description,
+      dietaryNotes: hasDietaryNotes ? "Contains dietary notes on page" : null,
+      include: true,
+    });
+  }
+
+  // Push last section
+  if (currentSection && currentSection.items.length > 0) {
+    sections.push({
+      id: createId("menu_section"),
+      title: currentSection.title,
+      sourceUrl: page.url,
+      include: true,
+      items: currentSection.items.slice(0, 20),
+    });
+  }
+
+  return sections;
+}
+
+function parsePricePatternMenu(text: string, page: CrawledPage): ImportMenuSection[] {
+  const headingCandidate = page.headingText?.find((entry) => /menu|food|wine|cocktail|brunch|dinner/i.test(entry));
+  const sectionTitle = headingCandidate || page.title || "Menu";
+  const priceMatches = Array.from(text.matchAll(/([^.$\n]{3,60})\s+\$\s?(\d{1,3}(?:\.\d{2})?)/g));
+
+  if (priceMatches.length === 0) return [];
+
+  // Group items by nearby headings if available
+  const hasDietaryNotes = /vegan|vegetarian|gluten|allergy|dairy/i.test(text);
+  const items: ImportMenuItem[] = priceMatches.slice(0, 20).map((match) => ({
+    id: createId("menu_item"),
+    name: compact((match[1] ?? "Item").replace(/[^a-zA-Z0-9&,'\-\s]/g, "")).slice(-48) || "Menu item",
+    price: `$${match[2]}`,
+    description: "",
+    dietaryNotes: hasDietaryNotes ? "Contains dietary notes on page" : null,
+    include: true,
+  }));
+
+  return [{
+    id: createId("menu_section"),
+    title: sectionTitle,
+    sourceUrl: page.url,
+    include: true,
+    items,
+  }];
+}
+
+function parseTextBlockMenu(text: string, page: CrawledPage): ImportMenuSection[] {
+  // Look for heading patterns in page headingText that could delineate sections
+  const headings = page.headingText ?? [];
+  const menuHeadings = headings.filter((h) =>
+    h.length >= 3 && h.length <= 60
+    && !/skip|menu|navigation|search|cart|home|back/i.test(h)
+    && !/^\d+$/.test(h),
+  );
+
+  if (menuHeadings.length < 2) return [];
+
+  // Heuristic: if a page has multiple short headings and text between them,
+  // treat each heading as a menu section
+  const sections: ImportMenuSection[] = [];
+  const hasDietaryNotes = /vegan|vegetarian|gluten|allergy|dairy/i.test(text);
+
+  for (const heading of menuHeadings) {
+    const headingIndex = text.indexOf(heading);
+    if (headingIndex < 0) continue;
+
+    // Find text between this heading and next heading
+    let nextHeadingIndex = text.length;
+    for (const other of menuHeadings) {
+      if (other === heading) continue;
+      const idx = text.indexOf(other, headingIndex + heading.length);
+      if (idx > headingIndex && idx < nextHeadingIndex) {
+        nextHeadingIndex = idx;
+      }
+    }
+
+    const sectionText = text.slice(headingIndex + heading.length, nextHeadingIndex).trim();
+    if (sectionText.length < 10) continue;
+
+    // Parse items from text: split by line-like boundaries
+    const itemCandidates = sectionText
+      .split(/\s{2,}|\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 3 && s.length <= 80)
+      .filter((s) => !/^(skip|copyright|all rights|share|follow)/i.test(s));
+
+    if (itemCandidates.length === 0) continue;
+
+    const items: ImportMenuItem[] = itemCandidates.slice(0, 20).map((candidate) => {
+      const priceMatch = candidate.match(/^(.+?)\s+\$\s?(\d{1,3}(?:\.\d{2})?)\s*$/);
+      const descMatch = candidate.match(/^([^–—:]{3,50})\s*[–—:]\s*(.+)$/);
+
+      return {
+        id: createId("menu_item"),
+        name: (priceMatch ? priceMatch[1] : descMatch ? descMatch[1] : candidate).trim().slice(0, 60),
+        price: priceMatch ? `$${priceMatch[2]}` : null,
+        description: descMatch ? descMatch[2].trim().slice(0, 160) : "",
+        dietaryNotes: hasDietaryNotes ? "Contains dietary notes on page" : null,
+        include: true,
+      };
+    });
 
     sections.push({
       id: createId("menu_section"),
-      title: sectionTitle,
+      title: heading,
       sourceUrl: page.url,
       include: true,
       items,
     });
   }
 
-  return sections.slice(0, 8);
+  return sections;
 }
 
 function extractReservationInfo(pages: CrawledPage[], signals: ImportSignals): ImportReservationInfo {
@@ -1129,12 +1307,16 @@ export async function buildWebsiteImportResult(input: {
     draft.faqs = extractFallbackFaqs(classifiedPages);
   }
 
-  const eventsDetected = draft.restaurantKnowledge.events.filter((entry) => entry.include).length;
-  const eventHeavyImport = eventsDetected >= 3 && classifiedPages.filter((entry) => entry.pageType === "events").length >= 2;
-  const hasFaqPages = classifiedPages.some((entry) => entry.pageType === "faq");
-  if (eventHeavyImport && !hasFaqPages) {
-    // Keep FAQ output secondary when we already extracted strong event knowledge.
-    draft.faqs = [];
+  // Generate FAQ suggestions from structured knowledge (events, reservations, menus, memberships)
+  const knowledgeFaqs = generateFaqsFromKnowledge(draft);
+  if (knowledgeFaqs.length > 0) {
+    const existingQuestions = new Set(draft.faqs.map((f) => f.question.toLowerCase()));
+    for (const faq of knowledgeFaqs) {
+      if (!existingQuestions.has(faq.question.toLowerCase())) {
+        draft.faqs.push(faq);
+        existingQuestions.add(faq.question.toLowerCase());
+      }
+    }
   }
 
   if (draft.policies.length === 0) {
@@ -1146,4 +1328,140 @@ export async function buildWebsiteImportResult(input: {
     signals: input.signals,
     draft,
   };
+}
+
+function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraft["faqs"] {
+  const faqs: WebsiteImportDraft["faqs"] = [];
+
+  // Reservation FAQ
+  const reservations = draft.restaurantKnowledge.reservations;
+  if (reservations.include && (reservations.bookingUrl || reservations.instructions)) {
+    const answer = [
+      reservations.instructions ? reservations.instructions.slice(0, 200) : "",
+      reservations.bookingUrl ? `Book online: ${reservations.bookingUrl}` : "",
+      reservations.platforms.length ? `Available on ${reservations.platforms.join(", ")}.` : "",
+    ].filter(Boolean).join(" ").trim();
+
+    if (answer) {
+      faqs.push({
+        id: createId("faq"),
+        question: "Do you take reservations?",
+        answer,
+        sourceUrl: reservations.sourceUrl,
+        include: true,
+        confidence: 0.9,
+      });
+    }
+
+    if (reservations.depositPolicy) {
+      faqs.push({
+        id: createId("faq"),
+        question: "What is your cancellation or deposit policy?",
+        answer: reservations.depositPolicy.slice(0, 280),
+        sourceUrl: reservations.sourceUrl,
+        include: true,
+        confidence: 0.8,
+      });
+    }
+  }
+
+  // Events FAQ
+  const events = draft.restaurantKnowledge.events.filter((e) => e.include);
+  if (events.length > 0) {
+    const upcoming = events.slice(0, 3);
+    const eventList = upcoming.map((e) => `${e.title}${e.date ? ` (${e.date})` : ""}`).join("; ");
+    faqs.push({
+      id: createId("faq"),
+      question: "What events do you have coming up?",
+      answer: `Upcoming events include: ${eventList}.${events.length > 3 ? ` Plus ${events.length - 3} more events.` : ""}`,
+      sourceUrl: events[0].sourceUrl,
+      include: true,
+      confidence: 0.85,
+    });
+
+    const liveMusic = events.filter((e) => /music|live|dj|piano|jazz|band/i.test(`${e.title} ${e.category}`));
+    if (liveMusic.length > 0) {
+      faqs.push({
+        id: createId("faq"),
+        question: "Do you have live music?",
+        answer: `Yes! ${liveMusic.slice(0, 3).map((e) => `${e.title}${e.date ? ` on ${e.date}` : ""}`).join("; ")}.`,
+        sourceUrl: liveMusic[0].sourceUrl,
+        include: true,
+        confidence: 0.85,
+      });
+    }
+  }
+
+  // Private events FAQ
+  const privateEvents = draft.pageClassification.find((p) => p.pageType === "private-events");
+  if (privateEvents) {
+    faqs.push({
+      id: createId("faq"),
+      question: "Do you host private events or weddings?",
+      answer: `Yes, we accommodate private events. Visit ${privateEvents.url} for more details.`,
+      sourceUrl: privateEvents.url,
+      include: true,
+      confidence: 0.8,
+    });
+  }
+
+  // Membership / Wine Club FAQ
+  const memberships = draft.restaurantKnowledge.memberships;
+  if (memberships.include && memberships.benefits) {
+    faqs.push({
+      id: createId("faq"),
+      question: memberships.name ? `What is the ${memberships.name}?` : "Do you have a membership or club program?",
+      answer: memberships.benefits.slice(0, 280),
+      sourceUrl: memberships.sourceUrl,
+      include: true,
+      confidence: 0.85,
+    });
+  }
+
+  // Hours FAQ
+  if (draft.businessProfile.hours.value) {
+    faqs.push({
+      id: createId("faq"),
+      question: "What are your hours?",
+      answer: draft.businessProfile.hours.value,
+      sourceUrl: draft.businessProfile.hours.sourceUrl,
+      include: true,
+      confidence: 0.9,
+    });
+  }
+
+  // Location / Contact FAQ
+  if (draft.businessProfile.address.value) {
+    const parts = [
+      draft.businessProfile.address.value,
+      draft.businessProfile.phone.value ? `Phone: ${draft.businessProfile.phone.value}` : "",
+      draft.businessProfile.email.value ? `Email: ${draft.businessProfile.email.value}` : "",
+    ].filter(Boolean);
+
+    faqs.push({
+      id: createId("faq"),
+      question: "Where are you located?",
+      answer: parts.join(". "),
+      sourceUrl: draft.businessProfile.address.sourceUrl,
+      include: true,
+      confidence: 0.9,
+    });
+  }
+
+  // Menu highlights FAQ
+  const menuSections = draft.restaurantKnowledge.menuSections.filter((m) => m.include);
+  if (menuSections.length > 0) {
+    const sectionNames = menuSections.map((s) => s.title).slice(0, 4);
+    const itemCount = menuSections.reduce((sum, s) => sum + s.items.length, 0);
+    faqs.push({
+      id: createId("faq"),
+      question: "What kind of food do you serve?",
+      answer: `Our menu features${sectionNames.length > 0 ? `: ${sectionNames.join(", ")}` : ` ${itemCount} items`}.${menuSections[0].sourceUrl ? ` View our full menu at ${menuSections[0].sourceUrl}` : ""}`,
+      sourceUrl: menuSections[0].sourceUrl,
+      include: true,
+      confidence: 0.75,
+    });
+  }
+
+  return faqs;
 }

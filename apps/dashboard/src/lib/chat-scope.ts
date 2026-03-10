@@ -12,15 +12,13 @@ export function resolveChatScope(location?: BusinessProfile): ChatScope {
     return {};
   }
 
-  const businessId = ((location as BusinessProfile & { businessId?: string }).businessId ?? "").trim() || undefined;
   const businessSlug = (location.businessSlug ?? location.slug ?? "").trim() || undefined;
-  const locationId = ((location as BusinessProfile & { locationId?: string }).locationId ?? "").trim() || undefined;
   const locationSlug = (location.locationSlug ?? location.slug ?? "").trim() || undefined;
 
   return {
-    businessId,
+    businessId: businessSlug,
     businessSlug,
-    locationId,
+    locationId: (location.id ?? "").trim() || undefined,
     locationSlug,
   };
 }

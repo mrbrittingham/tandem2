@@ -96,9 +96,9 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
   const isDirty = useMemo(() => JSON.stringify(draftTheme) !== JSON.stringify(persistedTheme), [draftTheme, persistedTheme]);
 
   const snippet = useMemo(() => {
-    const snippetBusinessId = business.businessSlug ?? business.slug;
+    const snippetBusinessSlug = business.businessSlug ?? business.slug;
     const snippetLocationSlug = business.locationSlug ?? business.slug;
-    return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${snippetBusinessId}" data-location="${snippetLocationSlug}"></script>`;
+    return `<script async src="https://cdn.tandem.dev/widget.js" data-business="${snippetBusinessSlug}" data-location="${snippetLocationSlug}"></script>`;
   }, [business.businessSlug, business.locationSlug, business.slug]);
 
   useEffect(() => {

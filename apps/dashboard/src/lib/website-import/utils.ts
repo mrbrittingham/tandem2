@@ -82,6 +82,31 @@ export function htmlToText(html: string): string {
   return decodeHtml(stripped).replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Preserves heading markers (##) in text for structured section parsing.
+ * Used by menu extraction to detect sections.
+ */
+export function htmlToStructuredText(html: string): string {
+  const withoutNoisyBlocks = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ");
+
+  const withHeadings = withoutNoisyBlocks
+    .replace(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi, (_m, text: string) => `\n## ${decodeHtml(text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())}\n`)
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_m, text: string) => `\n- ${decodeHtml(text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())}`)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+
+  return decodeHtml(withHeadings).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 const PRIORITY_PATH_HINTS = [
   "contact",
   "about",
@@ -89,6 +114,17 @@ const PRIORITY_PATH_HINTS = [
   "help",
   "hours",
   "menu",
+  "food",
+  "drink",
+  "dining",
+  "dinner",
+  "lunch",
+  "brunch",
+  "cocktail",
+  "wine",
+  "beer",
+  "kitchen",
+  "restaurant",
   "reservation",
   "booking",
   "opentable",
@@ -96,7 +132,11 @@ const PRIORITY_PATH_HINTS = [
   "event",
   "calendar",
   "music",
-  "wine",
+  "happenings",
+  "upcoming",
+  "wedding",
+  "private-event",
+  "group-dining",
   "club",
   "membership",
   "service",

@@ -19,6 +19,7 @@ export type CrawledPage = {
   url: string;
   title: string;
   textExcerpt: string;
+  structuredText?: string;
   pageType?: WebsitePageType;
   metaDescription?: string;
   headingText?: string[];
