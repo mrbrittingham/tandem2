@@ -241,6 +241,9 @@ export function WebsiteImportPanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [menuImportMode, setMenuImportMode] = useState<"url" | "text" | null>(null);
+  const [menuImportInput, setMenuImportInput] = useState("");
+  const [isMenuImporting, setIsMenuImporting] = useState(false);
 
   const selectedLocation = useMemo(
     () => locationOptions.find((entry) => entry.slug === selectedLocationSlug),
@@ -501,6 +504,53 @@ export function WebsiteImportPanel({
     } : current);
   };
 
+  const importMenuManually = async () => {
+    if (!menuImportInput.trim() || !draft) return;
+
+    setIsMenuImporting(true);
+    setError(null);
+    try {
+      const body: Record<string, string> = {};
+      if (menuImportMode === "url") {
+        body.url = menuImportInput.trim();
+      } else {
+        body.text = menuImportInput.trim();
+      }
+
+      const response = await fetch("/api/website-import/menu-extract", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; sections?: ImportMenuSection[]; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "Menu extraction failed");
+      }
+
+      const newSections = payload.sections ?? [];
+      if (newSections.length === 0) {
+        setError("No menu items could be extracted from the provided content.");
+        return;
+      }
+
+      setDraft((current) => current ? {
+        ...current,
+        restaurantKnowledge: {
+          ...current.restaurantKnowledge,
+          menuSections: [...current.restaurantKnowledge.menuSections, ...newSections],
+        },
+      } : current);
+
+      setMenuImportMode(null);
+      setMenuImportInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Menu import failed");
+    } finally {
+      setIsMenuImporting(false);
+    }
+  };
+
   const setPolicyInclude = (id: string, include: boolean) => {
     setDraft((current) => current ? {
       ...current,
@@ -691,9 +741,71 @@ export function WebsiteImportPanel({
         </div>
       </div>
 
-      {/* Detected Menus — collapsible cards */}
+      {/* Detected Menus — collapsible cards + manual import */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Detected Menus</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">Detected Menus</h3>
+          {draft && !menuImportMode ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setMenuImportMode("url"); setMenuImportInput(""); }}
+                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Import from URL
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMenuImportMode("text"); setMenuImportInput(""); }}
+                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+              >
+                Paste menu text
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {menuImportMode ? (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            {menuImportMode === "url" ? (
+              <TextInput
+                label="Menu page URL"
+                value={menuImportInput}
+                onChange={setMenuImportInput}
+                placeholder="https://restaurant.com/menu"
+              />
+            ) : (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Paste menu text</label>
+                <textarea
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  rows={6}
+                  placeholder="Paste your menu content here..."
+                  value={menuImportInput}
+                  onChange={(e) => setMenuImportInput(e.target.value)}
+                />
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isMenuImporting || !menuImportInput.trim()}
+                onClick={importMenuManually}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isMenuImporting ? "Extracting…" : "Extract menu"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMenuImportMode(null); setMenuImportInput(""); }}
+                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-3 space-y-2">
           {(draft?.restaurantKnowledge.menuSections ?? []).length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No menu sections detected.</p>

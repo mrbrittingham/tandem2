@@ -2,9 +2,11 @@ import { llmGenerate, validateLLMServerConfig } from "@tandem/shared/server";
 import type {
   CrawledPage,
   ImportEvent,
+  ImportFaq,
   ImportMembershipInfo,
   ImportMenuItem,
   ImportMenuSection,
+  ImportPolicy,
   ImportReservationInfo,
   ImportSignals,
   WebsiteImportDraft,
@@ -1646,6 +1648,213 @@ function parseLlmDraft(input: {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/*  Per-page-type LLM extraction (focused prompts)                     */
+/* ------------------------------------------------------------------ */
+
+async function extractMenuWithLlm(pages: CrawledPage[]): Promise<ImportMenuSection[]> {
+  const llmConfig = validateLLMServerConfig();
+  if (!llmConfig.ok) return [];
+
+  const menuPages = pages.filter((p) =>
+    (p as ClassifiedPage).pageType === "menu" ||
+    /\bmenu\b|\bfood\b|\bwine\s+list\b|\bcocktail\b|\bbrunch\b|\bdinner\b/i.test(`${p.url} ${p.title}`),
+  );
+  if (menuPages.length === 0) return [];
+
+  // Use more generous text limit for menu pages (menus are long)
+  const pagesPayload = menuPages.slice(0, 6).map((p) => ({
+    url: p.url,
+    title: p.title,
+    text: p.textExcerpt.slice(0, 16_000),
+  }));
+
+  const instruction = [
+    "You are a restaurant menu extractor. Given restaurant webpage text, extract a structured menu.",
+    "Return ONLY valid JSON (no markdown fences).",
+    "Schema: { \"sections\": [{ \"title\": string, \"source_url\": string, \"items\": [{ \"name\": string, \"price\": string|null, \"description\": string, \"dietary_notes\": string|null }] }] }",
+    "Rules:",
+    "- Each section represents a menu category (e.g., Appetizers, Entrees, Desserts, Beverages).",
+    "- price should be a string like \"$12\" or \"$12.99\" or null if not listed.",
+    "- description should be a brief description of the dish (ingredients, preparation). Empty string if none.",
+    "- dietary_notes should note vegan, vegetarian, gluten-free, etc. if mentioned. Null otherwise.",
+    "- Skip navigation text, page titles, footer content, and non-menu content.",
+    "- If a page contains no menu items, return { \"sections\": [] }.",
+    "- Limit to 12 sections and 25 items per section.",
+  ].join("\n");
+
+  try {
+    const response = await llmGenerate({
+      system: instruction,
+      messages: [{ role: "user", content: JSON.stringify({ pages: pagesPayload }) }],
+      temperature: 0,
+      maxTokens: 4000,
+    });
+
+    const parsed = parseLlmJson(response.text ?? "");
+    if (!parsed || !Array.isArray((parsed as Record<string, unknown>).sections)) return [];
+
+    const rawSections = (parsed as Record<string, unknown>).sections as Array<Record<string, unknown>>;
+    return rawSections
+      .filter((s) => typeof s.title === "string" && Array.isArray(s.items))
+      .slice(0, 12)
+      .map((s) => ({
+        id: createId("menu_section"),
+        title: String(s.title).slice(0, 80),
+        sourceUrl: asUrl(s.source_url) ?? menuPages[0]?.url ?? null,
+        include: true,
+        items: (s.items as Array<Record<string, unknown>>)
+          .filter((item) => typeof item.name === "string" && String(item.name).length >= 2)
+          .slice(0, 25)
+          .map((item) => ({
+            id: createId("menu_item"),
+            name: String(item.name).slice(0, 80),
+            price: typeof item.price === "string" ? item.price.slice(0, 12) : null,
+            description: typeof item.description === "string" ? item.description.slice(0, 200) : "",
+            dietaryNotes: typeof item.dietary_notes === "string" ? item.dietary_notes.slice(0, 100) : null,
+            include: true,
+          })),
+      }))
+      .filter((s) => s.items.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function extractFaqsWithLlm(pages: CrawledPage[]): Promise<ImportFaq[]> {
+  const llmConfig = validateLLMServerConfig();
+  if (!llmConfig.ok) return [];
+
+  const faqPages = pages.filter((p) => {
+    const pt = (p as ClassifiedPage).pageType;
+    return pt === "faq" || pt === "policies" || pt === "about" || pt === "contact" || pt === "general";
+  });
+  if (faqPages.length === 0) return [];
+
+  const pagesPayload = faqPages.slice(0, 8).map((p) => ({
+    url: p.url,
+    title: p.title,
+    pageType: (p as ClassifiedPage).pageType,
+    text: p.textExcerpt.slice(0, 10_000),
+  }));
+
+  const instruction = [
+    "You are a FAQ extractor for a restaurant or business website.",
+    "Extract question-and-answer pairs from the provided page text.",
+    "Return ONLY valid JSON (no markdown fences).",
+    "Schema: { \"faqs\": [{ \"question\": string, \"answer\": string, \"source_url\": string }] }",
+    "Rules:",
+    "- Questions should be natural customer questions (e.g., 'Do you allow dogs?', 'What are your hours?').",
+    "- Answers should be 1-3 sentences, conversational tone, as if a chatbot is responding to a guest.",
+    "- Only include FAQs supported by explicit evidence on the page. Do not invent answers.",
+    "- source_url must be one of the provided page URLs.",
+    "- Skip navigation, footer, social media, and cookie/privacy boilerplate.",
+    "- Look for: policies, hours, parking, reservations, dress code, dietary accommodations, private events, cancellation, pet policy, etc.",
+    "- Limit to 20 FAQs total, prioritizing the most useful for customers.",
+  ].join("\n");
+
+  try {
+    const response = await llmGenerate({
+      system: instruction,
+      messages: [{ role: "user", content: JSON.stringify({ pages: pagesPayload }) }],
+      temperature: 0,
+      maxTokens: 3000,
+    });
+
+    const parsed = parseLlmJson(response.text ?? "");
+    if (!parsed || !Array.isArray((parsed as Record<string, unknown>).faqs)) return [];
+
+    const allowedUrls = new Set(pages.map((p) => p.url));
+    return ((parsed as Record<string, unknown>).faqs as Array<Record<string, unknown>>)
+      .filter((f) => typeof f.question === "string" && typeof f.answer === "string" && typeof f.source_url === "string")
+      .filter((f) => allowedUrls.has(String(f.source_url)))
+      .slice(0, 20)
+      .map((f) => ({
+        id: createId("faq"),
+        question: String(f.question).slice(0, 150),
+        answer: String(f.answer).slice(0, 350),
+        sourceUrl: String(f.source_url),
+        include: true,
+        confidence: 0.85,
+        lowConfidence: false,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function extractContactWithLlm(pages: CrawledPage[]): Promise<{
+  name: string | null;
+  shortDescription: string | null;
+  phone: string | null;
+  phoneSourceUrl: string | null;
+  email: string | null;
+  emailSourceUrl: string | null;
+  address: string | null;
+  addressSourceUrl: string | null;
+  hours: string | null;
+  hoursSourceUrl: string | null;
+} | null> {
+  const llmConfig = validateLLMServerConfig();
+  if (!llmConfig.ok) return null;
+
+  const contactPages = pages.filter((p) => {
+    const pt = (p as ClassifiedPage).pageType;
+    return pt === "contact" || pt === "hours" || pt === "home" || pt === "about";
+  });
+  if (contactPages.length === 0) return null;
+
+  const pagesPayload = contactPages.slice(0, 5).map((p) => ({
+    url: p.url,
+    title: p.title,
+    pageType: (p as ClassifiedPage).pageType,
+    text: p.textExcerpt.slice(0, 6000),
+  }));
+
+  const instruction = [
+    "Extract business contact information from the provided restaurant/business website pages.",
+    "Return ONLY valid JSON (no markdown fences).",
+    "Schema: { \"name\": string|null, \"short_description\": string|null, \"phone\": string|null, \"phone_source_url\": string|null, \"email\": string|null, \"email_source_url\": string|null, \"address\": string|null, \"address_source_url\": string|null, \"hours\": string|null, \"hours_source_url\": string|null }",
+    "Rules:",
+    "- name: the business name, not a page title.",
+    "- short_description: 2-3 sentence description of the business based on evidence.",
+    "- All source_url fields must be one of the provided page URLs.",
+    "- hours should be a compact summary like 'Mon-Fri 11am-9pm, Sat-Sun 10am-10pm'.",
+    "- Set fields to null if not found in the text. Do not guess.",
+  ].join("\n");
+
+  try {
+    const response = await llmGenerate({
+      system: instruction,
+      messages: [{ role: "user", content: JSON.stringify({ pages: pagesPayload }) }],
+      temperature: 0,
+      maxTokens: 800,
+    });
+
+    const parsed = parseLlmJson(response.text ?? "");
+    if (!parsed) return null;
+
+    const raw = parsed as Record<string, unknown>;
+    const allowedUrls = new Set(pages.map((p) => p.url));
+    const validSource = (v: unknown) => typeof v === "string" && allowedUrls.has(v) ? v : null;
+
+    return {
+      name: asString(raw.name),
+      shortDescription: asString(raw.short_description),
+      phone: asString(raw.phone),
+      phoneSourceUrl: validSource(raw.phone_source_url),
+      email: asString(raw.email),
+      emailSourceUrl: validSource(raw.email_source_url),
+      address: asString(raw.address),
+      addressSourceUrl: validSource(raw.address_source_url),
+      hours: asString(raw.hours),
+      hoursSourceUrl: validSource(raw.hours_source_url),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function extractWithLlm(args: { sourceUrl: string; pages: CrawledPage[]; signals: ImportSignals }): Promise<RawDraft | null> {
   const llmConfig = validateLLMServerConfig();
   if (!llmConfig.ok) {
@@ -1727,13 +1936,54 @@ export async function buildWebsiteImportResult(input: {
   signals: ImportSignals;
 }): Promise<WebsiteImportResult> {
   const classifiedPages = classifyPages(input.pages);
-  const llmDraft = await extractWithLlm({ ...input, pages: classifiedPages }).catch(() => null);
+
+  // Run all LLM extractors in parallel: monolithic + per-page-type focused extractors
+  const [llmDraft, llmMenuSections, llmFaqs, llmContact] = await Promise.all([
+    extractWithLlm({ ...input, pages: classifiedPages }).catch(() => null),
+    extractMenuWithLlm(classifiedPages).catch(() => []),
+    extractFaqsWithLlm(classifiedPages).catch(() => []),
+    extractContactWithLlm(classifiedPages).catch(() => null),
+  ]);
+
   const draft = parseLlmDraft({
     sourceUrl: input.sourceUrl,
     pages: classifiedPages,
     signals: input.signals,
     llmDraft,
   });
+
+  // Prefer per-page-type LLM menu results over heuristic extraction when available
+  if (llmMenuSections.length > 0) {
+    draft.restaurantKnowledge.menuSections = llmMenuSections;
+  }
+
+  // Prefer per-page-type LLM FAQs over monolithic LLM FAQs when available
+  if (llmFaqs.length > 0) {
+    draft.faqs = llmFaqs;
+  }
+
+  // Merge per-page-type LLM contact info: fill in gaps not covered by monolithic extraction
+  if (llmContact) {
+    const bp = draft.businessProfile;
+    if (!bp.name.value && llmContact.name) {
+      bp.name = { value: llmContact.name, sourceUrl: llmContact.phoneSourceUrl ?? input.sourceUrl };
+    }
+    if (!bp.shortDescription.value && llmContact.shortDescription) {
+      bp.shortDescription = { value: llmContact.shortDescription, sourceUrl: input.sourceUrl };
+    }
+    if (!bp.phone.value && llmContact.phone) {
+      bp.phone = { value: llmContact.phone, sourceUrl: llmContact.phoneSourceUrl };
+    }
+    if (!bp.email.value && llmContact.email) {
+      bp.email = { value: llmContact.email, sourceUrl: llmContact.emailSourceUrl };
+    }
+    if (!bp.address.value && llmContact.address) {
+      bp.address = { value: llmContact.address, sourceUrl: llmContact.addressSourceUrl };
+    }
+    if (!bp.hours.value && llmContact.hours) {
+      bp.hours = { value: llmContact.hours, sourceUrl: llmContact.hoursSourceUrl };
+    }
+  }
 
   if (draft.faqs.length === 0) {
     draft.faqs = extractFallbackFaqs(classifiedPages);
@@ -1990,4 +2240,22 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
   }
 
   return faqs;
+}
+
+/**
+ * Extract menu sections from raw text or a fetched page using LLM.
+ * Used by the manual menu import endpoint.
+ */
+export async function extractMenuFromText(text: string, sourceUrl: string | null): Promise<ImportMenuSection[]> {
+  const page: CrawledPage = {
+    url: sourceUrl ?? "manual-input",
+    title: "Menu",
+    textExcerpt: text.slice(0, 24_000),
+    pageType: "menu",
+  };
+  const llmResult = await extractMenuWithLlm([page]);
+  if (llmResult.length > 0) return llmResult;
+
+  // Fallback to heuristic extraction
+  return extractMenuSectionsFromPages([page]);
 }
