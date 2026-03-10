@@ -674,90 +674,446 @@ function asNullableUrl(value: string | null): string | null {
   }
 }
 
-function extractFallbackFaqs(pages: CrawledPage[]) {
-  const out: WebsiteImportDraft["faqs"] = [];
-  const seenQuestions = new Set<string>();
-  const questionPattern = /([^?.!\n]{8,140}\?)/g;
+/* ------------------------------------------------------------------ */
+/*  Content-driven FAQ extraction                                      */
+/* ------------------------------------------------------------------ */
 
-  const sanitizeFallbackText = (value: string) => value
+const QUESTION_HEADING_REGEX = /^(what|when|where|who|why|how|can|do|does|is|are|will|did|should|could|would)\b/i;
+const FAQ_CONTENT_PAGES: Set<WebsitePageType> = new Set(["faq", "policies", "about", "contact", "general", "memberships", "private-events", "reservations", "hours"]);
+
+/**
+ * Sanitize crawled text for FAQ extraction — strip URLs, social noise, navigation, HTML entities.
+ */
+function sanitizeFaqText(value: string): string {
+  return value
     .replace(/https?:\/\/\S+/gi, " ")
     .replace(/\/[a-z0-9\-_]+\?(?:[^\s]{6,})/gi, " ")
+    .replace(/&hellip;/gi, "...")
+    .replace(/&amp;/gi, "&")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/&#\d+;/gi, " ")
+    .replace(/\[\s*&hellip;\s*\]/gi, "")
+    .replace(/\[…\]/gi, "")
     .replace(/\bshare\s+on\b/gi, " ")
     .replace(/\bsee\s+more\b/gi, " ")
+    .replace(/\bfind\s+out\s+more\b/gi, " ")
+    .replace(/\bread\s+more\b/gi, " ")
     .replace(/\bcomments?\b/gi, " ")
     .replace(/\blikes?\b/gi, " ")
     .replace(/\bcopy\s+link\b/gi, " ")
     .replace(/\bretweet\b/gi, " ")
     .replace(/\bpinterest\b/gi, " ")
+    .replace(/\badd\s+to\s+calendar\b/gi, " ")
     .replace(/(?:skip\s+to\s+content|main\s+menu|privacy\s+policy|terms)\b[^?.!\n]*/gi, " ")
+    .replace(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:,\s*\d{4})?\s+(?:farm\s+kitchen\s+events?|winery\s+events?)/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
 
-  for (const page of pages) {
-    if (page.pageType && page.pageType !== "faq" && page.pageType !== "general" && page.pageType !== "contact") {
-      continue;
-    }
+/**
+ * Convert a raw informational answer into a concise, chatbot-style response.
+ * Rules: 2-3 sentences max, sounds like a chatbot speaking to a guest.
+ */
+function toConversationalAnswer(rawAnswer: string): string {
+  let cleaned = rawAnswer
+    .replace(/&hellip;/gi, "...")
+    .replace(/&amp;/gi, "&")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/&#\d+;/gi, " ")
+    .replace(/\[\s*…\s*\]/g, "")
+    .replace(/\[\s*&hellip;\s*\]/gi, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\b(?:skip\s+to\s+content|main\s+menu)\b/gi, "")
+    .replace(/\bfind\s+out\s+more\b/gi, "")
+    .replace(/\bread\s+more\b/gi, "")
+    .replace(/\badd\s+to\s+calendar\b/gi, "")
+    .replace(/\b\w+\s*=\s*\w+/g, "") // strip query params like partySize=2
+    .replace(/\s+/g, " ")
+    .replace(/^[\s:;,.!?\-–—]+/, "")
+    .trim();
 
-    const faqPageHint = isLikelyFaqPage(page.url, page.title);
-    const sanitizedExcerpt = sanitizeFallbackText(page.textExcerpt);
-    const questions: Array<{ text: string; start: number; end: number }> = [];
+  if (!cleaned) return "";
 
-    let match: RegExpExecArray | null;
-    while ((match = questionPattern.exec(sanitizedExcerpt)) !== null && questions.length < 30) {
-      const question = (match[1] ?? "").trim();
-      questions.push({
-        text: question,
-        start: match.index,
-        end: match.index + question.length,
-      });
-    }
+  // Split into sentences
+  const sentences = cleaned
+    .split(/(?<=[.!])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 10 && s.length <= 200)
+    .filter((s) => !/^(skip|copyright|all rights|share|follow|subscribe|cookie|book\s+a\s+reservation$)/i.test(s))
+    .filter((s) => !/^\d{4}\s+(wine|farm|winery|event)/i.test(s));
 
-    for (let index = 0; index < questions.length && out.length < 20; index += 1) {
-      const question = questions[index];
-      const nextQuestion = questions[index + 1];
-      const answerStart = question.end;
-      const answerEnd = nextQuestion ? nextQuestion.start : Math.min(sanitizedExcerpt.length, answerStart + 420);
-      const answer = sanitizedExcerpt.slice(answerStart, answerEnd).trim();
+  if (sentences.length === 0) {
+    // If no clean sentences, just take the first meaningful chunk
+    const fallback = cleaned.slice(0, 180).replace(/\s+\S*$/, "").trim();
+    return fallback ? (fallback.endsWith(".") ? fallback : `${fallback}.`) : "";
+  }
 
-      const candidate = normalizeFaqCandidate(
-        {
-          question: question.text,
-          answer: answer.slice(0, 420),
-          sourceUrl: asNullableUrl(page.url),
-        },
-        {
-          faqPageHint,
-          minScore: faqPageHint ? 3 : 5,
-        },
-      );
+  // Take the first 2-3 most informative sentences
+  const picked = sentences.slice(0, 3);
+  let answer = picked.join(" ").trim();
 
-      if (!candidate) {
-        continue;
+  // Ensure it ends with a period
+  if (answer && !/[.!?]$/.test(answer)) {
+    answer += ".";
+  }
+
+  return answer.slice(0, 280);
+}
+
+/**
+ * Validate an FAQ answer meets minimum quality standards.
+ * Returns the answer if valid, null if it's garbage.
+ */
+function validateFaqAnswer(answer: string): string | null {
+  if (!answer || answer.length < 15) return null;
+
+  // Reject answers with query params, HTML artifacts, or numeric garbage
+  if (/[&=?]\w+=|dateTime|partySize|utm_|fbclid|gclid/.test(answer)) return null;
+
+  // Must have at least 4 real words
+  const words = answer.split(/\s+/).filter((w) => w.length >= 2 && !/^[&=?#]/.test(w));
+  if (words.length < 4) return null;
+
+  // Reject if it starts with a page title pattern
+  const cleaned = answer
+    .replace(/^[^a-zA-Z]*/, "") // strip leading punctuation
+    .replace(/^(?:[A-Z][a-z]+\s+){0,3}(?:in|at)\s+[A-Z][a-z]+[^.]*\|\s*[^|]+(?:\|[^?]*)?(\?|\.)\s*/i, "") // strip "Title in City | Business Name."
+    .trim();
+
+  if (cleaned.length >= 15 && cleaned !== answer) {
+    return cleaned.slice(0, 280);
+  }
+
+  return answer;
+}
+
+/**
+ * Extract FAQ candidates from actual FAQ page structure using headings + content.
+ * Looks for ## heading patterns in structuredText where headings are questions.
+ */
+function extractFaqsFromStructuredPage(page: CrawledPage & { pageType?: WebsitePageType }): WebsiteImportDraft["faqs"] {
+  const out: WebsiteImportDraft["faqs"] = [];
+  const structuredText = page.structuredText;
+  if (!structuredText) return out;
+
+  const lines = structuredText.split("\n");
+  const sections: Array<{ heading: string; body: string }> = [];
+  let currentHeading = "";
+  let currentBody: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("## ")) {
+      if (currentHeading) {
+        sections.push({ heading: currentHeading, body: currentBody.join(" ").trim() });
       }
+      currentHeading = trimmed.slice(3).trim();
+      currentBody = [];
+    } else if (trimmed && currentHeading) {
+      currentBody.push(trimmed.startsWith("- ") ? trimmed.slice(2) : trimmed);
+    }
+  }
+  if (currentHeading) {
+    sections.push({ heading: currentHeading, body: currentBody.join(" ").trim() });
+  }
 
-      const key = candidate.question.toLowerCase();
-      if (seenQuestions.has(key)) {
-        continue;
-      }
-      seenQuestions.add(key);
+  const isFaqPage = isLikelyFaqPage(page.url, page.title);
+
+  for (const section of sections) {
+    const heading = section.heading;
+    const body = sanitizeFaqText(section.body);
+    if (!body || body.length < 15) continue;
+
+    // Check if heading is a question
+    const isQuestion = heading.endsWith("?") || QUESTION_HEADING_REGEX.test(heading);
+
+    if (isQuestion) {
+      const question = heading.endsWith("?") ? heading : `${heading}?`;
+      const answer = toConversationalAnswer(body);
+      if (!answer || answer.length < 15) continue;
 
       out.push({
         id: createId("faq"),
-        question: candidate.question,
-        answer: candidate.answer,
-        sourceUrl: candidate.sourceUrl,
-        include: candidate.score >= 6,
-        confidence: Math.max(0, Math.min(1, candidate.score / 10)),
-        lowConfidence: candidate.score < 6,
+        question,
+        answer,
+        sourceUrl: page.url,
+        include: true,
+        confidence: isFaqPage ? 0.92 : 0.82,
+        lowConfidence: false,
       });
-    }
-
-    if (out.length >= 20) {
-      break;
+    } else if (isFaqPage && body.length >= 20) {
+      // On FAQ pages, treat non-question headings as implicit questions
+      const question = inferQuestionFromHeading(heading);
+      if (question) {
+        const answer = toConversationalAnswer(body);
+        if (answer && answer.length >= 15) {
+          out.push({
+            id: createId("faq"),
+            question,
+            answer,
+            sourceUrl: page.url,
+            include: true,
+            confidence: 0.78,
+            lowConfidence: false,
+          });
+        }
+      }
     }
   }
 
+  return out.slice(0, 20);
+}
+
+/**
+ * Infer a question from a heading that doesn't end with "?".
+ * E.g., "Dog Policy" → "What is your dog policy?"
+ *        "Parking" → "Where can I park?"
+ *        "Dress Code" → "What is your dress code?"
+ */
+function inferQuestionFromHeading(heading: string): string | null {
+  const h = heading.toLowerCase().trim();
+  if (h.length < 3 || h.length > 80) return null;
+  if (/^(skip|copyright|all rights|share|follow|menu|navigation|search|home|back|close)/i.test(h)) return null;
+
+  const inferenceMap: Array<{ pattern: RegExp; question: string }> = [
+    { pattern: /^dog|pet/i, question: "Do you allow dogs or pets?" },
+    { pattern: /^parking/i, question: "Where can I park?" },
+    { pattern: /^dress\s*code/i, question: "Is there a dress code?" },
+    { pattern: /^reservation/i, question: "Do I need a reservation?" },
+    { pattern: /^cancel/i, question: "What is your cancellation policy?" },
+    { pattern: /^refund/i, question: "What is your refund policy?" },
+    { pattern: /^hours|opening/i, question: "What are your hours?" },
+    { pattern: /^location|directions?|getting\s+here/i, question: "Where are you located?" },
+    { pattern: /^private\s*event/i, question: "Do you host private events?" },
+    { pattern: /^weddings?/i, question: "Do you host weddings?" },
+    { pattern: /^group|large\s*part/i, question: "Can you accommodate large groups?" },
+    { pattern: /^kids?|children|family|families/i, question: "Are you family-friendly?" },
+    { pattern: /^live\s*music/i, question: "Do you have live music?" },
+    { pattern: /^wine\s*club|membership/i, question: "Do you have a wine club or membership?" },
+    { pattern: /^tasting/i, question: "Do you offer tastings?" },
+    { pattern: /^gift\s*card/i, question: "Do you sell gift cards?" },
+    { pattern: /^delivery|takeout|to.go/i, question: "Do you offer delivery or takeout?" },
+    { pattern: /^gluten|allerg|dietary/i, question: "Can you accommodate dietary restrictions?" },
+    { pattern: /^smoking/i, question: "What is your smoking policy?" },
+    { pattern: /^age|minors?|21/i, question: "Is there an age requirement?" },
+    { pattern: /^outdoor|patio/i, question: "Do you have outdoor seating?" },
+    { pattern: /^catering/i, question: "Do you offer catering?" },
+    { pattern: /^wi.?fi|wifi/i, question: "Do you have Wi-Fi?" },
+  ];
+
+  for (const { pattern, question } of inferenceMap) {
+    if (pattern.test(h)) return question;
+  }
+
+  // Generic: "What about [heading]?"
+  if (h.length >= 4 && h.length <= 50) {
+    return `What is your ${heading.toLowerCase()} policy?`;
+  }
+
+  return null;
+}
+
+/**
+ * Extract FAQ candidates from policy / informational pages by detecting
+ * paragraphs that describe rules, policies, or restrictions.
+ */
+function extractFaqsFromPolicyContent(page: CrawledPage & { pageType?: WebsitePageType }): WebsiteImportDraft["faqs"] {
+  const out: WebsiteImportDraft["faqs"] = [];
+  const text = sanitizeFaqText(page.textExcerpt);
+  if (text.length < 40) return out;
+
+  const pageType = page.pageType ?? "general";
+  // Skip event listing pages — they produce noisy FAQ candidates
+  if (pageType === "events" && /\/event\//.test(page.url)) return out;
+  const haystack = `${page.url} ${page.title}`.toLowerCase();
+
+  // Topic-specific patterns to detect and convert into Q&A
+  const topicDetectors: Array<{
+    pattern: RegExp;
+    question: string;
+    pageTypes: Set<WebsitePageType>;
+  }> = [
+    { pattern: /\b(?:dogs?|pets?)\s+(?:are|welcome|allowed|not\s+allowed|prohibited|permitted)/i, question: "Do you allow dogs or pets?", pageTypes: new Set(["faq", "policies", "about", "general"]) },
+    { pattern: /\b(?:reservations?\s+(?:are\s+)?(?:required|recommended|suggested|not\s+required|optional))/i, question: "Do I need a reservation?", pageTypes: new Set(["faq", "policies", "reservations", "general", "about"]) },
+    { pattern: /\b(?:dress\s+code|attire|casual|formal\s+wear)/i, question: "Is there a dress code?", pageTypes: new Set(["faq", "policies", "general"]) },
+    { pattern: /\b(?:parking\s+(?:is|lot|garage|available|free|validation))/i, question: "Where can I park?", pageTypes: new Set(["faq", "policies", "contact", "general", "about"]) },
+    { pattern: /\b(?:private\s+event|host\s+(?:an?\s+)?event|private\s+dining|private\s+room)/i, question: "Do you host private events?", pageTypes: new Set(["faq", "private-events", "general"]) },
+    { pattern: /\b(?:cancellation|cancel(?:ing|led)?|no.shows?)\b/i, question: "What is your cancellation policy?", pageTypes: new Set(["faq", "policies", "reservations", "general"]) },
+    { pattern: /\b(?:large\s+(?:group|part)|group\s+dining|parties?\s+of\s+\d)/i, question: "Can you accommodate large groups?", pageTypes: new Set(["faq", "policies", "reservations", "general", "private-events"]) },
+    { pattern: /\b(?:outdoor\s+(?:seating|dining|patio)|patio\s+(?:seating|dining|area))/i, question: "Do you have outdoor seating?", pageTypes: new Set(["faq", "about", "general"]) },
+    { pattern: /\b(?:kids?|children|family.friendly|high\s+chair)/i, question: "Are you family-friendly?", pageTypes: new Set(["faq", "policies", "general"]) },
+    { pattern: /\b(?:gluten.free|vegan|vegetarian|allerg|dietary\s+(?:restrict|accommodat))/i, question: "Can you accommodate dietary restrictions?", pageTypes: new Set(["faq", "menu", "general"]) },
+    { pattern: /\b(?:gift\s+card|gift\s+certificate)/i, question: "Do you sell gift cards?", pageTypes: new Set(["faq", "general"]) },
+    { pattern: /\b(?:live\s+music|live\s+entertainment|band|musician)/i, question: "Do you have live music?", pageTypes: new Set(["faq", "events", "general", "about"]) },
+    { pattern: /\b(?:tasting\s+(?:room|experience|flight)|wine\s+tasting)/i, question: "Do you offer tastings?", pageTypes: new Set(["faq", "about", "general", "memberships"]) },
+    { pattern: /\b(?:corkage|bring\s+(?:your\s+own|outside)\s+(?:wine|alcohol|beverage))/i, question: "Can I bring my own wine?", pageTypes: new Set(["faq", "policies", "general"]) },
+    { pattern: /\b(?:smoking|vaping|smoke.free)/i, question: "What is your smoking policy?", pageTypes: new Set(["faq", "policies", "general"]) },
+    { pattern: /\b(?:wi.?fi|wifi|internet\s+access)/i, question: "Do you have Wi-Fi?", pageTypes: new Set(["faq", "general"]) },
+  ];
+
+  for (const detector of topicDetectors) {
+    if (!detector.pageTypes.has(pageType) && !detector.pattern.test(haystack)) continue;
+    if (!detector.pattern.test(text)) continue;
+    if (out.some((f) => f.question === detector.question)) continue;
+
+    // Extract answer from structuredText sections when available (higher quality)
+    const structuredText = page.structuredText;
+    let rawAnswer = "";
+
+    if (structuredText) {
+      // Find the section that contains the match
+      const sections = structuredText.split(/\n##\s+/);
+      for (const section of sections) {
+        if (detector.pattern.test(section)) {
+          // Take the body of the section (skip the heading line)
+          const lines = section.split("\n");
+          const body = lines.slice(1).join(" ").trim();
+          if (body.length >= 20) {
+            rawAnswer = body;
+            break;
+          }
+        }
+      }
+    }
+
+    // Fallback: extract from plain text, finding sentence-aligned window
+    if (!rawAnswer) {
+      const match = detector.pattern.exec(text);
+      if (!match) continue;
+
+      // Find the sentence containing the match
+      const beforeMatch = text.slice(0, match.index);
+      const sentenceStart = Math.max(
+        beforeMatch.lastIndexOf(". ") + 2,
+        beforeMatch.lastIndexOf("! ") + 2,
+        0,
+      );
+      const afterMatch = text.slice(match.index + match[0].length);
+      const sentenceEnd = afterMatch.search(/[.!]\s/);
+      const end = sentenceEnd >= 0
+        ? match.index + match[0].length + sentenceEnd + 1
+        : Math.min(text.length, match.index + match[0].length + 200);
+
+      rawAnswer = text.slice(sentenceStart, end).trim();
+
+      // If we got a very long chunk, try to just grab 2-3 sentences after the match
+      if (rawAnswer.length > 300) {
+        rawAnswer = text.slice(match.index, end).trim();
+      }
+    }
+
+    const answer = validateFaqAnswer(toConversationalAnswer(rawAnswer));
+    if (!answer) continue;
+
+    out.push({
+      id: createId("faq"),
+      question: detector.question,
+      answer,
+      sourceUrl: page.url,
+      include: true,
+      confidence: pageType === "faq" || pageType === "policies" ? 0.88 : 0.75,
+      lowConfidence: false,
+    });
+  }
+
+  return out.slice(0, 10);
+}
+
+/**
+ * Extract FAQs from question marks in page text (original fallback approach, improved).
+ */
+function extractQuestionMarkFaqs(page: CrawledPage & { pageType?: WebsitePageType }): WebsiteImportDraft["faqs"] {
+  const out: WebsiteImportDraft["faqs"] = [];
+  const faqPageHint = isLikelyFaqPage(page.url, page.title);
+  const sanitizedExcerpt = sanitizeFaqText(page.textExcerpt);
+  const questionPattern = /([^?.!\n]{8,140}\?)/g;
+  const questions: Array<{ text: string; start: number; end: number }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = questionPattern.exec(sanitizedExcerpt)) !== null && questions.length < 30) {
+    const question = (match[1] ?? "").trim();
+    questions.push({
+      text: question,
+      start: match.index,
+      end: match.index + question.length,
+    });
+  }
+
+  for (let index = 0; index < questions.length && out.length < 20; index += 1) {
+    const question = questions[index];
+    const nextQuestion = questions[index + 1];
+    const answerStart = question.end;
+    const answerEnd = nextQuestion ? nextQuestion.start : Math.min(sanitizedExcerpt.length, answerStart + 420);
+    const rawAnswer = sanitizedExcerpt.slice(answerStart, answerEnd).trim();
+
+    const candidate = normalizeFaqCandidate(
+      {
+        question: question.text,
+        answer: rawAnswer.slice(0, 420),
+        sourceUrl: asNullableUrl(page.url),
+      },
+      {
+        faqPageHint,
+        minScore: faqPageHint ? 3 : 5,
+      },
+    );
+
+    if (!candidate) continue;
+
+    // Convert to conversational answer
+    const conversationalAnswer = toConversationalAnswer(candidate.answer);
+    if (!conversationalAnswer || conversationalAnswer.length < 15) continue;
+
+    out.push({
+      id: createId("faq"),
+      question: candidate.question,
+      answer: conversationalAnswer,
+      sourceUrl: candidate.sourceUrl,
+      include: candidate.score >= 6,
+      confidence: Math.max(0, Math.min(1, candidate.score / 10)),
+      lowConfidence: candidate.score < 6,
+    });
+  }
+
   return out;
+}
+
+/**
+ * Main FAQ extraction: combines structured page extraction, policy detection, and question-mark fallback.
+ * Scans ALL relevant page types, not just FAQ/general/contact.
+ */
+function extractFallbackFaqs(pages: CrawledPage[]) {
+  const out: WebsiteImportDraft["faqs"] = [];
+  const seenQuestions = new Set<string>();
+
+  function addUnique(faqs: WebsiteImportDraft["faqs"]) {
+    for (const faq of faqs) {
+      const key = faq.question.toLowerCase();
+      if (seenQuestions.has(key) || out.length >= 30) continue;
+      seenQuestions.add(key);
+      out.push(faq);
+    }
+  }
+
+  for (const page of pages) {
+    const pageType = (page as ClassifiedPage).pageType ?? "general";
+    if (!FAQ_CONTENT_PAGES.has(pageType) && pageType !== "home" && pageType !== "menu" && pageType !== "events") continue;
+
+    // 1. Structured heading-based extraction (e.g., FAQ pages with ## headings)
+    addUnique(extractFaqsFromStructuredPage(page));
+
+    // 2. Policy/topic detection from paragraph content
+    addUnique(extractFaqsFromPolicyContent(page));
+
+    // 3. Question-mark fallback for FAQ and general pages
+    if (pageType === "faq" || pageType === "general" || pageType === "contact") {
+      addUnique(extractQuestionMarkFaqs(page));
+    }
+  }
+
+  return out.slice(0, 25);
 }
 
 function extractFallbackPolicies(pages: CrawledPage[]) {
@@ -1336,32 +1692,51 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
   // Reservation FAQ
   const reservations = draft.restaurantKnowledge.reservations;
   if (reservations.include && (reservations.bookingUrl || reservations.instructions)) {
-    const answer = [
-      reservations.instructions ? reservations.instructions.slice(0, 200) : "",
-      reservations.bookingUrl ? `Book online: ${reservations.bookingUrl}` : "",
-      reservations.platforms.length ? `Available on ${reservations.platforms.join(", ")}.` : "",
-    ].filter(Boolean).join(" ").trim();
-
-    if (answer) {
-      faqs.push({
-        id: createId("faq"),
-        question: "Do you take reservations?",
-        answer,
-        sourceUrl: reservations.sourceUrl,
-        include: true,
-        confidence: 0.9,
-      });
+    const parts: string[] = [];
+    if (reservations.platforms.length) {
+      parts.push(`Reservations are available through ${reservations.platforms.join(" and ")}.`);
+    } else {
+      parts.push("Yes, we recommend making a reservation.");
+    }
+    if (reservations.bookingUrl) {
+      parts.push(`You can book online at ${reservations.bookingUrl}.`);
     }
 
+    faqs.push({
+      id: createId("faq"),
+      question: "Do I need a reservation?",
+      answer: parts.join(" ").slice(0, 280),
+      sourceUrl: reservations.sourceUrl,
+      include: true,
+      confidence: 0.9,
+    });
+
     if (reservations.depositPolicy) {
-      faqs.push({
-        id: createId("faq"),
-        question: "What is your cancellation or deposit policy?",
-        answer: reservations.depositPolicy.slice(0, 280),
-        sourceUrl: reservations.sourceUrl,
-        include: true,
-        confidence: 0.8,
-      });
+      const answer = toConversationalAnswer(reservations.depositPolicy);
+      if (answer) {
+        faqs.push({
+          id: createId("faq"),
+          question: "What is your cancellation or deposit policy?",
+          answer,
+          sourceUrl: reservations.sourceUrl,
+          include: true,
+          confidence: 0.8,
+        });
+      }
+    }
+
+    if (reservations.partySizeNotes) {
+      const answer = validateFaqAnswer(toConversationalAnswer(reservations.partySizeNotes));
+      if (answer) {
+        faqs.push({
+          id: createId("faq"),
+          question: "Can you accommodate large groups?",
+          answer,
+          sourceUrl: reservations.sourceUrl,
+          include: true,
+          confidence: 0.8,
+        });
+      }
     }
   }
 
@@ -1369,11 +1744,11 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
   const events = draft.restaurantKnowledge.events.filter((e) => e.include);
   if (events.length > 0) {
     const upcoming = events.slice(0, 3);
-    const eventList = upcoming.map((e) => `${e.title}${e.date ? ` (${e.date})` : ""}`).join("; ");
+    const eventList = upcoming.map((e) => `${e.title}${e.date ? ` (${e.date})` : ""}`).join(", ");
     faqs.push({
       id: createId("faq"),
       question: "What events do you have coming up?",
-      answer: `Upcoming events include: ${eventList}.${events.length > 3 ? ` Plus ${events.length - 3} more events.` : ""}`,
+      answer: `We have some great events coming up! ${eventList}.${events.length > 3 ? ` Plus ${events.length - 3} more — check our events page for the full list.` : ""}`,
       sourceUrl: events[0].sourceUrl,
       include: true,
       confidence: 0.85,
@@ -1384,7 +1759,7 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
       faqs.push({
         id: createId("faq"),
         question: "Do you have live music?",
-        answer: `Yes! ${liveMusic.slice(0, 3).map((e) => `${e.title}${e.date ? ` on ${e.date}` : ""}`).join("; ")}.`,
+        answer: `Yes, we have live music! ${liveMusic.slice(0, 2).map((e) => `${e.title}${e.date ? ` on ${e.date}` : ""}`).join(" and ")}. Check our events page for the full schedule.`,
         sourceUrl: liveMusic[0].sourceUrl,
         include: true,
         confidence: 0.85,
@@ -1398,7 +1773,7 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
     faqs.push({
       id: createId("faq"),
       question: "Do you host private events or weddings?",
-      answer: `Yes, we accommodate private events. Visit ${privateEvents.url} for more details.`,
+      answer: "Yes, we host private events and weddings! Contact us for availability and details about our event spaces.",
       sourceUrl: privateEvents.url,
       include: true,
       confidence: 0.8,
@@ -1408,10 +1783,21 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
   // Membership / Wine Club FAQ
   const memberships = draft.restaurantKnowledge.memberships;
   if (memberships.include && memberships.benefits) {
+    // Clean benefits text: strip page title, "Skip to content", repeated headings
+    const cleanedBenefits = memberships.benefits
+      .replace(/^[^.]*\|\s*[^|.]*(?:\|[^|.]*)*\s*/i, "")
+      .replace(/skip\s+to\s+content/gi, "")
+      .replace(/^(?:wine\s+club|membership)\s+(?:wine\s+club|membership)\s+/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const answer = validateFaqAnswer(toConversationalAnswer(cleanedBenefits));
+    // Clean the membership name — strip location/business suffixes from page titles
+    const rawName = (memberships.name ?? "").replace(/\s*[|–—]\s*.*/g, "").replace(/\s+in\s+.*/i, "").trim();
+    const hasCleanName = rawName.length >= 3 && rawName.length <= 40 && !/membership/i.test(rawName);
     faqs.push({
       id: createId("faq"),
-      question: memberships.name ? `What is the ${memberships.name}?` : "Do you have a membership or club program?",
-      answer: memberships.benefits.slice(0, 280),
+      question: hasCleanName ? `What is the ${rawName}?` : "Do you have a wine club or membership?",
+      answer: answer || "Yes, we have a membership program. Contact us for details.",
       sourceUrl: memberships.sourceUrl,
       include: true,
       confidence: 0.85,
@@ -1420,47 +1806,71 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
 
   // Hours FAQ
   if (draft.businessProfile.hours.value) {
-    faqs.push({
-      id: createId("faq"),
-      question: "What are your hours?",
-      answer: draft.businessProfile.hours.value,
-      sourceUrl: draft.businessProfile.hours.sourceUrl,
-      include: true,
-      confidence: 0.9,
-    });
+    // Clean hours text: strip phone numbers that may have leaked in
+    const cleanHours = draft.businessProfile.hours.value
+      .replace(/\(\d{3}\)\s*\d{3}[-.]?\d{4}/g, "")
+      .replace(/\d{3}[-.]?\d{3}[-.]?\d{4}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (cleanHours.length >= 5) {
+      faqs.push({
+        id: createId("faq"),
+        question: "What are your hours?",
+        answer: `Our hours are: ${cleanHours}.`,
+        sourceUrl: draft.businessProfile.hours.sourceUrl,
+        include: true,
+        confidence: 0.9,
+      });
+    }
   }
 
   // Location / Contact FAQ
   if (draft.businessProfile.address.value) {
-    const parts = [
-      draft.businessProfile.address.value,
-      draft.businessProfile.phone.value ? `Phone: ${draft.businessProfile.phone.value}` : "",
-      draft.businessProfile.email.value ? `Email: ${draft.businessProfile.email.value}` : "",
-    ].filter(Boolean);
+    // Clean the address value - strip noise that may have leaked from page content
+    const cleanAddress = draft.businessProfile.address.value
+      .replace(/\s+/g, " ")
+      .replace(/\b\d{4}\s+(?:wine|farm|event|club)/gi, "")
+      .trim()
+      .slice(0, 120);
 
-    faqs.push({
-      id: createId("faq"),
-      question: "Where are you located?",
-      answer: parts.join(". "),
-      sourceUrl: draft.businessProfile.address.sourceUrl,
-      include: true,
-      confidence: 0.9,
-    });
+    if (cleanAddress.length >= 10) {
+      const parts = [`We're located at ${cleanAddress}.`];
+      if (draft.businessProfile.phone.value) {
+        const cleanPhone = draft.businessProfile.phone.value.replace(/[^0-9+() -]/g, "").trim();
+        if (cleanPhone.length >= 7) {
+          parts.push(`You can reach us at ${cleanPhone}.`);
+        }
+      }
+
+      faqs.push({
+        id: createId("faq"),
+        question: "Where are you located?",
+        answer: parts.join(" "),
+        sourceUrl: draft.businessProfile.address.sourceUrl,
+        include: true,
+        confidence: 0.9,
+      });
+    }
   }
 
   // Menu highlights FAQ
   const menuSections = draft.restaurantKnowledge.menuSections.filter((m) => m.include);
   if (menuSections.length > 0) {
-    const sectionNames = menuSections.map((s) => s.title).slice(0, 4);
-    const itemCount = menuSections.reduce((sum, s) => sum + s.items.length, 0);
-    faqs.push({
-      id: createId("faq"),
-      question: "What kind of food do you serve?",
-      answer: `Our menu features${sectionNames.length > 0 ? `: ${sectionNames.join(", ")}` : ` ${itemCount} items`}.${menuSections[0].sourceUrl ? ` View our full menu at ${menuSections[0].sourceUrl}` : ""}`,
-      sourceUrl: menuSections[0].sourceUrl,
-      include: true,
-      confidence: 0.75,
-    });
+    // Clean section names — strip full page titles, only keep actual section names
+    const sectionNames = menuSections
+      .map((s) => s.title.replace(/\s*[|–—]\s*.*/g, "").replace(/\s+in\s+.*/i, "").trim())
+      .filter((s) => s.length >= 2 && s.length <= 40)
+      .slice(0, 4);
+    if (sectionNames.length > 0) {
+      faqs.push({
+        id: createId("faq"),
+        question: "What kind of food do you serve?",
+        answer: `Our menu includes ${sectionNames.join(", ")}. Check our menu page for the full selection and current offerings.`,
+        sourceUrl: menuSections[0].sourceUrl,
+        include: true,
+        confidence: 0.75,
+      });
+    }
   }
 
   return faqs;

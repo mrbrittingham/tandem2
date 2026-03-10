@@ -515,6 +515,13 @@ export function WebsiteImportPanel({
     } : current);
   };
 
+  const removeFaq = (id: string) => {
+    setDraft((current) => current ? {
+      ...current,
+      faqs: current.faqs.filter((entry) => entry.id !== id),
+    } : current);
+  };
+
   const applyImport = async () => {
     if (!run?.id || !draft) {
       return;
@@ -743,22 +750,11 @@ export function WebsiteImportPanel({
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
         <h3 className="text-lg font-semibold text-slate-900">FAQ Suggestions</h3>
         <p className="mt-1 text-sm text-slate-500">Generated from extracted knowledge. Toggle to include or exclude.</p>
-        <div className="mt-3 space-y-2">
-          {(draft?.faqs ?? []).length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No FAQ suggestions detected.</p>
-          ) : draft?.faqs.map((faq) => (
-            <article key={faq.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-900">{faq.question}</p>
-                  <p className="mt-0.5 text-sm text-slate-700">{faq.answer}</p>
-                  {faq.lowConfidence ? <p className="mt-1 text-xs text-amber-600">Low confidence extraction</p> : null}
-                </div>
-                <button type="button" onClick={() => setFaqInclude(faq.id, !faq.include)} className={`shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold ${faq.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{faq.include ? "Included" : "Excluded"}</button>
-              </div>
-            </article>
-          ))}
-        </div>
+        <FaqList
+          faqs={draft?.faqs ?? []}
+          onToggleInclude={(id) => setFaqInclude(id, !(draft?.faqs.find((f) => f.id === id)?.include))}
+          onDelete={removeFaq}
+        />
       </div>
 
       {/* Review & Apply */}
@@ -880,5 +876,68 @@ function CollapsibleMenuCard({
         </div>
       ) : null}
     </article>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  FAQ List with collapse for 10+ items                               */
+/* ------------------------------------------------------------------ */
+
+function FaqList({
+  faqs,
+  onToggleInclude,
+  onDelete,
+}: {
+  faqs: WebsiteImportDraft["faqs"];
+  onToggleInclude: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const COLLAPSE_THRESHOLD = 10;
+  const visible = showAll || faqs.length <= COLLAPSE_THRESHOLD ? faqs : faqs.slice(0, COLLAPSE_THRESHOLD);
+
+  if (faqs.length === 0) {
+    return (
+      <div className="mt-3">
+        <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No FAQ suggestions detected.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      {visible.map((faq) => (
+        <article key={faq.id} className={`rounded-xl border bg-slate-50/70 p-3 ${faq.include ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-slate-900">{faq.question}</p>
+              <p className="mt-0.5 text-sm text-slate-700">{faq.answer}</p>
+              <div className="mt-1 flex items-center gap-3">
+                {faq.sourceUrl ? (
+                  <span className="text-xs text-slate-400">Source: {new URL(faq.sourceUrl).pathname}</span>
+                ) : null}
+                {faq.confidence != null ? (
+                  <span className="text-xs text-slate-400">{Math.round(faq.confidence * 100)}% confidence</span>
+                ) : null}
+                {faq.lowConfidence ? <span className="text-xs text-amber-600">Low confidence</span> : null}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button type="button" onClick={() => onToggleInclude(faq.id)} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${faq.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{faq.include ? "Included" : "Excluded"}</button>
+              <button type="button" onClick={() => onDelete(faq.id)} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50" title="Remove FAQ">✕</button>
+            </div>
+          </div>
+        </article>
+      ))}
+      {faqs.length > COLLAPSE_THRESHOLD ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(!showAll)}
+          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+        >
+          {showAll ? "Show fewer" : `Show all ${faqs.length} FAQs`}
+        </button>
+      ) : null}
+    </div>
   );
 }

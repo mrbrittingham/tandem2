@@ -645,6 +645,8 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
 
     seen.add(nextUrl);
 
+    console.log(`[crawl] depth=${currentDepth} score=${next?.score ?? 0} url=${nextUrl}`);
+
     let response: Response;
     try {
       response = await withTimeout(nextUrl, {
@@ -691,8 +693,9 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
     }
 
     const lowerUrl = nextUrl.toLowerCase();
-    const isContentPage = /menu|food|dining|drink|wine|cocktail|brunch|dinner|lunch/i.test(`${lowerUrl} ${title}`);
-    const structuredText = isContentPage ? excerptText(htmlToStructuredText(html), excerptLimit) : undefined;
+    const haystack = `${lowerUrl} ${title}`;
+    const needsStructuredText = /menu|food|dining|drink|wine|cocktail|brunch|dinner|lunch|faq|frequently|policy|policies|about|private.event|club|membership|contact|hours|visit|reservation|dog|pet|parking|dress|cancel/i.test(haystack);
+    const structuredText = needsStructuredText ? excerptText(htmlToStructuredText(html), excerptLimit) : undefined;
 
     pages.push({
       url: nextUrl,
@@ -723,6 +726,12 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
       const rScore = (r?.score ?? right.score) - right.depth * 4;
       return rScore - lScore;
     });
+  }
+
+  console.log(`[crawl] Finished: ${pages.length} pages crawled, ${seen.size} URLs visited, ${queue.length} remaining in queue`);
+  for (const page of pages) {
+    const path = new URL(page.url).pathname;
+    console.log(`[crawl]   ${path} — "${page.title}"`);
   }
 
   return {
