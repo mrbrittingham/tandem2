@@ -70,6 +70,7 @@ export function decodeHtml(value: string): string {
 
 export function htmlToText(html: string): string {
   const withoutNoisyBlocks = html
+    .replace(/<head[\s\S]*?<\/head>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
@@ -88,6 +89,7 @@ export function htmlToText(html: string): string {
  */
 export function htmlToStructuredText(html: string): string {
   const withoutNoisyBlocks = html
+    .replace(/<head[\s\S]*?<\/head>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")

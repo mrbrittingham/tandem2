@@ -38,9 +38,9 @@ const SOCIAL_PATTERNS: Array<{ platform: SocialLink["platform"]; pattern: RegExp
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const EMAIL_EXACT_PATTERN = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{7,}\d)/g;
+const PHONE_PATTERN = /(?:\+?\d[\d\s().-]{7,14}\d)(?!\d)/g;
 const HOURS_PATTERN = /\b(?:hours|tasting room hours|open|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b[^\n]{0,180}(?:\d{1,2}[:.]?\d{0,2}\s?(?:am|pm)?\s?(?:-|–|to)\s?\d{1,2}[:.]?\d{0,2}\s?(?:am|pm)?|closed|noon)/i;
-const ADDRESS_PATTERN = /\b\d{1,6}\s+[A-Za-z0-9.'#\-\s]{3,80}(?:street|st\.?|avenue|ave\.?|road|rd\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|way|suite|ste\.?|unit)\b[^\n]{0,120}/i;
+const ADDRESS_PATTERN = /\b\d{1,6}\s+[A-Za-z0-9.'#\-\s]{3,80}\s(?:street|avenue|ave|boulevard|blvd|road|lane|drive|way|suite|unit|st|rd|ln|dr|ste)\.?\b[,.\s]*(?:[A-Za-z\s.]+,?\s*)?(?:[A-Z]{2}\s+\d{5}(?:-\d{4})?)?/i;
 const TRACKING_QUERY_PARAMS = new Set(["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid", "mc_cid", "mc_eid"]);
 const JUNK_QUERY_PREFIXES = ["utm_", "oly_", "vero_", "hsa_"];
 const JUNK_PATH_REGEX = /(\/tag\/|\/category\/|\/author\/|\/feed\/?$|\/wp-admin|\/wp-json|\/xmlrpc\.php|\/cart|\/checkout|\/my-account|\/search\b|\?s=)/i;
@@ -331,13 +331,14 @@ function collectSignalsFromHtml(args: {
     signals.hours.push({ value: hoursMatch[0].trim(), sourceUrl: pageUrl });
   }
 
+  const ADDR_FALSE_POSITIVE = /\b(sandwich|burger|chicken|pork|beef|steak|pizza|pasta|salad|soup|dessert|appetizer|beverage|pepper|sausage|glazed|sliders?|wings?|fries|grill|bacon|cheese|shrimp|lobster)\b/i;
   const addressMatch = ADDRESS_PATTERN.exec(signalText);
-  if (addressMatch?.[0]) {
+  if (addressMatch?.[0] && !ADDR_FALSE_POSITIVE.test(addressMatch[0])) {
     signals.addresses.push({ value: addressMatch[0].trim(), sourceUrl: pageUrl });
   }
 
   const footerAddressMatch = ADDRESS_PATTERN.exec(footerText);
-  if (footerAddressMatch?.[0]) {
+  if (footerAddressMatch?.[0] && !ADDR_FALSE_POSITIVE.test(footerAddressMatch[0])) {
     signals.addresses.push({ value: footerAddressMatch[0].trim(), sourceUrl: pageUrl });
   }
 

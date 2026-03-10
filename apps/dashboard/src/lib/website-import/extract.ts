@@ -339,7 +339,11 @@ function extractEventsFromPages(pages: CrawledPage[], signals: ImportSignals): I
 }
 
 function extractMenuSectionsFromPages(pages: CrawledPage[]): ImportMenuSection[] {
-  const menuPages = pages.filter((page) => page.pageType === "menu" || /menu|food|wine|cocktail|brunch|dinner/i.test(`${page.url} ${page.title}`));
+  const menuPages = pages.filter((page) => {
+    // Skip home pages — their headings are often event titles, not menu sections
+    if ((page as ClassifiedPage).pageType === "home") return false;
+    return (page as ClassifiedPage).pageType === "menu" || /\bmenu\b|\bfood\b|\bwine\s+list\b|\bcocktail\b|\bbrunch\b|\bdinner\b/i.test(`${page.url} ${page.title}`);
+  });
   const sections: ImportMenuSection[] = [];
 
   for (const page of menuPages) {
@@ -591,7 +595,7 @@ function extractReservationInfo(pages: CrawledPage[], signals: ImportSignals): I
     platforms,
     instructions: (joined || bookingSignal?.label || "").slice(0, 360),
     partySizeNotes: joined.match(/party[^.]{0,100}|group[^.]{0,100}/i)?.[0] ?? null,
-    depositPolicy: joined.match(/deposit[^.]{0,120}|cancellation[^.]{0,120}/i)?.[0] ?? null,
+    depositPolicy: joined.match(/(?:\$\d+\s+)?deposit[^.]{0,120}|cancellation[^.]{0,120}/i)?.[0] ?? null,
     experienceNotes: joined.match(/experience[^.]{0,140}|special[^.]{0,140}/i)?.[0] ?? null,
   };
 }
@@ -682,10 +686,12 @@ const QUESTION_HEADING_REGEX = /^(what|when|where|who|why|how|can|do|does|is|are
 const FAQ_CONTENT_PAGES: Set<WebsitePageType> = new Set(["faq", "policies", "about", "contact", "general", "memberships", "private-events", "reservations", "hours"]);
 
 /**
- * Sanitize crawled text for FAQ extraction — strip URLs, social noise, navigation, HTML entities.
+ * Sanitize crawled text for FAQ extraction — strip URLs, social noise, navigation, HTML entities, page titles.
  */
 function sanitizeFaqText(value: string): string {
   return value
+    // Strip page title patterns (e.g., "Title | Business Name | City, ST")
+    .replace(/[^\n.!?]*\|[^\n.!?]*(?:\|[^\n.!?]*)*/g, " ")
     .replace(/https?:\/\/\S+/gi, " ")
     .replace(/\/[a-z0-9\-_]+\?(?:[^\s]{6,})/gi, " ")
     .replace(/&hellip;/gi, "...")
@@ -707,6 +713,7 @@ function sanitizeFaqText(value: string): string {
     .replace(/\badd\s+to\s+calendar\b/gi, " ")
     .replace(/(?:skip\s+to\s+content|main\s+menu|privacy\s+policy|terms)\b[^?.!\n]*/gi, " ")
     .replace(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:,\s*\d{4})?\s+(?:farm\s+kitchen\s+events?|winery\s+events?)/gi, " ")
+    .replace(/\+\d+\)/g, " ") // strip menu price modifier "+2)"
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -717,6 +724,7 @@ function sanitizeFaqText(value: string): string {
  */
 function toConversationalAnswer(rawAnswer: string): string {
   let cleaned = rawAnswer
+    // Decode HTML entities
     .replace(/&hellip;/gi, "...")
     .replace(/&amp;/gi, "&")
     .replace(/&nbsp;/gi, " ")
@@ -724,42 +732,87 @@ function toConversationalAnswer(rawAnswer: string): string {
     .replace(/&#\d+;/gi, " ")
     .replace(/\[\s*…\s*\]/g, "")
     .replace(/\[\s*&hellip;\s*\]/gi, "")
+    // Strip URLs and query params
     .replace(/https?:\/\/\S+/gi, "")
-    .replace(/\b(?:skip\s+to\s+content|main\s+menu)\b/gi, "")
+    .replace(/\b\w+\s*=\s*\w+/g, "")
+    // Strip page title patterns: "Something | Business Name | City, ST"
+    .replace(/[^.!?\n]*\|[^.!?\n]*(?:\|[^.!?\n]*)*/g, " ")
+    // Strip nav/UI noise
+    .replace(/\b(?:skip\s+to\s+content|main\s+menu|open\s+menu|close\s+menu)\b/gi, "")
     .replace(/\bfind\s+out\s+more\b/gi, "")
     .replace(/\bread\s+more\b/gi, "")
     .replace(/\badd\s+to\s+calendar\b/gi, "")
-    .replace(/\b\w+\s*=\s*\w+/g, "") // strip query params like partySize=2
+    .replace(/\bbook\s+a\s+reservation\b/gi, "")
+    .replace(/\b(?:share|follow|subscribe|newsletter|log\s*in|sign\s*in)\b/gi, "")
+    // Strip date-prefixed event noise: "Mar 13 Live Music Piano..."
+    .replace(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+(?:Live\s+Music|Event|Farm\s+Kitchen)[^.!?]*/gi, "")
+    // Strip event listing fragments: "Category: ... Add to Calendar"
+    .replace(/\bCategor(?:y|ies)?\s*:?\s*[^.!?]*/gi, "")
+    // Strip "+N)" price modifier patterns from menus
+    .replace(/\+\d+\)/g, "")
     .replace(/\s+/g, " ")
     .replace(/^[\s:;,.!?\-–—]+/, "")
     .trim();
 
   if (!cleaned) return "";
 
+  // Strip leading heading/title text that precedes actual content.
+  // Detects patterns like "The Tasting Experience Our wine tastings..."
+  // or "Wine Club at Windmill Creek Enjoy more..."
+  // where a title-case phrase (with optional connecting words) leaks in before actual content.
+  cleaned = cleaned.replace(
+    /^((?:[A-Z][a-z]+|at|in|of|the|and|&|for|with|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|at|in|of|the|and|&|for|with|[A-Z]{2,})){1,8})\s+((?:Our|We|The|This|You|It|They|A|An|Enjoy|Membership|Join|Get|As|For|Check|Visit|All|Whether|From|With|Is|Are)\b)/,
+    (_, _heading, sentenceStart) => sentenceStart,
+  );
+
+  // Capitalize first letter if it starts lowercase (e.g., mid-sentence fragment)
+  if (/^[a-z]/.test(cleaned)) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  // Strip leading standalone heading-like noise words that aren't part of a sentence
+  cleaned = cleaned.replace(/^(Reservations?|Overview|Details|Information|Description|Summary|Introduction|The\s+Tasting\s+Experience)\s+/i, "").trim();
+
   // Split into sentences
   const sentences = cleaned
-    .split(/(?<=[.!])\s+/)
+    .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
-    .filter((s) => s.length >= 10 && s.length <= 200)
-    .filter((s) => !/^(skip|copyright|all rights|share|follow|subscribe|cookie|book\s+a\s+reservation$)/i.test(s))
-    .filter((s) => !/^\d{4}\s+(wine|farm|winery|event)/i.test(s));
+    .filter((s) => s.length >= 12 && s.length <= 240)
+    // Reject noise sentences
+    .filter((s) => !/^(skip|copyright|all rights|share|follow|subscribe|cookie)/i.test(s))
+    .filter((s) => !/^\d{4}\s+(wine|farm|winery|event)/i.test(s))
+    // Reject sentences that are just page/section titles (capitalized words with no verb)
+    .filter((s) => !/^[A-Z][a-z]+(\s+[A-Z][a-z]+){2,}\s*[.!?]?$/.test(s))
+    // Reject sentences starting with truncated words (missing first letter)
+    .filter((s) => !/^[a-z]{2,}\s+[A-Z]/.test(s))
+    // Reject sentences with pipe characters (page title remnants)
+    .filter((s) => !s.includes("|"))
+    // Reject sentences that end with a preposition/article (sign of truncation)
+    .filter((s) => !/\b(?:for|to|at|in|on|with|the|a|an|and|or|but|of|from|by)\s*[.!?]?$/.test(s));
 
   if (sentences.length === 0) {
     // If no clean sentences, just take the first meaningful chunk
-    const fallback = cleaned.slice(0, 180).replace(/\s+\S*$/, "").trim();
-    return fallback ? (fallback.endsWith(".") ? fallback : `${fallback}.`) : "";
+    const fallback = cleaned
+      .replace(/^[a-z]+\s+/, "") // strip leading truncated word
+      .slice(0, 200).replace(/\s+\S*$/, "").trim();
+    return fallback && fallback.length >= 15 ? (fallback.endsWith(".") ? fallback : `${fallback}.`) : "";
   }
 
-  // Take the first 2-3 most informative sentences
-  const picked = sentences.slice(0, 3);
-  let answer = picked.join(" ").trim();
+  // Take first 2-3 sentences, but truncate at sentence boundaries within limit
+  let answer = "";
+  for (const s of sentences.slice(0, 3)) {
+    const next = answer ? `${answer} ${s}` : s;
+    if (next.length > 350) break;
+    answer = next;
+  }
+  answer = answer.trim();
 
   // Ensure it ends with a period
   if (answer && !/[.!?]$/.test(answer)) {
     answer += ".";
   }
 
-  return answer.slice(0, 280);
+  return answer;
 }
 
 /**
@@ -772,9 +825,19 @@ function validateFaqAnswer(answer: string): string | null {
   // Reject answers with query params, HTML artifacts, or numeric garbage
   if (/[&=?]\w+=|dateTime|partySize|utm_|fbclid|gclid/.test(answer)) return null;
 
+  // Reject answers containing page title pipe patterns
+  if (/\|/.test(answer)) return null;
+
   // Must have at least 4 real words
   const words = answer.split(/\s+/).filter((w) => w.length >= 2 && !/^[&=?#]/.test(w));
   if (words.length < 4) return null;
+
+  // Reject if it starts with a truncated word (lowercase fragment before uppercase)
+  if (/^[a-z]{2,}\s+[A-Z]/.test(answer)) {
+    const fixed = answer.replace(/^[a-z]+\s+/, "").trim();
+    if (fixed.length >= 15) return fixed.slice(0, 280);
+    return null;
+  }
 
   // Reject if it starts with a page title pattern
   const cleaned = answer
@@ -926,7 +989,10 @@ function extractFaqsFromPolicyContent(page: CrawledPage & { pageType?: WebsitePa
 
   const pageType = page.pageType ?? "general";
   // Skip event listing pages — they produce noisy FAQ candidates
-  if (pageType === "events" && /\/event\//.test(page.url)) return out;
+  if (pageType === "events") return out;
+  if (/\/event\//.test(page.url)) return out;
+  // Skip pages that are mostly event listings (upcoming-events, calendar, etc.)
+  if (/upcoming|calendar|happenings|what.?s.?on|organizer/i.test(page.url)) return out;
   const haystack = `${page.url} ${page.title}`.toLowerCase();
 
   // Topic-specific patterns to detect and convert into Q&A
@@ -944,7 +1010,7 @@ function extractFaqsFromPolicyContent(page: CrawledPage & { pageType?: WebsitePa
     { pattern: /\b(?:large\s+(?:group|part)|group\s+dining|parties?\s+of\s+\d)/i, question: "Can you accommodate large groups?", pageTypes: new Set(["faq", "policies", "reservations", "general", "private-events"]) },
     { pattern: /\b(?:outdoor\s+(?:seating|dining|patio)|patio\s+(?:seating|dining|area))/i, question: "Do you have outdoor seating?", pageTypes: new Set(["faq", "about", "general"]) },
     { pattern: /\b(?:kids?|children|family.friendly|high\s+chair)/i, question: "Are you family-friendly?", pageTypes: new Set(["faq", "policies", "general"]) },
-    { pattern: /\b(?:gluten.free|vegan|vegetarian|allerg|dietary\s+(?:restrict|accommodat))/i, question: "Can you accommodate dietary restrictions?", pageTypes: new Set(["faq", "menu", "general"]) },
+    { pattern: /\b(?:gluten.free|vegan|vegetarian|allerg|dietary\s+(?:restrict|accommodat))/i, question: "Can you accommodate dietary restrictions?", pageTypes: new Set(["faq", "policies", "about", "general"]) },
     { pattern: /\b(?:gift\s+card|gift\s+certificate)/i, question: "Do you sell gift cards?", pageTypes: new Set(["faq", "general"]) },
     { pattern: /\b(?:live\s+music|live\s+entertainment|band|musician)/i, question: "Do you have live music?", pageTypes: new Set(["faq", "events", "general", "about"]) },
     { pattern: /\b(?:tasting\s+(?:room|experience|flight)|wine\s+tasting)/i, question: "Do you offer tastings?", pageTypes: new Set(["faq", "about", "general", "memberships"]) },
@@ -983,13 +1049,16 @@ function extractFaqsFromPolicyContent(page: CrawledPage & { pageType?: WebsitePa
       const match = detector.pattern.exec(text);
       if (!match) continue;
 
-      // Find the sentence containing the match
-      const beforeMatch = text.slice(0, match.index);
-      const sentenceStart = Math.max(
-        beforeMatch.lastIndexOf(". ") + 2,
-        beforeMatch.lastIndexOf("! ") + 2,
-        0,
-      );
+      // Find the sentence containing the match — limit lookback to 120 chars
+      const lookbackStart = Math.max(0, match.index - 120);
+      const beforeMatch = text.slice(lookbackStart, match.index);
+      const lastPeriod = beforeMatch.lastIndexOf(". ");
+      const lastExcl = beforeMatch.lastIndexOf("! ");
+      const sentenceBreak = Math.max(lastPeriod, lastExcl);
+      const sentenceStart = sentenceBreak >= 0
+        ? lookbackStart + sentenceBreak + 2
+        : match.index; // If no sentence break found nearby, start at match
+
       const afterMatch = text.slice(match.index + match[0].length);
       const sentenceEnd = afterMatch.search(/[.!]\s/);
       const end = sentenceEnd >= 0
@@ -998,7 +1067,7 @@ function extractFaqsFromPolicyContent(page: CrawledPage & { pageType?: WebsitePa
 
       rawAnswer = text.slice(sentenceStart, end).trim();
 
-      // If we got a very long chunk, try to just grab 2-3 sentences after the match
+      // If we got a very long chunk, just grab from the match onward
       if (rawAnswer.length > 300) {
         rawAnswer = text.slice(match.index, end).trim();
       }
@@ -1092,6 +1161,13 @@ function extractFallbackFaqs(pages: CrawledPage[]) {
     for (const faq of faqs) {
       const key = faq.question.toLowerCase();
       if (seenQuestions.has(key) || out.length >= 30) continue;
+      // Check for near-duplicate questions (e.g., "Do you host private events?" vs "Do you host private events or weddings?")
+      const isDuplicate = [...seenQuestions].some((existing) => {
+        const shorter = existing.length < key.length ? existing : key;
+        const longer = existing.length < key.length ? key : existing;
+        return longer.includes(shorter.replace(/\?$/, ""));
+      });
+      if (isDuplicate) continue;
       seenQuestions.add(key);
       out.push(faq);
     }
@@ -1668,10 +1744,17 @@ export async function buildWebsiteImportResult(input: {
   if (knowledgeFaqs.length > 0) {
     const existingQuestions = new Set(draft.faqs.map((f) => f.question.toLowerCase()));
     for (const faq of knowledgeFaqs) {
-      if (!existingQuestions.has(faq.question.toLowerCase())) {
-        draft.faqs.push(faq);
-        existingQuestions.add(faq.question.toLowerCase());
-      }
+      const key = faq.question.toLowerCase();
+      if (existingQuestions.has(key)) continue;
+      // Near-duplicate check: skip if an existing question contains this one (or vice versa)
+      const isDuplicate = [...existingQuestions].some((existing) => {
+        const shorter = existing.length < key.length ? existing : key;
+        const longer = existing.length < key.length ? key : existing;
+        return longer.includes(shorter.replace(/\?$/, ""));
+      });
+      if (isDuplicate) continue;
+      draft.faqs.push(faq);
+      existingQuestions.add(key);
     }
   }
 
@@ -1783,11 +1866,14 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
   // Membership / Wine Club FAQ
   const memberships = draft.restaurantKnowledge.memberships;
   if (memberships.include && memberships.benefits) {
-    // Clean benefits text: strip page title, "Skip to content", repeated headings
+    // Clean benefits text: strip page title, "Skip to content", repeated headings, pipe patterns
     const cleanedBenefits = memberships.benefits
       .replace(/^[^.]*\|\s*[^|.]*(?:\|[^|.]*)*\s*/i, "")
+      .replace(/[^\n.!?]*\|[^\n.!?]*/g, " ")
       .replace(/skip\s+to\s+content/gi, "")
       .replace(/^(?:wine\s+club|membership)\s+(?:wine\s+club|membership)\s+/gi, "")
+      // Remove repeated consecutive phrases (e.g., "Wine Club Wine Club Wine Club")
+      .replace(/\b(\w+(?:\s+\w+)?)\s+(?:\1\s+)+/gi, "$1 ")
       .replace(/\s+/g, " ")
       .trim();
     const answer = validateFaqAnswer(toConversationalAnswer(cleanedBenefits));
@@ -1826,14 +1912,18 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
 
   // Location / Contact FAQ
   if (draft.businessProfile.address.value) {
-    // Clean the address value - strip noise that may have leaked from page content
+    // Clean the address value — strip event/page noise that may have leaked from regex
     const cleanAddress = draft.businessProfile.address.value
       .replace(/\s+/g, " ")
+      // Truncate after zip code pattern (e.g., "Berlin, MD 21811")
+      .replace(/(\b[A-Z]{2}\s+\d{5}(?:-\d{4})?)\b.*$/, "$1")
+      // Strip event/content noise that leaked in
+      .replace(/\b(?:Club|Events?|Wine|Farm|Kitchen|Pick-Up|Party|Join|Winery|Vineyard)\b[^,.]*/gi, "")
       .replace(/\b\d{4}\s+(?:wine|farm|event|club)/gi, "")
       .trim()
       .slice(0, 120);
 
-    if (cleanAddress.length >= 10) {
+    if (cleanAddress.length >= 10 && !/\b(event|party|join|club)\b/i.test(cleanAddress)) {
       const parts = [`We're located at ${cleanAddress}.`];
       if (draft.businessProfile.phone.value) {
         const cleanPhone = draft.businessProfile.phone.value.replace(/[^0-9+() -]/g, "").trim();
@@ -1856,20 +1946,46 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
   // Menu highlights FAQ
   const menuSections = draft.restaurantKnowledge.menuSections.filter((m) => m.include);
   if (menuSections.length > 0) {
-    // Clean section names — strip full page titles, only keep actual section names
-    const sectionNames = menuSections
-      .map((s) => s.title.replace(/\s*[|–—]\s*.*/g, "").replace(/\s+in\s+.*/i, "").trim())
-      .filter((s) => s.length >= 2 && s.length <= 40)
-      .slice(0, 4);
+    // Clean section names — strip full page titles, location text, only keep actual section names
+    const MONTH_REGEX = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/i;
+    const sectionNames = [...new Set(menuSections
+      .map((s) => s.title
+        .replace(/\s*[|–—]\s*.*/g, "")
+        .replace(/\s+in\s+.*/i, "")
+        .replace(/\b(?:Berlin|MD|Windmill|Creek|Winery|Kitchen)\b/gi, "")
+        // Strip "Farm" only as a standalone word, not in "Farm-to-Table"
+        .replace(/\bFarm\b(?!-)/gi, "")
+        .replace(/&#\d+;/g, " ")
+        .replace(/&\w+;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim())
+      .filter((s) => s.length >= 3 && s.length <= 40)
+      // Reject month/season headings (e.g., "November Through March")
+      .filter((s) => !MONTH_REGEX.test(s))
+      // Reject page titles and navigation
+      .filter((s) => !/\b(dining|reservations?|igloo|menus?)\s*&\s*/i.test(s) || s.length <= 20)
+      .filter((s) => !/^(menu|dining|food|restaurant)\s*$/i.test(s))
+      // Reject section names starting with punctuation (e.g., "-to-Table")
+      .filter((s) => /^[A-Za-z]/.test(s))
+      // Reject event titles (contain colons, e.g., "Four Hands Dinner: Chef...")
+      .filter((s) => !/:/.test(s))
+      // Reject generic seasonal labels
+      .filter((s) => !/\b(through|thru|until|season|winter|spring|summer|fall|autumn)\b/i.test(s))
+      // Reject page/event titles that aren't actual food categories
+      .filter((s) => !/\b(restaurant|dinner|village|brunch|experience|event)\b/i.test(s) || /\b(appetizer|entree|dessert|salad|soup|sandwich|pizza|pasta|seafood|steak|chicken|cocktail|beer|wine list)\b/i.test(s))
+    )].slice(0, 4);
     if (sectionNames.length > 0) {
       faqs.push({
         id: createId("faq"),
         question: "What kind of food do you serve?",
-        answer: `Our menu includes ${sectionNames.join(", ")}. Check our menu page for the full selection and current offerings.`,
+        answer: `Our menu features ${sectionNames.join(", ")}. Check our menu page for the full selection and current offerings.`,
         sourceUrl: menuSections[0].sourceUrl,
         include: true,
         confidence: 0.75,
       });
+    } else {
+      // No clean menu section names found — skip generating a misleading FAQ.
+      // The food/menu topic may still be captured by extractFaqsFromPolicyContent.
     }
   }
 
