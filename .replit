@@ -1,0 +1,47 @@
+modules = ["nodejs-20", "web", "bash", "python-3.11"]
+
+[nix]
+channel = "stable-25_05"
+
+[agent]
+expertMode = true
+integrations = ["github:1.0.0"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+NEXT_PUBLIC_SUPABASE_URL = "https://hewevejtnvagwtplbuwu.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_dRRaMZYKd66J8JF_Bg227A_ZhhaoSFy"
+OPENAI_API_KEY = "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"
+TANDEM_API_KEY = "pijh345938u4g_jndasd87das"
+
+[deployment]
+deploymentTarget = "cloudrun"
