@@ -1,0 +1,39 @@
+{
+  "name": "tandem2",
+  "version": "2.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/dashboard",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apps/dashboard run dev",
+    "dev:reset": "npm run clean && npm run dev",
+    "lint": "npm --workspace apps/dashboard run lint",
+    "typecheck": "npx tsc -p packages/shared/tsconfig.json --noEmit && npx tsc -p packages/ui-kit/tsconfig.json --noEmit && npm --workspace apps/dashboard run typecheck",
+    "build": "npm --workspace apps/dashboard run build",
+    "clean": "node ./scripts/clean.mjs",
+    "guard:migrations": "node ./scripts/guard-migrations.mjs",
+    "guard:schema": "node scripts/guard/supabase-schema-guard.mjs",
+    "db:link": "node --env-file=.env.local ./scripts/supabase-link.mjs",
+    "db:pull": "node --env-file=.env.local ./scripts/supabase-pull.mjs",
+    "db:push": "node --env-file=.env.local ./scripts/supabase-push.mjs",
+    "migration:new": "node ./scripts/supabase-migration-new.mjs",
+    "db:reset": "npx --yes supabase db reset",
+    "db:status": "node --env-file=.env.local ./scripts/supabase-status.mjs",
+    "doctor": "node ./scripts/check-deploy-env.mjs",
+    "check:chat-store": "node --import tsx ./scripts/check-chat-store-runtime.ts",
+    "worker:imports": "node --env-file=.env.local --import tsx ./scripts/worker/website-import-worker.ts",
+    "verify:api": "bash ./scripts/verify-api.sh",
+    "smoke:chat": "node ./scripts/smoke-chat.mjs",
+    "smoke:chat:dev": "node ./scripts/smoke-chat-dev.mjs",
+    "docs:generate": "npx tsx scripts/generate-docs.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.37",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.98.0",
+    "ai": "^6.0.105",
+    "tsx": "^4.20.5"
+  }
+}

@@ -1,0 +1,73 @@
+## Error Type
+Recoverable Error
+
+## Error Message
+Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+      <RedirectBoundary>
+        <RedirectErrorBoundary router={{...}}>
+          <InnerLayoutRouter url="/login?red..." tree={[...]} params={{}} cacheNode={{rsc:<Fragment>, ...}} ...>
+            <SegmentViewNode type="page" pagePath="/apps/dash...">
+              <SegmentTrieNode>
+              <ClientPageRoot Component={function LoginPage} serverProvidedParams={{...}}>
+                <LoginPage params={Promise} searchParams={Promise}>
+                  <Suspense fallback={<div>}>
+                    <LoginPageClient>
+                      <main className="flex min-h...">
+                        <section className="w-full max...">
+                          <p>
+                          <h1>
+                          <p>
+                          <form className="mt-6 space..." onSubmit={function onSubmit}>
+                            <label className="block text...">
+                              <span>
+                              <input
+                                type="email"
+                                value=""
+                                onChange={function onChange}
+                                required={true}
+                                className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-bord..."
+                                placeholder="you@company.com"
+-                               data-keeper-lock-id="k-rsjvbapi8u"
+                              >
+-                             <keeper-lock
+-                               className="focus-visible keeper-lock-disabled"
+-                               tabindex="-1"
+-                               id="k-rsjvbapi8u"
+-                               aria-label="Open Keeper Popup"
+-                               role="button"
+-                               style={{background-image:"url(\"chro...",background-size:"24px 24px",cursor:"pointer",width:"24px", ...}}
+-                             >
+                            ...
+                          ...
+            ...
+          ...
+
+
+
+    at label (<anonymous>:null:null)
+    at LoginPageClient (src/app/login/page.tsx:69:11)
+    at LoginPage (src/app/login/page.tsx:125:7)
+
+## Code Frame
+  67 |
+  68 |         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+> 69 |           <label className="block text-sm text-[var(--console-text-secondary)]">
+     |           ^
+  70 |             <span className="mb-1 block">Email</span>
+  71 |             <input
+  72 |               type="email"
+
+Next.js version: 16.1.6 (Turbopack)

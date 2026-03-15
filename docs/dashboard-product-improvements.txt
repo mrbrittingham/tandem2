@@ -1,0 +1,119 @@
+Dashboard Product Improvements
+================================
+Observations and recommendations from a full UX audit of the Tandem
+operator dashboard, reviewed from a non-technical restaurant operator
+perspective.
+
+────────────────────────────────────────
+1. FEATURE ADDITIONS
+────────────────────────────────────────
+
+1a. Conversation analytics depth
+    The Inbox page shows basic metrics (total, open, escalated, resolution
+    rate) but "Avg Response Time" is still a placeholder. Deriving this from
+    assistant reply deltas would give operators a meaningful quality signal.
+
+1b. Bulk intent management
+    The Assistant page only supports add/edit/remove one action at a time.
+    Operators with many intents would benefit from bulk reorder via drag-and-
+    drop rather than "Move up / Move down" buttons.
+
+1c. Knowledge import feedback loop
+    The Knowledge page shows "Detected website content" but gives no way to
+    re-crawl or schedule periodic refreshes. Adding a "Re-import" button and
+    a last-crawled timestamp would help operators keep knowledge current.
+
+1d. Widget preview on Appearance page
+    The Appearance page has a live preview dock, but it is hidden behind a
+    toggle. Making it always visible on wider viewports (side-by-side) would
+    reduce trial-and-error during color customization.
+
+1e. Team invitations
+    The Settings page currently shows "Team invitations are coming soon."
+    Once built, invite-by-email with role selection (admin / viewer) would
+    be the expected feature.
+
+1f. Conversation export
+    Operators may want to export chat transcripts for review or compliance.
+    A "Download CSV" or "Export" action on the Inbox detail panel would be
+    useful.
+
+1g. Notification preferences
+    Settings mentions notifications but has no channel configuration (email,
+    SMS, push). Adding notification routing per event type (escalation,
+    new conversation, offline message) would improve responsiveness.
+
+────────────────────────────────────────
+2. WORKFLOW IMPROVEMENTS
+────────────────────────────────────────
+
+2a. Location creation inline
+    Creating a location currently opens a modal dialog. Embedding the
+    create form inline on the Locations page (as it already does when
+    "Add location" is clicked) is more natural; the modal could be
+    reserved for quick-add from other pages.
+
+2b. Onboarding completion nudges
+    The Overview page shows a setup score, but there is no guided flow
+    that walks operators through the steps in order. A progressive
+    checklist with direct links to each incomplete section would reduce
+    time-to-value.
+
+2c. Handoff availability calendar
+    Handoff support hours are stored as a simple text field. Offering a
+    visual weekly calendar (Mon–Sun, open/close per day) would remove
+    ambiguity and prevent formatting errors.
+
+2d. Knowledge section ordering
+    The Knowledge page has seven sections. Operators may only need two or
+    three. Allowing sections to be collapsed or reordered by relevance
+    would reduce cognitive load.
+
+2e. Inline validation on Locations forms
+    Location forms validate on submit. Showing per-field validation
+    inline as the operator types (debounced) would prevent form
+    rejection surprises.
+
+────────────────────────────────────────
+3. FEATURE ALTERATIONS
+────────────────────────────────────────
+
+3a. Integrations connect flow
+    The Integrations page shows a credential text input and a "Connect
+    account" button. For real third-party integrations (Toast, Resy,
+    Square), an OAuth flow or guided API-key tutorial would be more
+    trustworthy than a bare input field.
+
+3b. Widget embed snippet
+    The Appearance page shows a raw script tag. Adding a "Copy for
+    WordPress," "Copy for Squarespace," or "Copy for Shopify" variant
+    would help non-technical operators who don't manage raw HTML.
+
+3c. Conversation status management
+    Conversations have status labels (escalated, resolved) but there is
+    no UI to change status from the detail panel. Adding "Mark resolved"
+    and "Escalate" buttons on the thread view would close the loop.
+
+3d. Setup score granularity
+    The Overview page shows a single percentage. Breaking it into
+    per-section scores (knowledge: 80%, handoff: 60%, widget: 100%)
+    would help operators see exactly what needs attention.
+
+────────────────────────────────────────
+4. FEATURE REMOVALS / SIMPLIFICATIONS
+────────────────────────────────────────
+
+4a. "Sync now" on Integrations
+    Each integration card has a "Sync now" button even when the
+    integration is not connected. This button should be hidden or
+    disabled until a connection exists.
+
+4b. Redundant appearance redirect
+    The route /appearance simply redirects to /widget. This extra
+    route could be removed once all sidebar references point to /widget.
+
+4c. Country/region dropdown complexity
+    The Locations page lists 19 countries with region sub-lists.
+    Unless the product is actively used internationally, defaulting
+    to US-only with an "Other" option and free-text fallback would
+    simplify the form for the primary audience.

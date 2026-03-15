@@ -1,0 +1,47 @@
+@import "tailwindcss";
+@source "../../../../packages/ui-kit/src/**/*.{ts,tsx}";
+@import "@tandem/ui-kit/src/tokens/tokens.css";
+@import "./tandem-console-tokens.css";
+
+:root {
+  /* Legacy aliases — mapped to unified tokens for backward compat */
+  --bg: var(--color-bg);
+  --panel: var(--color-surface);
+  --panel-muted: var(--color-surface-hover);
+  --text: var(--color-text);
+  --muted: var(--color-text-secondary);
+  --accent: var(--color-primary);
+  --accent-soft: var(--console-sidebar-item-active-bg);
+  --border: var(--color-border);
+  --radius-large: var(--radius-lg);
+  --radius-medium: var(--radius-md);
+}
+
+@theme inline {
+  --color-dashboard-bg: var(--color-bg);
+  --color-dashboard-panel: var(--color-surface);
+  --color-dashboard-text: var(--color-text);
+  --color-dashboard-muted: var(--color-text-secondary);
+  --color-dashboard-accent: var(--color-primary);
+  --font-sans: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[class*="bg-[var(--console-primary)]"],
+[class*="bg-[var(--console-secondary)]"],
+[class*="bg-indigo-"],
+[class*="bg-violet-"],
+[class*="bg-blue-"] {
+  color: #fff;
+}

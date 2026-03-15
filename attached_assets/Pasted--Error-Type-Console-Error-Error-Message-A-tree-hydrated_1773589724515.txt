@@ -1,0 +1,51 @@
+## Error Type
+Console Error
+
+## Error Message
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <PopperProvider scope={{Menu:[...], ...}} anchor={null} onAnchorChange={function bound dispatchSetState}>
+      <MenuProvider scope={{Menu:[...], ...}} open={false} onOpenChange={function useCallbackRef.useMemo} content={null} ...>
+        <MenuProvider scope={{Menu:[...], ...}} onClose={function Menu.useCallback} isUsingKeyboardRef={{current:false}} ...>
+          <DropdownMenuTrigger asChild={true}>
+            <MenuAnchor asChild={true} __scopeMenu={{Menu:[...], ...}}>
+              <PopperAnchor __scopePopper={{Menu:[...], ...}} asChild={true} ref={null}>
+                <Primitive.div asChild={true} ref={function}>
+                  <Primitive.div.Slot ref={function}>
+                    <Primitive.div.SlotClone ref={function}>
+                      <Primitive.button type="button" id="radix-_R_2..." aria-haspopup="menu" aria-expanded={false} ...>
+                        <Primitive.button.Slot type="button" id="radix-_R_2..." aria-haspopup="menu" ...>
+                          <Primitive.button.SlotClone type="button" id="radix-_R_2..." aria-haspopup="menu" ...>
+                            <button
+                              type="button"
+                              className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] r..."
++                             id="radix-_R_2r35rlb_"
+-                             id="radix-_R_bcd5rlb_"
+                              aria-haspopup="menu"
+                              aria-expanded={false}
+                              aria-controls={undefined}
+                              data-state="closed"
+                              data-disabled={undefined}
+                              disabled={false}
+                              onPointerDown={function handleEvent}
+                              onKeyDown={function handleEvent}
+                              ref={function}
+                            >
+          ...
+
+
+
+    at button (unknown:0:0)
+
+Next.js version: 16.1.6 (Turbopack)

@@ -1,0 +1,181 @@
+Repository Improvement Audit
+================================
+Architectural observations, structural issues, and opportunities
+identified during a full codebase review of the Tandem monorepo.
+Date: March 2026
+
+────────────────────────────────────────
+1. ARCHITECTURE OBSERVATIONS
+────────────────────────────────────────
+
+1a. Clean monorepo boundaries
+    The three-package structure (dashboard, ui-kit, shared) provides
+    clear separation. Import paths (@tandem/shared, @tandem/shared/server,
+    @tandem/ui-kit) enforce client/server boundaries effectively.
+
+1b. Storage fallback chain
+    The Supabase → file → in-memory fallback chain is pragmatic for
+    local development but means chat data could silently land in
+    different stores depending on environment configuration. Operators
+    may not realize data isn't persisting to Supabase.
+
+1c. Mock-first state management
+    The localStorage-based mock store is effective for rapid prototyping
+    but creates a parallel state layer that will eventually need to be
+    reconciled with server-sourced state as the product matures.
+
+1d. LLM provider abstraction
+    The provider abstraction layer exists but only OpenAI is implemented.
+    Anthropic and Google providers are placeholder stubs. This is fine
+    for current needs but the abstraction may be premature.
+
+1e. Single async worker
+    The website-import worker is the only background processor, polling
+    on a 5s interval. This pattern works at current scale but doesn't
+    have retry semantics, dead-letter handling, or scaling primitives.
+
+────────────────────────────────────────
+2. STRUCTURAL ISSUES
+────────────────────────────────────────
+
+2a. Migration path split
+    Legacy migrations exist under packages/shared/supabase/migrations/
+    while the authoritative path is supabase/migrations/. Despite
+    guard scripts, this split can confuse contributors. Consider
+    removing the legacy directory entirely or adding a clear README.
+
+2b. Dashboard component colocation
+    Some components in apps/dashboard/src/components/ duplicate
+    primitives available in packages/ui-kit (e.g., TextInput vs
+    ui-kit's Input). A cleanup pass to eliminate duplicates would
+    reduce maintenance burden.
+
+2c. No test infrastructure
+    The repository has no automated test suite. TypeScript type checking
+    and linting are the primary safety nets. Adding integration tests
+    for the chat pipeline and unit tests for the import extraction
+    logic would significantly improve confidence during refactors.
+
+2d. API route inconsistency
+    Some API routes use NextResponse.json() while others use new Response().
+    Some export runtime = "nodejs" and others don't. Standardizing
+    on one pattern would improve maintainability.
+
+2e. Docs directory organization
+    The docs/ directory mixes architecture references (architecture.md,
+    system-map.md), operational guides (RUNBOOK.md at root), audits
+    (dashboard-product-improvements.txt), and plans (stabilization-plan.md,
+    product-plan.md). A clearer hierarchy would help newcomers.
+
+────────────────────────────────────────
+3. POTENTIAL REFACTORS
+────────────────────────────────────────
+
+3a. Consolidate state management
+    Once server-sourced state stabilizes, the mock-store could be
+    refactored to act as a cached layer over server state rather than
+    a standalone localStorage store.
+
+3b. Extract API scope validation
+    Scope validation (businessId + locationSlug) is repeated across
+    multiple route handlers. A shared middleware or utility function
+    would reduce duplication and ensure consistent error responses.
+
+3c. Widget theme normalization
+    Widget theme handling is split between apps/dashboard/src/lib/
+    widget-theme.ts and the ChatWidget component. Consider colocating
+    theme resolution logic in packages/ui-kit.
+
+3d. Import pipeline modularization
+    The website-import logic under apps/dashboard/src/lib/website-import/
+    could be moved to packages/shared if other consumers (future apps or
+    APIs) need import capabilities.
+
+3e. Type file splitting
+    packages/shared/src/types.ts defines all domain types in one file.
+    As the type surface grows, splitting into domain-specific type files
+    (chat-types.ts, business-types.ts, import-types.ts) would improve
+    navigability.
+
+────────────────────────────────────────
+4. UX INCONSISTENCIES
+────────────────────────────────────────
+
+4a. Appearance vs Widget routes
+    /appearance redirects to /widget but both sidebar entries may exist.
+    One canonical route should be chosen and the other removed.
+
+4b. Knowledge page density
+    Seven knowledge sections are shown regardless of which are populated.
+    Collapsing empty or irrelevant sections would reduce visual noise.
+
+4c. Integration cards show actions for unconnected integrations
+    "Sync now" buttons are visible even when no integration is connected,
+    creating false affordances.
+
+4d. Onboarding follow-through
+    The onboarding flow creates a business but doesn't guide operators
+    through completing each setup section. The overview page shows a
+    score but no actionable path to completion.
+
+See also: docs/product/dashboard-product-improvements.md for a complete
+product UX audit from a non-technical operator perspective.
+
+────────────────────────────────────────
+5. OPPORTUNITIES FOR AUTOMATION
+────────────────────────────────────────
+
+5a. Documentation generation
+    A scripts/generate-docs.ts script can scan the repository and
+    auto-update docs/repo-map.md with current directory structure,
+    packages, API routes, and pages. This keeps documentation
+    synchronized with code changes.
+
+5b. CI documentation updates
+    A GitHub Actions workflow can run the docs generator on push to main
+    and auto-commit changes, ensuring repo-map.md stays current without
+    manual effort.
+
+5c. Schema drift detection
+    Running guard:migrations and guard:schema in CI would catch
+    migration path violations before they merge.
+
+5d. Component inventory
+    An automated script could scan ui-kit exports and dashboard imports
+    to detect unused components or dashboard-level duplicates of ui-kit
+    primitives.
+
+5e. Periodic knowledge re-import
+    The website import system is currently one-shot. A scheduled trigger
+    (cron or operator-initiated) for periodic re-crawls would keep
+    knowledge current.
+
+────────────────────────────────────────
+6. SUGGESTIONS FOR FUTURE IMPROVEMENTS
+────────────────────────────────────────
+
+6a. Add integration testing
+    Priority targets: chat pipeline (message → LLM → persist → stream),
+    website import (queue → crawl → extract → apply), and auth flow
+    (login → membership → scope access).
+
+6b. Implement conversation export
+    Operators need chat transcript export (CSV/JSON) for compliance
+    and review. This complements the existing conversation viewer.
+
+6c. Build team invitation system
+    The Settings page has a placeholder for team invitations. Role-based
+    access (admin/viewer) with email invitations is a natural next step.
+
+6d. Add notification routing
+    Per-event notification configuration (escalation alerts via email,
+    new conversation via push) would improve operator responsiveness.
+
+6e. Improve error observability
+    The import worker logs errors but there's no centralized error
+    reporting. Adding structured logging or an error tracking service
+    would help diagnose production issues.
+
+6f. API versioning strategy
+    As the API surface grows, consider versioning (/api/v1/) or
+    adding OpenAPI specs for documentation and client generation.

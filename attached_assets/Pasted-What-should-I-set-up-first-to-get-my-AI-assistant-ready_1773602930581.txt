@@ -1,0 +1,40 @@
+What should I set up first to get my AI assistant ready?
+To get your Windmill Creek chat assistant ready, set up these basics first:
+
+Core info: business overview (winery + restaurant), address (11206 Worcester Hwy, Berlin MD 21811), and your phone ((410) 251-6122).
+Hours (so it can answer “open now?”): Wednesday–Sunday, 12PM–8:30PM.
+Reservations flow: your booking link + what to say when you’re full
+- Link: [Book a table](https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime)
+
+Menu structure: add your sections (e.g., Salads & Soup, Sandwiches, Lite Fare, Flatbreads, Entrees, House Made Desserts, plus Igloo sections) and keep item lists updated.
+Events: a list of upcoming events with date/time + the event URLs (so it can answer “what’s happening this weekend?”).
+Escalation contacts: where to send people for private events/questions—events@windmillcreekvineyard.com and (410) 251-6122.
+Do you want the assistant to focus more on driving reservations, promoting events, or answering menu questions?
+
+driving reservations
+To set your AI assistant up to drive reservations first, prioritize these pieces in this order:
+
+1) Reservations “happy path”
+
+A clear CTA + link: [Book a table](https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime)
+A short script it follows: confirm date, time window, party size, and (per your preference) ask “Will everyone in your party be 21+?” then send the booking link.
+2) Hours + “are you open now?” logic
+
+Hours loaded as: Wednesday–Sunday, 12PM–8:30PM
+This is huge for converting “can we come tonight?” into an actual booking.
+
+3) Fast answers to common pre-booking questions
+
+Location: 11206 Worcester Hwy, Berlin MD 21811
+Phone for quick help: (410) 251-6122
+Events email for larger plans/private events: events@windmillcreekvineyard.com
+4) Reservation backup plan (when it’s full)
+
+A fallback message that suggests trying a different time, or calling (410) 251-6122 for help.
+If you tell me what reservation system you’re using (Toast is what your link looks like), I can write the exact short “reservation-driving” chat flow you can paste into your assistant.
+
+toast https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime
+I didn't quite catch that. Could you rephrase your question about our business?
+
+we're using Toast for our reservations bookings; https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime
+I didn't quite catch that. Could you rephrase your question about our business?
