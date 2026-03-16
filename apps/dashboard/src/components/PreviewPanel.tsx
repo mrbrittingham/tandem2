@@ -29,32 +29,12 @@ export function PreviewPanel({ isOpen, onClose, activeBusiness, draftTheme, isCl
   const previewRuntimeConfig = useMemo(
     () => {
       const scope = resolveChatScope(activeBusiness);
-      const resolved = resolveWidgetRuntimeConfig({
+      return resolveWidgetRuntimeConfig({
         businessId: scope.businessId,
         businessSlug: scope.businessSlug,
         locationId: scope.locationId,
         locationSlug: scope.locationSlug,
       });
-      // TEMP DEBUG: Remove after diagnosing missing business identifier
-      console.log("PREVIEW DEBUG activeBusiness", activeBusiness ? JSON.parse(JSON.stringify(activeBusiness)) : undefined);
-      console.log("PREVIEW DEBUG resolveChatScope result", scope);
-      console.log("PREVIEW DEBUG previewRuntimeConfig", resolved);
-      console.log("PREVIEW DEBUG ChatWidget props", {
-        businessId: resolved.businessId,
-        businessSlug: resolved.businessSlug,
-        locationId: resolved.locationId,
-        locationSlug: resolved.locationSlug,
-        apiBaseUrl: resolved.apiBaseUrl,
-        isValid: resolved.isValid,
-        error: resolved.error,
-      });
-      try {
-        const stored = typeof window !== "undefined" ? window.localStorage.getItem("tandem:mock-state") : null;
-        console.log("PREVIEW DEBUG localStorage tandem:mock-state", stored ? JSON.parse(stored) : null);
-      } catch {
-        console.log("PREVIEW DEBUG localStorage read failed");
-      }
-      return resolved;
     },
     [activeBusiness],
   );

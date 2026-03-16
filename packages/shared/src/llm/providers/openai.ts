@@ -13,7 +13,7 @@ function getOpenAIClient() {
   return createOpenAI({ apiKey });
 }
 
-const getModel = () => process.env.LLM_MODEL || "gpt-5.2";
+const getModel = () => process.env.LLM_MODEL || "gpt-4o";
 
 const baseOptions = (request: LLMRequest) => ({
   system: request.system,

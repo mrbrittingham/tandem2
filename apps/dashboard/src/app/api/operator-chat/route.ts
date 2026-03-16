@@ -212,7 +212,7 @@ export async function POST(request: Request) {
     }
 
     const openai = createOpenAI({ apiKey });
-    const model = process.env.LLM_MODEL || "gpt-5.2";
+    const model = process.env.LLM_MODEL || "gpt-4o";
 
     console.info("[operator-chat] llm-request", {
       userId: user.id,
@@ -284,8 +284,17 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
-    console.error("[operator-chat] unhandled error:", raw);
-    // Return a safe generic message — do not leak internal error details
-    return Response.json({ error: "Failed to process message. Please try again." }, { status: 500 });
+    // Log the full error string so we can diagnose LLM/API failures without
+    // leaking internal details to the client.
+    console.error("[operator-chat] unhandled error:", raw, {
+      model: process.env.LLM_MODEL || "gpt-4o",
+      hasApiKey: !!process.env.OPENAI_API_KEY,
+    });
+    // Friendly client message distinguishes config errors from transient ones.
+    const isModelError = /model.*not.*exist|does not exist|invalid.*model/i.test(raw);
+    const clientMessage = isModelError
+      ? "LLM model is not configured correctly. Contact your administrator."
+      : "Failed to process message. Please try again.";
+    return Response.json({ error: clientMessage }, { status: 500 });
   }
 }
