@@ -1,0 +1,199 @@
+PASS 5 IMPLEMENTATION LOG — Chatbot Page and Nav Consolidation (Tandem 3.0)
+============================================================================
+Branch: tandem3/pass-5-chatbot-nav
+Commit: feat(tandem3-pass-5): implement chatbot page and nav consolidation
+
+---
+
+## SUMMARY
+
+Pass 5 consolidates the operator-facing navigation from nine areas down to
+four top-level sections (Home, Conversations, Chatbot, Account) and introduces
+the /chatbot page as a unified tabbed view of all chatbot configuration.
+
+Pass 5 builds on partial work from the WIP commit
+(wip(tandem3-pass-5): partial chatbot page and nav restructure) and completes:
+  1. /chatbot page with four tabs: Knowledge | Handoff | Behavior | Appearance
+  2. ConsoleTopbar reduced to four nav items
+  3. BusinessSubNav removed from layout rendering
+  4. Redirects for all old routes pointing to new destinations
+  5. /account expanded to absorb business identity and integrations role
+
+Key design decisions:
+  - /chatbot embeds existing sub-pages (knowledge, handoff, intents, widget) as
+    tab content. This is a transitional approach: the sub-pages remain accessible
+    directly via redirects and continue to function as full editors.
+  - The ConsoleSidebar write-path principle is preserved; forms in sub-pages
+    remain functional during the transition.
+  - /account is read-focused: business identity and integrations are displayed
+    as structured data from the mock store; editing flows through the AI sidebar.
+  - BusinessSubNav (the old 7-tab horizontal strip) is no longer imported or
+    rendered anywhere in the console layout.
+
+---
+
+## FILES CREATED
+
+(None — all work is modifications to existing files or the new WIP commit's
+new file which was already created.)
+
+---
+
+## FILES MODIFIED (total across WIP commit + this completion pass)
+
+apps/dashboard/src/app/(console)/chatbot/page.tsx   [CREATED in WIP + fixed]
+  - Created new /chatbot page with four-tab UI: Knowledge, Handoff, Behavior,
+    Appearance.
+  - Uses useSearchParams() with Suspense boundary for SSR safety.
+  - Tab bar styled with rounded pill container matching console design tokens.
+  - Each tab embeds the corresponding full sub-page component:
+      knowledge → KnowledgePage (apps/.../knowledge/page.tsx)
+      handoff   → HandoffPage   (apps/.../handoff/page.tsx)
+      behavior  → AssistantPage (apps/.../intents/page.tsx)
+      appearance → WidgetPage   (apps/.../widget/page.tsx)
+  - Fixed: removed unused useState/useEffect imports (lint warnings).
+
+apps/dashboard/src/components/ConsoleTopbar.tsx   [MODIFIED in WIP]
+  - Reduced nav from 9+ links (BusinessSubNav + overview/conversations/account)
+    to four top-level tabs: Home (/overview), Conversations, Chatbot, Account.
+  - CHATBOT_PATHS list covers all old sub-page paths so the Chatbot tab
+    remains active when visiting /knowledge, /handoff, /intents, /widget,
+    /menus, /settings (which redirect to /chatbot tabs).
+  - NavTab component supports both Link and button variants.
+  - Location switcher and user avatar dropdown retained in topbar right slot.
+
+apps/dashboard/src/app/(console)/layout.tsx   [MODIFIED in WIP]
+  - BusinessSubNav import and rendering removed from console layout.
+  - Layout renders: ConsoleSidebar (left) + topbar + page content (right).
+  - No horizontal sub-nav rendered for any route.
+  - AISidebarProvider wraps layout (carried forward from Pass 4).
+
+apps/dashboard/next.config.ts   [MODIFIED in WIP]
+  - Seven permanent=false redirects added:
+      /knowledge   → /chatbot?tab=knowledge
+      /handoff     → /chatbot?tab=handoff
+      /intents     → /chatbot?tab=behavior
+      /widget      → /chatbot?tab=appearance
+      /menus       → /chatbot?tab=knowledge
+      /settings    → /account
+      /integrations → /account
+
+apps/dashboard/src/app/(console)/account/page.tsx   [MODIFIED in this pass]
+  - Expanded from minimal stub to absorb business identity and integrations roles.
+  - Sections:
+      Business identity — shows name, tagline, address, timezone, phone, email
+                          using useActiveBusiness() from the mock store. Read-only.
+      Locations         — shows count of configured locations.
+      Integrations      — shows all IntegrationConfig entries as cards with
+                          StatusBadge (Connected / Syncing / Not connected),
+                          category, description, and lastSynced timestamp.
+      Users & roles     — stub ("coming soon"), retained from original.
+      Billing / Plan    — stub ("coming soon"), retained from original.
+      Security          — stub ("coming soon"), retained from original.
+  - Changed import from useAccountBusiness (name+slug only) to
+    useActiveBusiness (full BusinessProfile) for richer data access.
+  - Removed unused Link import (manage locations link removed; locations section
+    is now read-only display in Tandem 3 style).
+
+---
+
+## BUSINESSSUBNAV STATUS
+
+BusinessSubNav.tsx file still exists (not deleted — additive-first principle).
+It is no longer imported or rendered anywhere in the console layout.
+The component is safe to remove in a future cleanup pass but doing so now
+would violate the additive-first principle. Old routes (/knowledge, /handoff,
+etc.) remain as static pages that redirect.
+
+---
+
+## COMMANDS RUN
+
+npm run typecheck   → PASS (0 errors)
+npm run lint        → Modified files CLEAN (chatbot/page.tsx and account/page.tsx
+                      have no lint errors). Pre-existing errors remain in:
+                        conversations/page.tsx  (react-hooks/set-state-in-effect)
+                        intents/page.tsx        (react/no-unescaped-entities, deps)
+                        knowledge/page.tsx      (exhaustive-deps)
+                        layout.tsx              (react-hooks/set-state-in-effect)
+                      These were present before Pass 5 and are not caused by
+                      Pass 5 changes.
+npm run build       → BUILD SUCCESS (33/33 pages generated)
+                      All routes present including /chatbot as static page.
+
+---
+
+## VERIFICATION
+
+Navigation structure confirmed (ConsoleTopbar.tsx):
+  ✓ Home        → /overview
+  ✓ Conversations → /conversations
+  ✓ Chatbot     → /chatbot (active for all old sub-nav paths too)
+  ✓ Account     → /account
+
+Chatbot tabs confirmed (chatbot/page.tsx):
+  ✓ Knowledge   → embeds KnowledgePage
+  ✓ Handoff     → embeds HandoffPage
+  ✓ Behavior    → embeds AssistantPage (intents)
+  ✓ Appearance  → embeds WidgetPage (widget)
+
+Redirects confirmed (next.config.ts):
+  ✓ /settings    → /account
+  ✓ /integrations → /account
+  ✓ /intents     → /chatbot?tab=behavior
+  ✓ /menus       → /chatbot?tab=knowledge
+  ✓ /handoff     → /chatbot?tab=handoff
+  ✓ /widget      → /chatbot?tab=appearance
+  ✓ /knowledge   → /chatbot?tab=knowledge
+
+BusinessSubNav confirmed removed from layout:
+  ✓ grep for "BusinessSubNav" in apps/ finds only the component definition file.
+  ✓ layout.tsx does not import or render BusinessSubNav.
+
+Account page expansion confirmed:
+  ✓ Business identity section shows name, tagline, address, timezone, phone, email
+  ✓ Integrations section shows IntegrationConfig cards with StatusBadge
+  ✓ TypeScript: no type errors (useActiveBusiness() returns BusinessProfile)
+
+---
+
+## KNOWN ISSUES
+
+1. Sub-page h1 duplication: The knowledge sub-page renders <h1>Knowledge</h1>
+   and the intents sub-page renders <h1>Assistant</h1>. When these are embedded
+   inside /chatbot tabs, the operator sees both the "Chatbot" page heading and
+   the sub-page section heading. This is a visual redundancy, not a functional
+   issue. It will be resolved when sub-pages are rebuilt as read-only tab
+   panels (a future cleanup pass).
+
+2. BusinessSubNav.tsx file remains: The component file is not deleted; old
+   routes it linked to still exist as redirect sources. Cleanup (deleting
+   BusinessSubNav.tsx) is deferred to a future pass.
+
+3. Pre-existing lint errors in conversations/page.tsx, intents/page.tsx,
+   knowledge/page.tsx, and layout.tsx are not caused by Pass 5 and are
+   unchanged from Pass 4.
+
+---
+
+## INTENTIONALLY DEFERRED (not in Pass 5 scope)
+
+- Operator chat session persistence (Pass 5 roadmap §5.3) — out of scope for
+  this nav-consolidation pass per task boundaries.
+- AI sidebar contextual greeting upgrade (Pass 5 roadmap §5.4) — out of scope.
+- Config-store version wire-up to tab panels (Pass 5 roadmap §5.2) — deferred.
+- Onboarding Stage 4 tool-calling upgrade (Pass 5 roadmap §5.1) — deferred.
+- Tab panels rebuilt as true read-only views (vs. embedding full form pages)
+  — deferred to a future cleanup pass.
+
+---
+
+## SAFETY BOUNDARIES MAINTAINED
+
+The following Pass 1–3 files were NOT modified:
+  apps/dashboard/src/app/api/operator-chat/route.ts
+  apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+  scripts/worker/website-import-worker.ts
+  packages/shared/src/server/ (all files)
+  packages/ui-kit/src/ChatWidget.tsx
+  apps/dashboard/src/app/api/chat/route.ts

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import KnowledgePage from "@/app/(console)/knowledge/page";
 import HandoffPage from "@/app/(console)/handoff/page";
