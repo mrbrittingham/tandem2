@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Intent } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
+import { SaveBar } from "@/components/SaveBar";
 import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
@@ -79,6 +80,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
   const [persona, setPersona] = useState<Persona>({ name: "Tandem Assistant", greeting: "Hi! How can I help you today?", responseStyle: "balanced" });
   const [personaSnapshot, setPersonaSnapshot] = useState(JSON.stringify(persona));
   const [savingPersona, setSavingPersona] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const [intentForm, setIntentForm] = useState<IntentFormState>(defaultIntent);
@@ -93,16 +95,22 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
       if (business.businessSlug) params.set("businessSlug", business.businessSlug);
       const r = await fetch(`/api/location-config?${params.toString()}`).catch(() => null);
       if (r?.ok) {
-        const data = await r.json().catch(() => ({})) as { config?: { assistantConfig?: { persona?: Partial<Persona> } } };
+        const data = await r.json().catch(() => ({})) as { config?: { assistantConfig?: { persona?: Partial<Persona>; intents?: Intent[] } } };
         const p = data.config?.assistantConfig?.persona;
         if (p) {
           const merged: Persona = {
-            name: p.name ?? persona.name,
-            greeting: p.greeting ?? persona.greeting,
-            responseStyle: (p.responseStyle as ResponseStyle) ?? persona.responseStyle,
+            name: p.name ?? "Tandem Assistant",
+            greeting: p.greeting ?? "Hi! How can I help you today?",
+            responseStyle: (p.responseStyle as ResponseStyle) ?? "balanced",
           };
           setPersona(merged);
           setPersonaSnapshot(JSON.stringify(merged));
+        }
+        const serverIntents = data.config?.assistantConfig?.intents;
+        if (Array.isArray(serverIntents)) {
+          updateBusiness(business.id, (draft) => {
+            draft.intents = serverIntents;
+          });
         }
       }
       setLoaded(true);
@@ -116,9 +124,12 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
 
   const savePersona = async () => {
     setSavingPersona(true);
+    setSaveError(null);
     try {
       await saveLocationConfig({ location: business, assistantConfig: { persona } });
       setPersonaSnapshot(JSON.stringify(persona));
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save. Please try again.");
     } finally {
       setSavingPersona(false);
     }
@@ -237,17 +248,8 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
             </div>
           </div>
 
-          {personaDirty && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={savePersona}
-                disabled={savingPersona}
-                className="rounded-xl bg-[var(--color-primary)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-60"
-              >
-                {savingPersona ? "Saving…" : "Save persona"}
-              </button>
-            </div>
+          {saveError && (
+            <p className="text-sm text-red-600">{saveError}</p>
           )}
         </div>
       </SectionCard>
@@ -354,6 +356,8 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
           </ul>
         )}
       </SectionCard>
+
+      <SaveBar visible={personaDirty || savingPersona} onSave={savePersona} saving={savingPersona} label="Unsaved persona changes" />
     </div>
   );
 }

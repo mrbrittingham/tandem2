@@ -72,7 +72,7 @@ function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
             {/* Content row: page */}
               <div className="flex flex-1 overflow-hidden">
               <main className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
-                <div className="mx-auto max-w-[1160px] px-6 py-6">
+                <div className="max-w-[1160px] px-6 py-6">
                   {children}
                 </div>
               </main>

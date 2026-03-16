@@ -292,9 +292,12 @@ export async function POST(request: Request) {
     });
     // Friendly client message distinguishes config errors from transient ones.
     const isModelError = /model.*not.*exist|does not exist|invalid.*model/i.test(raw);
+    const isApiKeyError = /incorrect api key|invalid_api_key|api key.*invalid|authentication/i.test(raw);
     const clientMessage = isModelError
       ? "LLM model is not configured correctly. Contact your administrator."
-      : "Failed to process message. Please try again.";
+      : isApiKeyError
+        ? "LLM API key is invalid or expired. Update OPENAI_API_KEY and restart the server."
+        : "Failed to process message. Please try again.";
     return Response.json({ error: clientMessage }, { status: 500 });
   }
 }

@@ -356,10 +356,29 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
               content: assistantText,
             });
           }
-        } catch (error) {
+        } catch (streamError) {
           aborted = true;
-          controller.error(error);
-          await reader.cancel(error);
+          // With AI SDK v6 + Responses API, auth/config errors are deferred to
+          // stream-read time (the initial await streamText() does not throw).
+          // Fall back to a plain-text message so the client always gets a
+          // usable 200 response instead of an errored ReadableStream.
+          if (assistantText.length === 0) {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("LLM stream read failed, returning fallback", streamError);
+            }
+            const fallbackText = buildFallbackReply(lastUserText);
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode(fallbackText));
+            assistantText = fallbackText;
+          }
+          controller.close();
+          await reader.cancel();
+          if (assistantText.trim().length > 0) {
+            await store.appendMessage(session.id, {
+              role: "assistant",
+              content: assistantText,
+            });
+          }
         }
       },
       async cancel(reason) {
@@ -368,16 +387,13 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
       },
     });
 
-    const headers = new Headers(baseResponse.headers);
+    // Always respond with content-type text/plain so the widget can stream it.
+    const headers = new Headers({ "content-type": "text/plain; charset=utf-8" });
     if (created) {
       headers.append("Set-Cookie", buildSessionCookie(session.id));
     }
 
-    return new Response(proxyStream, {
-      headers,
-      status: baseResponse.status,
-      statusText: baseResponse.statusText,
-    });
+    return new Response(proxyStream, { headers, status: 200 });
   } catch (error) {
     const guardResponse = asGuardResponse(error);
     if (guardResponse) {

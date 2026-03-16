@@ -105,7 +105,8 @@
   --console-leading-normal: 1.5;
   --console-leading-relaxed: 1.75;
 
-  --console-sidebar-width: 224px;
+  --sidebar-width: 528px;
+  --console-sidebar-width: 528px;
   --console-sidebar-collapsed-width: 72px;
   --console-header-height: 58px;
   --console-button-height: 40px;
