@@ -14,6 +14,7 @@ import { PreviewDockProvider } from "@/components/PreviewDockContext";
 import { PreviewPanel } from "@/components/PreviewPanel";
 import { useActiveLocation } from "@/lib/store-hooks";
 import { useLocationHydration } from "@/lib/use-location-hydration";
+import { AISidebarProvider } from "@/contexts/AISidebarContext";
 
 function isBusinessPath(pathname: string) {
   return BUSINESS_NAV_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -62,6 +63,7 @@ function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <ConsoleDialogProvider value={providerValue}>
+      <AISidebarProvider>
       <PreviewDockProvider value={previewContextValue}>
         <AppShell>
           {/* Left: AI chat panel */}
@@ -97,6 +99,7 @@ function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
         <CreateLocationDialog open={createLocationOpen} onClose={() => setCreateLocationOpen(false)} />
         <Toaster />
       </PreviewDockProvider>
+      </AISidebarProvider>
     </ConsoleDialogProvider>
   );
 }

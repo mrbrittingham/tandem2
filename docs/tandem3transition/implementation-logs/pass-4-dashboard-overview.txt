@@ -1,0 +1,159 @@
+PASS 4 IMPLEMENTATION LOG — Dashboard Overview (Tandem 3.0)
+==============================================================
+Branch: tandem3/pass-4-dashboard-overview
+Commit: feat(tandem3-pass-4): implement tandem 3 overview dashboard
+
+---
+
+## SUMMARY
+
+Pass 4 replaces the analytics-focused overview page with a read-only chatbot
+state surface. The operator can now see the health of their chatbot configuration
+at a glance, interact with panels that summarise each domain (hours, knowledge,
+behavior, handoff), view a live widget preview, and trigger AI sidebar prompts
+via inline prompt chips — all without navigating away from the overview.
+
+Key design decisions:
+- Two-column layout: left = state panels, right = sticky widget preview
+- No mutation on the overview page itself; all changes go through the AI sidebar
+- Prompt chips call prefillInput() to stage the command in the sidebar without autosending
+- useConfigStoreVersion() drives a re-fetch of recent conversations whenever the AI
+  sidebar confirms a write operation
+- AISidebarContext uses a ref-backed subscriber pattern so the overview cannot
+  accidentally hold stale closures
+
+---
+
+## FILES CREATED
+
+apps/dashboard/src/contexts/AISidebarContext.tsx
+  Pub/sub context that lets any page component pre-fill the ConsoleSidebar chat
+  input.  Exports: AISidebarProvider, useAISidebar (with prefillInput /
+  registerPrefill).  Uses useRef<(text: string) => void | null> so the sidebar
+  always receives the latest setter without the provider re-rendering.
+
+apps/dashboard/src/components/console/panels/HealthSummaryBar.tsx
+  Three inline status badges shown in the page header: Hours, Knowledge, Handoff.
+  Each badge is emerald (configured) or orange (needs attention) based on whether
+  the relevant slice of the location profile is populated.
+
+apps/dashboard/src/components/console/panels/HoursPanel.tsx
+  Displays operating hours blocks with day-grouping (consecutive days with the
+  same open/close pair are collapsed to a range), formatted 12-hour time labels,
+  and an "Update my hours" prompt chip.  Shows a warning empty state when no
+  hours are configured.
+
+apps/dashboard/src/components/console/panels/KnowledgePanel.tsx
+  Shows total FAQ count, the first three FAQs as expandable accordion rows, a
+  link to the full Knowledge page, and two prompt chips: "Add a Q&A" and
+  "Remove a Q&A".
+
+apps/dashboard/src/components/console/panels/BehaviorPanel.tsx
+  Renders toneVoice, shouldAnswer topics, shouldAvoid topics, and conversionGoals
+  derived from buildKnowledgeProgramFromBusiness().  Links to the Knowledge page
+  for full editing.  Prompt chip: "Update tone or goals".
+
+apps/dashboard/src/components/console/panels/HandoffPanel.tsx
+  Displays the handoff online/offline status badge and the list of contact methods
+  with enabled/disabled state and type icons (phone, email, sms, link, form).
+  Prompt chips: "Add a contact" and "Set my status".
+
+apps/dashboard/src/components/console/panels/RecentConversationsPanel.tsx
+  Fetches up to the 5 most-recent chat sessions for the active location and
+  renders them with status badges (escalated / resolved / open).  Includes
+  skeleton loading rows and an empty-state prompt linking to the Widget page.
+
+apps/dashboard/src/components/console/WidgetPreviewColumn.tsx
+  Right-column component that embeds the live ChatWidget (initiallyOpen, no
+  launcher, no history hydration) alongside a collapsible install snippet with
+  clipboard copy.  Derives config from businessToWidgetConfig() and theme from
+  widgetThemeToChatTheme().
+
+---
+
+## FILES MODIFIED
+
+apps/dashboard/src/app/(console)/layout.tsx
+  Added AISidebarProvider as an outer wrapper around PreviewDockProvider so the
+  context is available to all console pages and to ConsoleSidebar.
+
+apps/dashboard/src/components/ConsoleSidebar.tsx
+  Added useAISidebar() call inside ConsoleSidebar().  registerPrefill() is called
+  in a useEffect on mount to wire a setter that writes to the input state and
+  focuses the input element via requestAnimationFrame.
+
+apps/dashboard/src/app/(console)/overview/page.tsx
+  FULL REWRITE.  Removed old analytics page (StatCard, ActivityChart,
+  SetupChecklist, range filters).  New implementation:
+    - useActiveLocation() for location/business profile
+    - useConfigStoreVersion() to invalidate the conversation fetch on AI writes
+    - Async load() function inside useEffect to fetch recent conversations
+      (satisfies react-hooks/set-state-in-effect ESLint rule)
+    - Two-column grid layout (1fr / 380px)
+    - Left column: HealthSummaryBar, HoursPanel, KnowledgePanel, BehaviorPanel,
+      HandoffPanel, RecentConversationsPanel
+    - Right column: sticky WidgetPreviewColumn
+
+---
+
+## COMMANDS RUN
+
+npm run typecheck           → PASS (0 errors)
+npm run lint                → New/modified files CLEAN
+                              Pre-existing 11 errors in other files not touched
+                              by Pass 4 (store-hooks.ts, etc.) — unchanged.
+npm run build               → BUILD EXIT: 0
+                              All routes present; /overview listed as static.
+
+---
+
+## VERIFICATION
+
+- TypeScript strict mode: all new files pass typecheck with 0 errors
+- ESLint: all new/modified files pass with 0 errors after fixing the
+  react-hooks/set-state-in-effect pattern (async load() refactor)
+- Production build: successful, /overview prerendered as static
+
+---
+
+## KNOWN ISSUES
+
+None introduced by Pass 4.
+
+---
+
+## INTENTIONALLY DEFERRED
+
+- BehaviorPanel reads training config from buildKnowledgeProgramFromBusiness()
+  which derives from the mock store only.  It does not fetch a live
+  knowledge_config record from Supabase.  This matches the mock-first architecture
+  in place; a Supabase-backed fetch would require the same pattern used in the
+  knowledge page and is out of scope for Pass 4.
+
+- configVersion in the conversation fetch dep array over-invalidates (any AI
+  tool confirmation triggers a refetch, not just changes that affect sessions).
+  This is intentional: it is cheap, always correct, and avoids per-tool
+  invalidation logic.
+
+- Widget preview in WidgetPreviewColumn is constrained to a 380px fixed column.
+  On mobile viewports the columns stack vertically, which is correct, but the
+  widget height may look cramped.  Widget embed responsiveness is out of scope
+  for Pass 4.
+
+---
+
+## SAFETY BOUNDARIES MAINTAINED
+
+The following Pass 1–3 files were NOT modified:
+
+  apps/dashboard/src/app/api/operator-chat/route.ts
+  apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+  apps/dashboard/src/lib/tool-definitions.ts
+  apps/dashboard/src/lib/tool-executor.ts
+  apps/dashboard/src/components/PendingChangeRenderer.tsx
+  apps/dashboard/src/lib/config-store.ts
+  apps/dashboard/src/lib/mock-store-updaters.ts
+  apps/dashboard/src/app/api/chat/route.ts
+  packages/ui-kit/src/ChatWidget.tsx
+  packages/shared/src/mock-store.ts
+

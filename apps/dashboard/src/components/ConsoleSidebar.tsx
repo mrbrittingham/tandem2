@@ -15,6 +15,7 @@ import {
   applyBehaviorChange,
   applyBusinessInfoChange,
 } from "@/lib/operator-tools/mock-store-updaters";
+import { useAISidebar } from "@/contexts/AISidebarContext";
 
 type MessageType = "text" | "pending_change" | "confirm_success" | "confirm_error";
 
@@ -122,6 +123,16 @@ export function ConsoleSidebar() {
   const [confirmingIds, setConfirmingIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Register setInput with AISidebarContext so prompt chips can pre-fill the input
+  const { registerPrefill } = useAISidebar();
+  useEffect(() => {
+    registerPrefill((text: string) => {
+      setInput(text);
+      // Focus the textarea so the operator can continue typing
+      requestAnimationFrame(() => inputRef.current?.focus());
+    });
+  }, [registerPrefill]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
