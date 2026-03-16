@@ -7,7 +7,6 @@ import type { WidgetThemeSettings } from "@tandem/shared";
 import { ConsoleDialogProvider } from "@/components/ConsoleDialogContext";
 import { ConsoleSidebar } from "@/components/ConsoleSidebar";
 import { ConsoleTopbar } from "@/components/ConsoleTopbar";
-import { BusinessSubNav, BUSINESS_NAV_PATHS } from "@/components/BusinessSubNav";
 import { CreateLocationDialog } from "@/components/CreateLocationDialog";
 import { LocationSwitcher } from "@/components/LocationSwitcher";
 import { PreviewDockProvider } from "@/components/PreviewDockContext";
@@ -15,10 +14,6 @@ import { PreviewPanel } from "@/components/PreviewPanel";
 import { useActiveLocation } from "@/lib/store-hooks";
 import { useLocationHydration } from "@/lib/use-location-hydration";
 import { AISidebarProvider } from "@/contexts/AISidebarContext";
-
-function isBusinessPath(pathname: string) {
-  return BUSINESS_NAV_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
 
 function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -30,7 +25,6 @@ function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
   const { setMobileOpen } = useSidebar();
 
   const isPreviewOpen = Boolean(activeBusiness) && previewOpen;
-  const showSubNav = isBusinessPath(pathname);
 
   useLocationHydration();
 
@@ -75,10 +69,8 @@ function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
               leading={<LocationSwitcher onAddLocation={() => setCreateLocationOpen(true)} />}
             />
 
-            {/* Content row: optional sub-nav + page */}
-            <div className="flex flex-1 overflow-hidden">
-              {showSubNav && <BusinessSubNav />}
-
+            {/* Content row: page */}
+              <div className="flex flex-1 overflow-hidden">
               <main className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
                 <div className="mx-auto max-w-[1160px] px-6 py-6">
                   {children}

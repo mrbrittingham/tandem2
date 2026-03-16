@@ -13,14 +13,13 @@ import {
   useSidebar,
 } from "@tandem/ui-kit";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { usePreviewDock } from "@/components/PreviewDockContext";
 import { useRouter } from "next/navigation";
 
 type Props = {
   leading?: ReactNode;
 };
 
-const BUSINESS_PATHS = ["/knowledge", "/menus", "/intents", "/widget", "/handoff", "/integrations", "/settings", "/locations"];
+const CHATBOT_PATHS = ["/chatbot", "/knowledge", "/menus", "/intents", "/widget", "/handoff", "/integrations", "/settings"];
 
 function matchesPath(pathname: string, href: string, extra?: string[]) {
   if (pathname === href || pathname.startsWith(`${href}/`)) return true;
@@ -74,7 +73,6 @@ export function ConsoleTopbar({ leading }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const { toggleMobile } = useSidebar();
-  const { open: openPreview } = usePreviewDock();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -88,7 +86,7 @@ export function ConsoleTopbar({ leading }: Props) {
     router.refresh();
   };
 
-  const isBusinessActive = BUSINESS_PATHS.some(
+  const isChatbotActive = CHATBOT_PATHS.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
@@ -113,21 +111,8 @@ export function ConsoleTopbar({ leading }: Props) {
       <nav className="flex flex-1 items-center overflow-x-auto scrollbar-none px-2 lg:px-3">
         <NavTab
           href="/overview"
-          label="Overview"
+          label="Home"
           active={matchesPath(pathname, "/overview")}
-          icon={
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="1" y="1" width="5" height="5" rx="1" />
-              <rect x="8" y="1" width="5" height="5" rx="1" />
-              <rect x="1" y="8" width="5" height="5" rx="1" />
-              <rect x="8" y="8" width="5" height="5" rx="1" />
-            </svg>
-          }
-        />
-        <NavTab
-          href="/settings"
-          label="Settings"
-          active={isBusinessActive}
           icon={
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M7 1.5 1.5 5v7.5h3.5V9h4v3.5H12.5V5Z" />
@@ -136,7 +121,7 @@ export function ConsoleTopbar({ leading }: Props) {
         />
         <NavTab
           href="/conversations"
-          label="Chats"
+          label="Conversations"
           active={matchesPath(pathname, "/conversations")}
           icon={
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -145,13 +130,27 @@ export function ConsoleTopbar({ leading }: Props) {
           }
         />
         <NavTab
-          label="Preview chat"
-          active={false}
-          onClick={openPreview}
+          href="/chatbot"
+          label="Chatbot"
+          active={isChatbotActive}
           icon={
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="7" cy="7" r="5.5" />
-              <path d="M7 4.5v4M5 6.5 7 4.5l2 2" />
+              <rect x="3" y="4.5" width="8" height="6" rx="1.5" />
+              <path d="M7 4.5V3" />
+              <circle cx="5.5" cy="7.5" r="0.5" fill="currentColor" />
+              <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor" />
+              <path d="M5.5 9.5h3" />
+            </svg>
+          }
+        />
+        <NavTab
+          href="/account"
+          label="Account"
+          active={matchesPath(pathname, "/account")}
+          icon={
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="7" cy="5" r="2.5" />
+              <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5" />
             </svg>
           }
         />
