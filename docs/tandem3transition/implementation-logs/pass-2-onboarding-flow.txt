@@ -1,0 +1,122 @@
+Pass 2 — Staged Onboarding Flow
+================================
+Branch: tandem3/pass-2-onboarding
+Date:   2025
+
+Overview
+--------
+Replaced the flat 3-field onboarding form with a staged, two-column chatbot-led
+experience. The left column is an AI chat thread; the right column shows a
+contextual panel that changes as the operator progresses through setup.
+
+Files Created
+-------------
+apps/dashboard/src/app/onboarding/lib/onboarding-state-machine.ts
+  - Core types and reducer; no UI dependencies.
+  - OnboardingStage union: business-form | website-url | scanning |
+    scan-results | scan-review | manual-setup | handoff | complete
+  - OnboardingState with: stage, businessData, locationData, runId,
+    scanUrl, scanPages, scanDraft, scanError, chatMessages
+  - ChatMessage supports embed?: "url-input" | "handoff-input" and
+    optional statusLines?: string[] for live scan progress in chat
+  - onboardingReducer handles all stage transitions including error routing:
+      dns_fail → back to website-url
+      blocked/timeout/other → manual-setup
+  - WELCOME_MESSAGE pre-loaded in initialOnboardingState
+  - slugifyBusinessName() helper for business slug generation
+
+apps/dashboard/src/app/onboarding/hooks/useImportPolling.ts
+  - Polls GET /api/website-import/latest?runId=X every 2 seconds.
+  - Stops automatically on terminal statuses (succeeded, failed).
+  - Resets all state when runId changes / becomes null.
+  - Handles network errors gracefully by retrying rather than failing.
+
+apps/dashboard/src/app/onboarding/components/EmbeddedUrlInput.tsx
+  - Inline URL input inside a chat bubble (embed="url-input").
+  - Client-side URL validation; two actions: "Scan my website" / "Skip".
+
+apps/dashboard/src/app/onboarding/components/ScanProgressPanel.tsx
+  - Right panel during scanning: domain name, animated indicator,
+    crawled page list with color-coded pageType badges, page count.
+  - All WebsitePageType values mapped to badge colors.
+
+apps/dashboard/src/app/onboarding/components/ScanResultsSummary.tsx
+  - Right panel after scan: five CategoryCard components for Hours,
+    Menu, Q&As, Contact, and Brand signals.
+  - Emerald = found, orange = not found; clear CTA to apply or review.
+
+apps/dashboard/src/app/onboarding/components/HandoffContactInput.tsx
+  - Inline handoff contact form inside a chat bubble (embed="handoff-input").
+  - Three fields: phone (tel), link (url), email.
+  - On save: calls PUT /api/location-config with handoffConfig.contactMethods.
+  - Pre-fills phone and bookingUrl from import draft if available.
+
+apps/dashboard/src/app/onboarding/components/ManualSetupForm.tsx
+  - Right panel for manual setup path (when scan is unavailable).
+  - Textarea for hours + optional description.
+  - Calls PUT /api/location-config with knowledgeConfig.businessProfile.
+
+Files Modified
+--------------
+apps/dashboard/src/app/onboarding/page.tsx  (full rewrite)
+  - Two-column layout: left = AI chat thread, right = contextual panel.
+  - No console sidebar (onboarding is pre-dashboard).
+  - BusinessSetupForm: calls POST /api/bootstrap, then POST /api/locations.
+    Business + membership creation is via bootstrap_membership RPC.
+    syncLocationsFromServer() hydrates the mock store after location creation.
+  - Chat thread renders ChatBubble components with embedded form support.
+  - Right panel switches on stage:
+      business-form  → BusinessSetupForm
+      website-url    → placeholder hint
+      scanning       → ScanProgressPanel (live via useImportPolling)
+      scan-results   → ScanResultsSummary (apply / review)
+      scan-review    → WebsiteImportPanel (full review editor, minimal BusinessProfile)
+      manual-setup   → ManualSetupForm
+      handoff        → hint panel
+      complete       → CompletionPanel → router.replace("/overview")
+  - Scan progress status lines appended to the scanning chat message in real time.
+  - handleApplyDraft: POST /api/website-import/:runId/apply; continues to handoff
+    even if apply fails (non-blocking failure path).
+  - handleHandoffSaved / handleHandoffSkipped dispatch to HANDOFF_SAVED / HANDOFF_SKIPPED.
+
+Bug Fix vs Original Onboarding
+-------------------------------
+The original onboarding page sent businessName to POST /api/locations, which was
+ignored — the create_business_location RPC requires an existing business_memberships
+row. New users would silently fail. Pass 2 fixes this by calling POST /api/bootstrap
+first to create the business entity and membership, then calls POST /api/locations.
+
+API Surface Used
+----------------
+POST /api/bootstrap              — create business + membership (bootstrap_membership RPC)
+POST /api/locations              — create first location (create_business_location RPC)
+POST /api/website-import/start   — start website scan (source="onboarding")
+GET  /api/website-import/latest  — poll scan progress by runId
+POST /api/website-import/:id/apply — apply scan draft to location config
+PUT  /api/location-config        — save handoff contact methods or manual knowledge
+
+Deferred to Later Passes
+------------------------
+These items are out of scope for Pass 2 per the roadmap:
+
+- Stage 4 AI tool-calling upgrade: hours, menu, FAQ, contact info collected
+  via natural language chat using operator AI tools (requires Phase 3).
+- HandoffContactInput tool-calling upgrade: same dependency.
+- Live ChatWidget preview in completion stage (requires Phase 4 dashboard).
+- Full operator identity persistence across sessions (requires auth integration).
+
+Lint Notes
+----------
+The react-hooks/set-state-in-effect rule (added in newer eslint-plugin-react-hooks)
+fires when setState is called synchronously at the top of a useEffect body. This
+pattern is present throughout the pre-existing codebase (conversations, layout,
+overview pages) and is flagged project-wide. In useImportPolling.ts the legitimate
+reset-on-runId-change setState calls are suppressed with a targeted eslint-disable
+block. The pre-existing violations in other files are unchanged.
+
+Verification
+------------
+npm run typecheck  → 0 errors
+npm run build      → /onboarding built as static page, all routes pass
+npm run lint       → 0 errors in new onboarding files (pre-existing errors in
+                     other files are unchanged and not introduced by Pass 2)

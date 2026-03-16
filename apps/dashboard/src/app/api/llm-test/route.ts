@@ -1,29 +1,28 @@
-import { asGuardResponse, llmGenerate, requireApiKey } from "@tandem/shared/server";
+import { llmGenerate } from "@tandem/shared/server";
 
-const provider = process.env.LLM_PROVIDER ?? "openai";
-const model = process.env.LLM_MODEL ?? "gpt-5.2";
-const hasKey = Boolean(process.env.OPENAI_API_KEY);
-
-export function GET(request: Request) {
-  try {
-    requireApiKey(request);
-  } catch (error) {
-    const guardResponse = asGuardResponse(error);
-    if (guardResponse) {
-      return guardResponse;
-    }
-    return Response.json({ error: "Unknown error" }, { status: 500 });
-  }
-
-  return Response.json({ provider, model, hasKey });
+// Read env vars at request time — never capture at module level.
+// These values must be fresh on every call so .env.local changes
+// and Replit Secrets are always reflected without a server restart.
+function getRuntimeEnv() {
+  return {
+    provider: process.env.LLM_PROVIDER ?? "openai",
+    model: process.env.LLM_MODEL ?? "gpt-5.2",
+    hasKey: Boolean(process.env.OPENAI_API_KEY?.trim()),
+  };
 }
 
-export async function POST(request: Request) {
+// This route lives inside the dashboard and is protected by Supabase
+// auth middleware (see proxy.ts). No additional TANDEM_API_KEY guard
+// is needed here — that check is for external script access only.
+export function GET() {
+  return Response.json(getRuntimeEnv());
+}
+
+export async function POST() {
   const startedAt = Date.now();
+  const { provider, model } = getRuntimeEnv();
 
   try {
-    requireApiKey(request);
-
     const { text } = await llmGenerate({
       system: "You are Tandem's status assistant.",
       messages: [
@@ -40,11 +39,6 @@ export async function POST(request: Request) {
 
     return Response.json({ provider, model, latencyMs, text });
   } catch (error) {
-    const guardResponse = asGuardResponse(error);
-    if (guardResponse) {
-      return guardResponse;
-    }
-
     const message = error instanceof Error ? error.message : "Unknown error";
     return Response.json({ provider, model, error: message }, { status: 500 });
   }

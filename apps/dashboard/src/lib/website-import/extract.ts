@@ -111,7 +111,7 @@ function makeClassificationHaystack(page: CrawledPage) {
   };
 }
 
-function classifyPageType(page: CrawledPage): WebsitePageType {
+export function classifyPageType(page: CrawledPage): WebsitePageType {
   const haystack = makeClassificationHaystack(page);
   const scores = new Map<WebsitePageType, number>();
 

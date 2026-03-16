@@ -10,6 +10,7 @@ type ImportRunRow = {
   status: "queued" | "running" | "succeeded" | "failed";
   error: string | null;
   error_code: string | null;
+  source: string;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -60,6 +61,7 @@ export function mapImportRunRow(row: ImportRunRow): WebsiteImportRunRecord {
     status: row.status,
     error: row.error,
     errorCode: row.error_code,
+    source: row.source ?? "knowledge-page",
     createdAt: row.created_at,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
@@ -106,7 +108,7 @@ export async function assertMembership(supabase: SupabaseClient, businessId: str
 export async function getImportRunById(supabase: SupabaseClient, runId: string) {
   const { data, error } = await supabase
     .from("onboarding_import_runs")
-    .select("id,location_id,url,status,error,error_code,created_at,started_at,finished_at,applied_at,pages_json,signals_json,result_json")
+    .select("id,location_id,url,status,error,error_code,source,created_at,started_at,finished_at,applied_at,pages_json,signals_json,result_json")
     .eq("id", runId)
     .limit(1)
     .returns<ImportRunRow[]>();

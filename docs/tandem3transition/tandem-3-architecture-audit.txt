@@ -1,0 +1,236 @@
+# Tandem 3.0 Architecture Audit
+
+_Performed: March 15, 2026_
+
+---
+
+## 1. Current Product Shape
+
+Tandem is a **classic operator SaaS dashboard** with an AI chatbot bolted on. It consists of:
+
+**Dashboard (12 console pages):**
+- `overview` — setup score + 14-day activity chart + recent sessions
+- `knowledge` — CRUD editor for FAQs, policies, and structured fields (text inputs, website import)
+- `menus` — standalone menu section/item editor (separate from knowledge page)
+- `conversations` — chat history viewer with session detail
+- `widget` — theme editor (colors, logo, header) + embed snippet
+- `handoff` — contact method CRUD (phone, email, SMS, link) + online/offline toggle
+- `intents` — persona config (name, greeting, response style) + intent routing CRUD
+- `integrations` — stub status board for Toast, OpenTable, Yelp, etc.
+- `locations` — full address/phone/timezone form with multi-country field sets
+- `account` — team membership (mostly placeholder)
+- `settings` — business name, hours, contact info, timezone forms
+
+**AI layer (already partially built):**
+- `ConsoleSidebar.tsx` — a full chat UI already rendering as the left panel of every page, calling `/api/operator-chat`
+- `/api/operator-chat` — a dedicated route with a well-written system prompt for operator assistance ("You are Tandem — an AI assistant built specifically for restaurant operators")
+- `/api/chat` — customer-facing chatbot with `buildKnowledgeSystemPrompt`, guardrails, streaming, and injection detection
+- `chat-handler.ts` — shared handler with INJECTION_PATTERNS screening, token budget, session/cookie management
+
+**State model:**
+- `MockState` in `localStorage` (`tandem:mock-state`) is the primary runtime state source
+- `useSyncExternalStore` hooks (`store-hooks.ts`) bind UI to that store
+- Supabase is real persistence but chat and configs go through it only when env vars are present
+- `KnowledgeProgram` is a rich structured type covering hours, menus, events, reservations, memberships, policies, FAQs, website import data
+
+**Product doc baseline:** The `docs/product-plan.md` is titled "Tandem 2.0" and explicitly blueprints a traditional SaaS information architecture (list pages, CRUD wizards, settings tabs). The product as built closely follows that plan.
+
+---
+
+## 2. Already Aligned With Tandem 3.0
+
+These are genuine foundations to build on — not incidental overlaps.
+
+**a. Operator AI chat is already the left panel.**
+`ConsoleSidebar.tsx` is not a nav drawer — it is a full AI chat interface embedded into the layout shell on every console page. This is structurally correct for Tandem 3.0. The AI assistant already has a permanent, prominent home in the product.
+
+**b. `/api/operator-chat` has a strong, focused system prompt.**
+`buildOperatorSystemPrompt()` correctly identifies the assistant role ("configuring your AI chatbot"), gives action-scoped capabilities (knowledge setup, copy writing, handoff rules, integrations, troubleshooting), sets a practical tone ("smart colleague, not customer support script"), and enforces the boundary ("You are NOT the customer-facing chatbot"). This is production-quality guidance.
+
+**c. Customer chatbot has real guardrails and scope enforcement.**
+`buildKnowledgeSystemPrompt()` injects structured knowledge, enforces strict "only use what you know" rules, handles hallucination prevention, prompt injection screening, and graceful handoff. `chat-handler.ts` has pattern-matched injection detection. These are Tandem 3.0-compliant and should be preserved as-is.
+
+**d. `KnowledgeProgram` is a rich structured model.**
+It covers `RestaurantKnowledgeFields`, `AssistantTrainingControls`, FAQs, policies, menu sections, events, reservations, memberships — the full domain of what a restaurant chatbot needs. This is a solid substrate for AI-driven editing.
+
+**e. LLM provider abstraction is clean.**
+`llmStream()` / `llmGenerate()` in `packages/shared/src/llm/client.ts` route through a provider interface. Swapping models or adding function-calling capability later is structurally supported.
+
+**f. ChatWidget is production-ready and prominent.**
+A well-built embeddable widget with theming, streaming, quick actions, CTA support, and inject-safe rendering. It belongs as a central feature and is already positioned that way.
+
+**g. Quick actions in operator chat already seed intent.**
+`ConsoleSidebar.tsx` defines `QUICK_ACTIONS` ("What should I set up first?", "Auto-configure my assistant"). This is the right UX pattern for an agent-first onboarding experience.
+
+---
+
+## 3. Misaligned or Overbuilt Areas
+
+**a. The operator AI cannot change anything.**
+This is the core structural gap. `ConsoleSidebar.tsx` sends messages to `/api/operator-chat`, which reads business context from Supabase, generates advice, and streams text back. It has no write path. No function calling. No ability to update FAQs, change hours, configure handoff, or write back to `business_location_configs`. The AI is advisory only. In Tandem 3.0, it must become the primary configuration actor.
+
+**b. Form pages are the primary configuration interface, not the AI.**
+Settings, Knowledge, Handoff, Intents, and Locations are all traditional form-based CRUD pages. Users must navigate to specific pages and fill in fields manually. These pages are the *real* product — the operator AI is a sidebar add-on. This is the inversion problem: in Tandem 3.0, the AI should be the real product and the pages should be read-only state surfaces.
+
+**c. Twelve pages is too many for restaurant owners.**
+The current route list (settings, handoff, intents, integrations, locations, menus, knowledge, conversations, widget, account, overview + sub-pages) represents a classic enterprise SaaS IA. Restaurant owners are not software operators. A five-page surface (Home/activity, My Chatbot/state viewer, Conversations, Widget, Settings) is closer to the right complexity ceiling.
+
+**d. Menus is a duplicate of Knowledge.**
+`menus/page.tsx` is a standalone menu section editor. `knowledge/page.tsx` also has a website-imported `menuSections` field on `KnowledgeProgram`. These represent the same data in two places. Needs consolidation regardless of direction.
+
+**e. Integrations page is entirely placeholder UI.**
+The integrations page has a connect/sync/disconnect UI, but integration sync is simulated with a `setTimeout(1000)` that flips status to `"connected"`. The actual POS/reservation connectors (Toast, OpenTable, Yelp) don't exist. This surface creates false expectations of capability.
+
+**f. Industry type is not restaurant-specific.**
+`types.ts` defines `Industry` as `"restaurant" | "hospitality" | "retail" | "services" | "wellness"`. The product-plan docs, chatbot prompts, and operating model all say "restaurant first." The type breadth suggests an older, broader ambition that has been de-prioritized but not cleaned up.
+
+**g. `MockState` in `localStorage` is still the primary runtime state.**
+The mock store means the dashboard runs locally against browser state, and Supabase is an optional overlay. For an agent-first product where the AI writes state changes back, there needs to be a durable server-side source of truth that the AI can write to and the UI can read from. The current architecture has the relationship backwards for agent use.
+
+**h. Operator chat has no session memory.**
+Each visit to the dashboard starts a fresh `ConsoleSidebar` with `useState<Message[]>([])`. Conversation history is not persisted between page navigations or sessions. The AI learns nothing about the operator over time. A Tandem 3.0 operator assistant needs persistent session continuity, at minimum within a browser session, ideally across sessions.
+
+**i. The product-plan doc is titled "Tandem 2.0" and blueprints a traditional SaaS IA.**
+The documentation trajectory still aims at the 2.0 model. No document currently reflects the 3.0 direction. This creates friction for every agent or engineer working against it.
+
+---
+
+## 4. Missing Capabilities For Tandem 3.0
+
+**a. Operator AI write-back (tool calling / action execution)**
+The AI assistant needs the ability to take actions: update FAQs, set hours, configure handoff contacts, write policy text, enable/disable intents. This requires OpenAI function calling (or equivalent), a set of defined tools, and API routes the assistant can call on behalf of the operator after confirmation.
+
+**b. Change confirmation / preview flow**
+When the operator AI proposes a change ("I've updated your hours to reflect Monday–Friday 11–10, Saturday–Sunday 10–11"), the operator should be able to preview and confirm or reject before it's applied. No such pattern exists.
+
+**c. Visible state surface / "What my chatbot knows" home screen**
+The overview page currently shows activity charts and setup score. Tandem 3.0 needs a primary surface that shows: current hours, active FAQs, handoff contacts, current widget greeting — a read-only reflection of what the chatbot will actually say. This is the "glass dashboard" the AI writes to.
+
+**d. AI change audit log / activity feed**
+If the AI can modify configuration, there must be a visible record of what changed, when, and why. No audit trail exists today.
+
+**e. Knowledge gap detection**
+The chatbot should surface recurring unanswered questions back to the operator assistant: "Guests asked about corkage fee 8 times this week and your chatbot had no answer." This feedback loop is absent.
+
+**f. Persistent operator chat session**
+Operator chat history must survive page navigation and ideally survive across browser sessions. The AI should remember what the operator has already set up.
+
+**g. Usage/cost quiet management**
+`maxTokens` is hardcoded (400 for customer chat, 800 for operator chat). There is no usage tracking, no per-location budget, no internal cost visibility. For Tandem 3.0, this should be managed and monitored internally without exposing billing complexity to operators.
+
+**h. Widget "chatbot rules" visible state**
+There is no place in the current dashboard where an operator can see, at a glance: "My chatbot will answer these topics. It will refuse these. It will hand off on these." The intents page has routing config but it doesn't render as a human-readable rules view.
+
+---
+
+## 5. Most Relevant Existing Files And Systems
+
+| File | Why It Matters |
+|------|---------------|
+| `apps/dashboard/src/components/ConsoleSidebar.tsx` | The operator AI chat UI — the core surface for Tandem 3.0. Needs write-back capability. |
+| `apps/dashboard/src/app/api/operator-chat/route.ts` | Operator assistant backend + `buildOperatorSystemPrompt`. Needs tool/function calling added. |
+| `apps/dashboard/src/app/api/chat/route.ts` | Customer chatbot backend with `buildKnowledgeSystemPrompt`. Well-built; preserve as-is. |
+| `packages/shared/src/server/chat-handler.ts` | Shared `handleChatPost` with guardrails, screening, streaming. Solid foundation. |
+| `apps/dashboard/src/lib/knowledge-program.ts` | `KnowledgeProgram` type — the structured knowledge model. This is what the AI should read/write. |
+| `packages/ui-kit/src/ChatWidget.tsx` | Embeddable customer widget. Production-ready; central product feature. |
+| `packages/shared/src/mock-store.ts` | Current state store. Needs a path toward server-authoritative state for agent writes. |
+| `packages/shared/src/llm/client.ts` | LLM abstraction. Needs function calling / tool support added to `llmGenerate`. |
+| `apps/dashboard/src/app/api/location-config/route.ts` | The write path for config changes — this is what AI actions will call. |
+| `supabase/migrations/` | Authoritative schema. Any agent-audit or AI-change-log tables go here. |
+
+---
+
+## 6. Recommended Product Direction
+
+**Invert the interface polarity.** Forms become read-only state viewers. The AI sidebar becomes the primary action surface.
+
+The target UX model:
+
+1. **Operator opens dashboard** → sees a home screen showing current chatbot state (hours, FAQs count, handoff status, recent conversations) — not forms, just facts.
+2. **Operator wants to change hours** → types in the AI sidebar: "We're closed on Mondays now." The AI confirms: "Got it — I'll mark Monday as closed in your schedule. Apply this change?" Operator clicks Confirm. State updates instantly. Home screen reflects the change.
+3. **Operator wants to see/approve FAQs** → navigates to a read-only FAQ/rules viewer. Can delete or promote items. Can ask AI to add more.
+4. **Operator wants to preview chatbot** → widget preview panel is always visible (already exists in the layout).
+5. **Operator wants to see conversations** → conversations page remains unchanged.
+
+Five primary surfaces cover the full product:
+- **Home** (state overview: what the AI knows)
+- **Chatbot Rules** (read-only view of active behaviors — FAQs, handoff, safety boundaries)
+- **Conversations** (analytics + history)
+- **Widget** (preview + embed)
+- **Settings** (basics only: business name, address, contact info)
+
+The 7 current form-heavy pages (menus, intents, integrations, locations, handoff, knowledge CRUD, account) either collapse into these five or become AI-mediated entirely.
+
+---
+
+## 7. Proposed Refactor Buckets
+
+**Bucket 1 — Agent Write-Back (highest priority)**
+Add function/tool calling to `/api/operator-chat`. Define a tool set: `update_hours`, `add_faq`, `remove_faq`, `set_handoff_contact`, `set_policy`, `update_business_info`. Wire each tool to call `/api/location-config` internally. Add a confirmation step before applying.
+
+**Bucket 2 — Visible State Surface**
+Replace the overview page content with a "chatbot state" dashboard: active hours, FAQ count with list, current handoff contacts, recent conversation volume. Everything is read-only; the AI sidebar is used to change anything.
+
+**Bucket 3 — Operator Chat Session Persistence**
+Persist operator chat messages to Supabase (new `operator_chat_sessions` table or reuse `chat_sessions` with a special `businessId: "operator"` scope which the route already does). Restore history on sidebar mount.
+
+**Bucket 4 — Page Consolidation**
+Merge menus into knowledge, retire the integrations placeholder, fold handoff into settings or AI-mediated only, consolidate locations form into settings. Target: 5–6 nav items total.
+
+**Bucket 5 — Knowledge Gap / Feedback Loop**
+Add a query on conversations to detect questions where the chatbot's response contained the "I don't have that information" marker. Surface these as "unanswered questions" on the home screen or as AI sidebar suggestions.
+
+**Bucket 6 — Internal Usage Tracking**
+Add per-request token counting (OpenAI responses return token usage). Persist to a `usage_events` table. Build an internal admin view. Never expose this directly to operators.
+
+**Bucket 7 — Doc Update**
+Archive `product-plan.md` as Tandem 2.0 history. Write a `docs/tandem-3-product-model.md` reflecting the agent-first model. Update `AGENTS.md` to reflect the new primary interface is the AI sidebar.
+
+---
+
+## 8. Risks / Watchouts
+
+**Agent write-back is a security surface.**
+If the operator AI can call `update_hours` or `add_faq`, those tool calls must be scoped to the authenticated operator's business only. The operator chat route currently reads `locationId` from the request body — an authenticated Supabase session must authorize that scope before any write tools execute.
+
+**Mock store / Supabase duality is a liability.**
+If the AI writes to Supabase via `/api/location-config` but the UI reads from `MockState` in `localStorage`, the operator will see stale data after an AI-driven change. This requires either: (a) agent writes also update the local mock store via a hook, or (b) moving toward server-authoritative reads. Option (b) is the right direction long-term but touches every page.
+
+**`gpt-5.2` is listed as the default model.**
+This is set as `LLM_MODEL` default in the README. Function calling behavior and token costs vary significantly across model versions. The model default should be validated against actual OpenAI API availability.
+
+**Anthropic/Google providers throw at runtime.**
+`generateWithAnthropic` and `generateWithGoogle` are stubs that throw "Provider not yet implemented." If a future agent uses `llmGenerate` for tool calls and `LLM_PROVIDER` is set to `anthropic`, it will silently fail at production. These should either be implemented or the selectable values gated.
+
+**No automated tests.**
+The codebase relies entirely on lint/typecheck and manual smoke tests. Adding agent write-back with no test coverage is high risk. Even a minimal integration test for the tool-calling path would significantly reduce regression exposure.
+
+**Website import worker complexity.**
+`scripts/worker/website-import-worker.ts` is a substantial async pipeline (crawl → classify → extract → store → review → apply). If the Tandem 3.0 model simplifies the knowledge surface, this pipeline's output (structured `KnowledgeProgram`) should feed directly into what the AI can present and edit — not into a manual review CRUD interface.
+
+---
+
+## 9. Executive Summary For Next Agent
+
+**What Tandem currently is:** A traditional SaaS operator dashboard for restaurant AI chatbot management, with 12 form-based configuration pages, a mock-first state store, and an AI assistant already present as a sidebar chat panel but limited to advisory text responses with no write capability.
+
+**What already works for 3.0:**
+- The operator AI sidebar (`ConsoleSidebar.tsx`) and its backend (`/api/operator-chat`) are structurally in the right place with a well-crafted system prompt.
+- The customer chatbot (widget + `/api/chat` + `chat-handler.ts`) is production-quality and should be preserved.
+- `KnowledgeProgram` is a rich structured model that is the right substrate for AI-driven config.
+- `ChatWidget` is production-ready and should remain a central feature.
+
+**The core structural problem:** The AI is advisory only. It cannot change anything. Every configuration action still requires navigating to a form page and saving manually. Tandem 3.0 requires adding tool/function calling to the operator assistant so it can write back to configuration via `/api/location-config`.
+
+**First actions for next agent:**
+1. Add OpenAI function calling to `/api/operator-chat` — define 5–6 tools (`update_hours`, `add_faq`, `set_handoff_contact`, `update_business_info`, `set_policy`), each calling the existing `/api/location-config` write path after operator confirmation.
+2. Replace the overview page content with a "current chatbot state" read panel (hours, FAQ count, handoff contacts, recent volume) — no forms allowed.
+3. Persist operator chat history to Supabase so the AI sidebar remembers context across page navigations.
+4. Consolidate the 12 pages toward 5: Home, Chatbot Rules (read-only), Conversations, Widget, Settings.
+
+**Files to read before making any changes:**
+- `apps/dashboard/src/app/api/operator-chat/route.ts`
+- `apps/dashboard/src/components/ConsoleSidebar.tsx`
+- `apps/dashboard/src/app/api/location-config/route.ts`
+- `apps/dashboard/src/lib/knowledge-program.ts`
+- `packages/shared/src/server/chat-handler.ts`

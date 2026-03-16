@@ -21,13 +21,13 @@ Tandem is an npm workspaces monorepo for an operator dashboard built with Next.j
 ## Development
 
 ### Running the App
-The app runs via the "Start application" workflow, which executes `npm run dev` from the root. This delegates to the dashboard workspace and starts Next.js on port 5000 bound to 0.0.0.0 (required for Replit preview).
+The app runs via the "Start application" workflow, which executes `npm run dev` from the root. This delegates to the dashboard workspace and starts Next.js on port 3100.
 
 ### Package Manager
 npm with workspaces (package-lock.json present). Run `npm install` from repo root.
 
 ### Key Scripts (run from repo root)
-- `npm run dev` — Start dashboard on port 5000
+- `npm run dev` — Start dashboard on port 3100
 - `npm run build` — Build dashboard
 - `npm run lint` — Lint dashboard
 - `npm run typecheck` — Type-check all packages
@@ -109,7 +109,7 @@ Login uses a Next.js Server Action (`apps/dashboard/src/app/login/actions.ts`) t
 The middleware is at `apps/dashboard/src/proxy.ts` — exported as `proxy` (Next.js 16 special-case for `/src/proxy` path).
 
 ## Replit Configuration
-- Port: 5000 (webview)
+- Port: 3100 (webview)
 - Host: 0.0.0.0
 - Node.js 20
 - Workflow: "Start application" → `npm run dev`

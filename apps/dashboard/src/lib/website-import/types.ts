@@ -175,6 +175,7 @@ export type WebsiteImportRunRecord = {
   status: ImportRunStatus;
   error: string | null;
   errorCode?: string | null;
+  source: string;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;

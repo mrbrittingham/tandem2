@@ -10,6 +10,7 @@ type Body = {
   businessSlug?: string;
   locationSlug?: string;
   url?: string;
+  source?: string;
 };
 
 type LocationRow = {
@@ -39,6 +40,8 @@ export async function POST(request: Request) {
     const businessSlugParam = (body.businessSlug ?? "").trim();
     const locationSlug = (body.locationSlug ?? "").trim();
     const rawUrl = (body.url ?? "").trim();
+    const sourceParam = (body.source ?? "").trim();
+    const source = sourceParam === "onboarding" ? "onboarding" : "knowledge-page";
 
     if (!businessIdParam && !businessSlugParam) {
       return NextResponse.json({ error: "businessSlug or businessId required" }, { status: 400 });
@@ -48,6 +51,13 @@ export async function POST(request: Request) {
     }
     if (!rawUrl) {
       return NextResponse.json({ error: "url required" }, { status: 400 });
+    }
+
+    if (/^javascript:/i.test(rawUrl)) {
+      return NextResponse.json({ error: "javascript: URLs are not allowed", code: "INVALID_URL" }, { status: 400 });
+    }
+    if (/^http:\/\//i.test(rawUrl)) {
+      return NextResponse.json({ error: "Only https:// URLs are accepted for website import", code: "INVALID_URL" }, { status: 400 });
     }
 
     console.info("[website-import/start] request", {
@@ -129,6 +139,7 @@ export async function POST(request: Request) {
         location_id: location.id,
         url,
         status: "queued",
+        source,
         created_by: user.id,
         created_at: nowIso,
       })
@@ -148,9 +159,9 @@ export async function POST(request: Request) {
       .update({ last_import_run_id: runId })
       .eq("id", location.id);
 
-    console.info("[website-import/start] import queued", { locationId, runId });
+    console.info("[website-import/start] import queued", { locationId, runId, source });
 
-    return NextResponse.json({ ok: true, runId, status: "queued" });
+    return NextResponse.json({ ok: true, runId, status: "queued", source });
   } catch (error) {
     if (error instanceof BusinessResolutionError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });

@@ -1,0 +1,838 @@
+TANDEM 3.0 — DASHBOARD REDESIGN PLAN
+=====================================
+Report generated: 2026-03-15
+Scope: Design phase only. No code has been written.
+Prerequisite reading: docs/tandem3transition/operator-ai-tool-architecture.txt
+
+---
+
+1. CURRENT DASHBOARD STRUCTURE
+================================
+
+The current dashboard is an npm-workspace Next.js 16 App Router application
+located at apps/dashboard/src/. The console layout is under
+apps/dashboard/src/app/(console)/ and consists of the following pages:
+
+  /overview       — Conversation analytics (stat cards, activity chart,
+                    recent conversations list), setup progress checklist.
+
+  /settings       — Business info form (name, tagline, timezone, address,
+                    phone, email, website) plus day-of-week operating hours
+                    grid. 100+ lines of form state management.
+
+  /menus          — Full menu management: sections, items, prices, dietary
+                    notes, include/exclude toggles. Persists to location-config
+                    via saveLocationConfig().
+
+  /knowledge      — FAQ editor (add/edit/expand/remove), policy editor, Q&A
+                    training fields (tone, what-to-answer, what-to-avoid).
+                    Also contains the WebsiteImportPanel.
+
+  /intents        — AI assistant persona (name, greeting, response style) and
+                    intent routing rules (answer / open link / route to handoff).
+
+  /widget         — Widget appearance: color pickers, gradient header config,
+                    logo URL, quick-action toggle. Reads/writes draftTheme via
+                    PreviewDockContext.
+
+  /handoff        — Contact methods editor (add/edit/remove phone, email, SMS,
+                    link, form contacts), handoff status (online/offline),
+                    headline and offline message fields.
+
+  /integrations   — POS/reservation system connection cards (connect, sync).
+
+  /conversations  — Full conversation list with filter tabs (all/open/escalated/
+                    resolved), inline message transcript panel, status management.
+
+  /account        — Account overview: business info stub, location count, team
+                    management (stub), billing (stub), security (stub).
+
+  /locations      — Location listing (minimal page, mostly stubs).
+
+Navigation structure in the current codebase:
+
+  LEFT PANEL (always visible):
+    ConsoleSidebar.tsx — AI chat panel. Streams responses from
+    /api/operator-chat. Currently read-only: it can answer questions but
+    cannot make any configuration changes. Renders plain text responses.
+
+  TOPBAR:
+    ConsoleTopbar.tsx with LocationSwitcher — allows switching active location.
+
+  HORIZONTAL SUB-NAV (BusinessSubNav.tsx, visible on business config pages):
+    Seven tabs: General Info | Menu | Knowledge | Assistant |
+                Appearance | Handoff | Integrations
+
+  FLOATING PREVIEW PANEL:
+    PreviewPanel component, opened via PreviewDockContext. Shows live ChatWidget
+    render. Accessed via button on overview and widget pages only.
+
+---
+
+2. PROBLEMS WITH CURRENT UX
+=============================
+
+A. FORM-FIRST CONFIGURATION MODEL
+The entire configuration surface is built around forms. Each change requires
+the operator to navigate to a page, find the right field, type the value, and
+click Save. For a restaurant owner who is not a SaaS power user, this creates
+friction at every step. The AI sidebar exists but has no write capability,
+making it feel like a chatbot bolted onto a conventional admin panel.
+
+B. NINE-SECTION NAVIGATION OVERLOAD
+The BusinessSubNav alone has seven tabs in a horizontal strip. Together with
+Overview, Conversations, and Account, operators face nine distinct areas to
+reason about. A restaurant owner opening the dashboard for the first time has
+no clear starting point. The setup checklist redirects to different pages but
+provides no consolidated view of state.
+
+C. OVERVIEW PAGE DOES NOT SHOW CHATBOT STATE
+The current /overview page shows: conversations per period (stat cards),
+conversation activity chart, recent conversations list, and a setup checklist.
+It tells the operator how many conversations happened. It does not tell them
+what their chatbot currently knows, what it would say if someone asked about
+hours, or whether the handoff contact is configured. An operator cannot
+understand their chatbot's behavior from the overview page.
+
+D. AI CHAT SIDEBAR IS READ-ONLY AND UNDERUTILIZED
+ConsoleSidebar.tsx makes POST requests to /api/operator-chat, which calls the
+shared chat-handler — the same code path used by guest-facing chats. It has
+no tool-calling capability and no confirmation flow. The sidebar is present
+everywhere but operators quickly learn it can only answer questions, not do
+anything. This wastes the highest-visibility real estate in the layout.
+
+E. SETUP CHECKLIST IS COMPLETION-DRIVEN, NOT STATE-REVEALING
+The SetupChecklist component tracks four steps: import menu, add 3 Q&As,
+configure live handoff, install widget. It shows a progress percentage.
+This tells operators what they haven't done, not what the chatbot currently
+knows. Once setup is 100% complete, the checklist disappears and the overview
+page shows only analytics — still no chatbot state summary.
+
+F. WIDGET PREVIEW IS HIDDEN AND SECONDARY
+The PreviewPanel opens via a floating button and covers part of the screen.
+Operators must actively seek out the preview. It is never shown alongside
+the configuration or the overview — so operators configure in a vacuum and
+check the preview as an afterthought.
+
+G. OVERLAPPING CONCERNS BETWEEN INTENTS AND KNOWLEDGE PAGES
+The /intents page configures tone, response style, persona name, and intent
+routing (link/handoff/knowledge). The /knowledge page also has tone and
+training fields (shouldAnswer, shouldAvoid, escalation instructions). These
+are the same concern — how the chatbot behaves — split across two pages for
+no clear product reason.
+
+H. MENUS PAGE IS A FULL CMS
+The menus page is a complete menu management system with sections, items,
+prices, and dietary flags. Restaurant operators already manage this in their
+POS, on their website, or in a spreadsheet. Duplicating it in Tandem adds
+maintenance burden for operators with no clear advantage over the website
+import tool that already extracts menus from their existing site.
+
+I. NO VISIBLE CONNECTION BETWEEN PANELS AND AI ACTIONS
+Nothing in the current UI suggests that the AI sidebar can or should be
+used to change any of the panels being displayed. There are no prompt chips,
+no "tell the AI to update this" nudges, and no feedback loop between what
+the operator sees and what the AI can do.
+
+J. CONFIGURATION CHANGES DO NOT REFLECT IMMEDIATELY IN OVERVIEW
+When an operator updates hours on the settings page and saves, the overview
+page does not know the config changed. Nothing cross-panel refreshes. In
+Tandem 3.0 where AI writes directly to config, a notification bus is needed
+so that the overview page panels reflect AI-confirmed changes within the
+same session without a full reload.
+
+---
+
+3. TANDEM 3.0 DASHBOARD PRINCIPLES
+=====================================
+
+PRINCIPLE 1: AI SIDEBAR IS THE WRITE PATH
+Restaurant operators configure their chatbot by talking to the AI. The sidebar
+is always present, full height, and is the primary interaction surface. Every
+panel on the overview page acknowledges this by offering contextual prompt
+chips that pre-fill the sidebar input.
+
+PRINCIPLE 2: DASHBOARD PAGES ARE READ-ONLY REFLECTIONS OF STATE
+The main content area shows what the chatbot currently knows and how it
+currently behaves. Operators do not click into fields to edit them. They look
+at a panel, understand the current state, and use the sidebar to change it.
+Form-based editing pages are demoted: they exist as detail views, not as
+primary interaction surfaces.
+
+PRINCIPLE 3: OVERVIEW IS THE CHATBOT STATE SNAPSHOT
+The first thing an operator sees when they log in is: hours, FAQ summary,
+behavior summary, handoff contacts, recent conversations, and a live widget
+preview. By the end of one page, they know exactly what their chatbot does.
+
+PRINCIPLE 4: FEWER SECTIONS, FASTER COMPREHENSION
+Reduce visible navigation from nine areas to four. The goal is that a
+restaurant owner can understand the full dashboard in under two minutes.
+
+PRINCIPLE 5: WIDGET PREVIEW IS ALWAYS ACCESSIBLE
+The live ChatWidget preview lives on the overview page, visible without any
+click. Operators can see the chatbot in guest-view while looking at any state
+panel.
+
+PRINCIPLE 6: CONFIGURATION DETAIL IS ACCESSIBLE BUT SECONDARY
+Each panel on the overview page links to a detail view for operators who want
+to inspect individual FAQs, review all contact methods, or see exact hour
+blocks. These detail views are read-focused; edits flow through the AI sidebar.
+
+PRINCIPLE 7: NO BLANK-SLATE ANXIETY
+Even when the chatbot is unconfigured, the overview page shows what is missing
+and says so clearly with warning badges. It does not show empty gray boxes.
+Each missing piece shows a specific AI suggestion: "Say: 'My hours are...'"
+
+PRINCIPLE 8: AI WRITES REFLECT IMMEDIATELY ON PAGE
+When an operator confirms an AI-proposed change (per the confirmation flow in
+operator-ai-tool-architecture.txt), the relevant overview panel instantly
+shows the new value. This uses the mock-store update + config-store
+invalidation pattern described in §5 of the tool architecture doc.
+
+---
+
+4. PROPOSED NAVIGATION STRUCTURE
+===================================
+
+BEFORE (9 sections + floating preview):
+  Sidebar AI panel | Overview | Conversations | [BusinessSubNav: General Info,
+  Menu, Knowledge, Assistant, Appearance, Handoff, Integrations] | Account
+
+AFTER (4 top-level sections):
+
+  /overview (renamed visually to "Home")
+    The chatbot state snapshot. The primary destination.
+
+  /conversations
+    Full conversation list + transcript. Unchanged in function.
+
+  /chatbot
+    Tabbed detail view of the current chatbot configuration.
+    Tabs: Knowledge | Handoff | Behavior | Appearance
+    Read-focused. Each tab shows structured current state.
+    Editing within these tabs: via AI sidebar only.
+
+  /account
+    Business identity, team, billing, integrations.
+    Consolidates: current /account + /settings + /integrations.
+
+REMOVED FROM TOP-LEVEL NAV:
+  /settings     → Merged into /account (business name, hours remain AI-editable)
+  /menus        → Removed (manual editing); menu knowledge visible under /chatbot > Knowledge
+  /intents      → Merged into /chatbot > Behavior
+  /widget       → Merged into /chatbot > Appearance (color editor stays form-based)
+  /handoff      → Merged into /chatbot > Handoff
+  /knowledge    → Merged into /chatbot > Knowledge (full FAQ list)
+  /integrations → Merged into /account
+
+BUSINESSSUBNAV (horizontal tab strip) STATUS:
+  Removed. The seven-tab strip is replaced by the /chatbot page's four tabs.
+  The console layout no longer renders BusinessSubNav for any route.
+
+CONSOLESIDEBAR STATUS:
+  Retained, upgraded. In Tandem 3.0 it gains:
+    - Pending change card rendering (per tool architecture §4)
+    - openAIWithPrompt() method exposed via context for prompt chips
+    - Contextual greeting on first load: "Hi! Ask me to update your
+      hours, add a Q&A, or change anything you see on this page."
+
+PREVIEW PANEL STATUS:
+  Retained for /chatbot > Appearance (widget theme draft editing).
+  No longer the primary preview surface — that role moves to the right
+  column of the overview page.
+
+---
+
+5. NEW OVERVIEW PAGE LAYOUT
+=============================
+
+FILE: apps/dashboard/src/app/(console)/overview/page.tsx
+
+The page uses a two-column layout on desktop (lg: breakpoint and above).
+On mobile, columns stack vertically.
+
+  ┌─────────────────────────────────────────┬──────────────────────────┐
+  │  HEADER                                 │                          │
+  │  Location name + address                │   WIDGET PREVIEW         │
+  │  Health summary bar (3 badges)          │                          │
+  ├─────────────────────────────────────────┤   Live ChatWidget        │
+  │  OPERATING HOURS PANEL                  │   (read-only, live cfg)  │
+  │  Structured hours display               │                          │
+  │  Chip: "Update my hours"                │   "This is what guests   │
+  ├─────────────────────────────────────────┤    see on your website"  │
+  │  KNOWLEDGE PANEL                        │                          │
+  │  FAQ count + 3 example questions        │   ── Install snippet ──  │
+  │  Chip: "Add a Q&A"                      │   (collapsed, expandable)│
+  ├─────────────────────────────────────────┤                          │
+  │  BEHAVIOR PANEL                         │                          │
+  │  Tone summary, conversion goals         │                          │
+  │  Topics avoided (1 line)                │                          │
+  │  Chip: "Change my bot's tone"           │                          │
+  ├─────────────────────────────────────────┤                          │
+  │  HANDOFF CONTACTS PANEL                 │                          │
+  │  Contact method list + status badge     │                          │
+  │  Chip: "Add a contact method"           │                          │
+  ├─────────────────────────────────────────┤                          │
+  │  RECENT CONVERSATIONS                   │                          │
+  │  Last 5 sessions, status badges         │                          │
+  │  "View all →" link                      │                          │
+  └─────────────────────────────────────────┴──────────────────────────┘
+
+HEADER SECTION:
+  - H1: location name (from activeBusiness.locationName)
+  - Subtitle: address + timezone
+  - Health summary bar: three inline badges showing critical config status.
+    Badge states:
+      Hours ✓        (emerald)  — hours are configured with at least one block
+      Hours ⚠        (orange)   — hours not configured
+      Knowledge ✓    (emerald)  — 1+ FAQs exist
+      Knowledge ⚠    (orange)   — no FAQs
+      Handoff ✓      (emerald)  — at least one enabled contact method
+      Handoff ⚠      (orange)   — no enabled contact method
+    This replaces the SetupChecklist component entirely.
+
+RIGHT COLUMN (sticky, top-aligned):
+  - ChatWidget component embedded at widget config size (~375px wide) using
+    businessToWidgetConfig(activeBusiness) to derive WidgetContentConfig.
+  - Caption: "This is what guests see on your website"
+  - Collapsible "Install snippet" section below preview.
+  - On mobile: collapses to a thumbnail "Preview ↗" link.
+
+---
+
+6. CHATBOT STATE PANELS
+=========================
+
+PANEL 1: OPERATING HOURS
+  Data source: knowledge_config.knowledgeProgram.fields.hours (narrative)
+               knowledge_config.businessProfile.hours (structured blocks)
+               Fallback: activeBusiness.hours from mock store
+
+  Render logic:
+    - If hoursBlocks present: render a day-grouped table.
+      Example:
+        Weekdays (Mon–Fri)    11:00 AM – 10:00 PM
+        Weekends (Sat–Sun)    10:00 AM – 11:00 PM
+    - If only narrative present: render as plain text paragraph in a bordered box.
+    - If neither: render warning card — "Hours not configured. Your chatbot will
+      tell guests it doesn't know your hours."
+
+  AI entry point:
+    Prompt chip below panel: "Update my hours"
+    → Pre-fills sidebar: "Update my operating hours to "
+
+  Edit deep link: None needed. Hours editing is fully AI-driven.
+
+PANEL 2: KNOWLEDGE (FAQ SUMMARY)
+  Data source: knowledge_config.knowledgeProgram.faqs (FAQItem[])
+               Fallback: activeBusiness.faqs from mock store
+
+  Render logic:
+    - Headline: "12 Q&As" (count in large type, like a stat card)
+    - Below count: render first 3 FAQ entries as expandable question rows.
+      Show question only in collapsed state; answer on expand.
+    - "See all →" link to /chatbot?tab=knowledge
+    - If faqs.length === 0: warning card — "No Q&As yet. Your chatbot will
+      only answer from general restaurant knowledge."
+
+  AI entry points:
+    Prompt chip: "Add a Q&A" → pre-fills: "Add a FAQ: '"
+    Prompt chip: "Remove a Q&A" → pre-fills: "Remove the FAQ about "
+
+  Categories visible: If FAQs have category labels, group by category.
+  Categories are optional display logic, not required for v1.
+
+PANEL 3: BEHAVIOR SUMMARY
+  Data source: knowledge_config.knowledgeProgram.training (AssistantTrainingControls)
+
+  Fields displayed:
+    - Tone: toneVoice (truncated to 1 line if long)
+    - Answers: shouldAnswer (truncated to 2 lines)
+    - Avoids: shouldAvoid (truncated to 1 line)
+    - Conversion goals: conversionGoals[] (bullet list, max 3)
+
+  Render logic:
+    - If no training configured: neutral empty state "Not customized yet.
+      Using default behavior."
+    - No error badge — missing behavior is not a critical gap.
+    - "See full settings →" link to /chatbot?tab=behavior
+
+  AI entry point:
+    Prompt chip: "Update tone or goals" → pre-fills: "Update my chatbot's
+    tone to "
+
+PANEL 4: HANDOFF CONTACTS
+  Data source: handoff_config.contactMethods (ContactMethod[])
+               handoff_config.status, headline, offlineMessage
+
+  Render logic:
+    - Status badge: Online (emerald) or Offline (gray) based on handoff_config.status
+    - List of enabled contact methods:
+        📞  Front desk — (555) 123-4567
+        📧  Reservations — reservations@place.com
+        🔗  Book online — opentable.com/place
+    - Disabled methods shown in muted text with "Disabled" label
+    - If contactMethods is empty or all disabled: warning card —
+      "No handoff contacts configured. Guests cannot reach your team."
+    - "See all contacts →" link to /chatbot?tab=handoff
+
+  AI entry points:
+    Prompt chip: "Add a contact" → pre-fills: "Add a handoff contact: "
+    Prompt chip: "Set my status" → pre-fills: "Set my handoff status to "
+
+PANEL 5: RECENT CONVERSATIONS
+  Data source: GET /api/conversations (same as current overview page)
+
+  Render logic:
+    - Show last 5 sessions sorted by updatedAt desc.
+    - Each row: avatar initial | session title | status badge | relative time
+    - Status badges: escalated (orange), resolved (green), open (blue dot)
+    - "View all conversations →" link at bottom
+    - Loading state: skeleton rows (3 rows, 40px height each)
+    - Empty state: "No conversations yet. Install the widget to start."
+      + "Get install snippet →" nudge
+
+  Activity chart: Moved from overview to /conversations page.
+  The overview page shows the list only — the chart adds analytical depth
+  that belongs on the conversations page.
+
+  Time range filter: Removed from overview page.
+  The overview always shows the most recent 5 sessions.
+  Time range filtering is a /conversations page concern.
+
+---
+
+7. WIDGET PREVIEW INTEGRATION
+================================
+
+CURRENT STATE:
+  PreviewPanel is a floating overlay opened via PreviewDockContext.
+  It renders a live ChatWidget using businessToWidgetConfig(activeBusiness).
+  The overview page has an "Open Preview" button in the header.
+  The widget page uses PreviewDockContext for draft theme editing.
+
+TANDEM 3.0 CHANGES:
+
+  ON THE OVERVIEW PAGE:
+    The right column renders ChatWidget directly — no floating panel,
+    no button, no context. It reads businessToWidgetConfig(activeBusiness)
+    on mount and on config-store version change, then re-renders.
+
+    Implementation:
+      const config = useMemo(() => businessToWidgetConfig(activeBusiness),
+                             [activeBusiness, configVersion]);
+      <ChatWidget config={config} mode="preview" />
+
+    React to AI changes:
+      const configVersion = useConfigStoreVersion();
+      // configVersion increments after each confirmed AI write (§5 of
+      // operator-ai-tool-architecture.txt). useMemo re-runs and ChatWidget
+      // re-renders with the new config.
+
+    Size: The preview is constrained to a max-width: 375px container in the
+    right column. It uses the same sizing as the current PreviewPanel.
+
+    Install snippet: Below the widget, a collapsible <details> element shows
+    the standard embed script. The snippet reads from the active location's
+    businessSlug and locationSlug. No copy-to-clipboard logic is removed.
+
+  ON THE /CHATBOT > APPEARANCE TAB:
+    PreviewDockContext and PreviewPanel are retained for draft theme editing.
+    The operator edits colors/fonts in the form and sees a live preview of
+    the draft theme (not yet saved). This is the one page where the floating
+    panel design is appropriate because the operator is comparing before/after.
+
+  ON ALL OTHER PAGES:
+    PreviewPanel is removed from layout.tsx. It is only rendered when the
+    current route is /chatbot (where the tab includes Appearance).
+    The AppShell layout no longer conditionally renders PreviewPanel based
+    on previewOpen — instead it renders it only for the chatbot route.
+
+---
+
+8. AI INTERACTION POINTS
+==========================
+
+The AI sidebar is the action surface for every state panel. The connection
+between what the operator sees and what the AI can do must be explicit and
+low-friction.
+
+PROMPT CHIP COMPONENT
+  A small clickable chip rendered below each state panel:
+
+    ┌───────────────────────────────────┐
+    │  💬 Say: "Update my hours"    →   │
+    └───────────────────────────────────┘
+
+  On click:
+    1. The AI sidebar input is focused.
+    2. The chip's starter text is inserted into the input field.
+    3. The operator can complete the sentence and press Enter.
+    4. This does NOT auto-send — the operator types the rest and confirms.
+
+  Implementation:
+    The ConsoleSidebar exposes a context value with a prefillInput(text)
+    function. This is wired through a new AISidebarContext:
+
+      // In AISidebarContext.tsx
+      type AISidebarContextValue = {
+        prefillInput: (text: string) => void;
+      };
+      export const AISidebarContext = createContext<AISidebarContextValue>({
+        prefillInput: () => {},
+      });
+
+    ConsoleSidebar uses useImperativeHandle or simply publishes to this
+    context after mounting. The inputRef.current.focus() + setValue(text)
+    pattern achieves the prefill.
+
+    Prompt chips on overview panels consume the context:
+      const { prefillInput } = useContext(AISidebarContext);
+      <button onClick={() => prefillInput("Update my hours to ")}>
+        💬 Say: "Update my hours"
+      </button>
+
+CONTEXTUAL GREETING IN AI SIDEBAR
+  When messages.length === 0 and location is selected, the sidebar shows:
+    "Hi! I can update your hours, add Q&As, change your bot's tone,
+    or configure how guests reach your team. What would you like to do?"
+
+  This replaces the three generic QUICK_ACTIONS chips currently in the sidebar
+  ("Let's get started!", "Auto-configure", "Tell me what you can do").
+  The new greeting is location-aware and references the specific panels
+  the operator can see on the current page.
+
+CONFIRMATION CARD (per operator-ai-tool-architecture.txt §4)
+  After the operator sends a change request and the AI generates a tool call,
+  the sidebar renders a ConfirmationCard instead of a text bubble:
+
+    ┌─────────────────────────────────────────────────┐
+    │  📋 Proposed change                              │
+    │                                                   │
+    │  Add FAQ: "Do you take walk-ins?"                │
+    │  Answer: "Yes, walk-ins are welcome but          │
+    │  reservations recommended on weekends."          │
+    │                                                   │
+    │  [Confirm ✓]    [Cancel ✗]                       │
+    └─────────────────────────────────────────────────┘
+
+  On Confirm → POST /api/operator-chat/confirm → tool executed → config
+  updated → mock store updated → config-store version bumps → overview
+  panels re-render with new data.
+
+POST-CONFIRMATION STATE REFRESH
+  The flow after a confirmed change:
+    1. ConsoleSidebar receives { ok: true, updatedConfig } from confirm route.
+    2. Calls updateMockState() with the changed fields (e.g., appends FAQ to
+       activeBusiness.faqs).
+    3. Calls notifyConfigUpdated() from config-store.ts which increments the
+       version counter.
+    4. Overview panels that use useConfigStoreVersion() re-evaluate their
+       useMemo dependencies and re-render.
+    5. Widget preview re-renders automatically (it also depends on configVersion).
+    6. Sidebar shows success bubble: "Done! Your FAQ has been added."
+
+---
+
+9. PAGES TO REMOVE OR MERGE
+==============================
+
+REMOVE: /intents (Assistant page)
+  Why: The intents page manages AI persona, response style, and intent routing.
+  These are developer concepts. Restaurant operators do not think in terms of
+  "intents" or "routing rules." The tone/behavior settings overlap with the
+  knowledge page's training fields. The correct operator-facing surface is
+  the Behavior panel on the overview page and the /chatbot > Behavior tab.
+  How: Delete apps/dashboard/src/app/(console)/intents/page.tsx.
+  Redirect: GET /intents → /chatbot?tab=behavior (Next.js redirect in config).
+
+REMOVE/DEMOTE: /menus (Menu page)
+  Why: Manual menu management is too complex for Tandem's current value
+  proposition. Restaurant operators maintain menus in their POS or on their
+  website. The website import tool (WebsiteImportPanel) already extracts
+  menu information. Manual entry creates a parallel, out-of-sync source of
+  truth. The chatbot does not currently do direct menu item lookup — menus
+  feed into general knowledge.
+  How: Remove manual editing. Under /chatbot > Knowledge, add a read-only
+  "Imported menu knowledge" section showing what was extracted from the last
+  website import. The import panel (WebsiteImportPanel) is retained.
+  Redirect: GET /menus → /chatbot?tab=knowledge.
+
+REMOVE: /settings (General Info page)
+  Why: The settings page is a conventional form for business name, tagline,
+  timezone, address, phone, email, website, and hours. In Tandem 3.0, all
+  these fields are directly editable via AI tools (update_business_info,
+  set_business_hours). The hours display moves to the overview Hours panel.
+  The remaining identity fields (name, phone, website) move to /account.
+  How: Delete apps/dashboard/src/app/(console)/settings/page.tsx.
+  Move: Business name, phone, email, website form → /account page new section.
+  Move: Operating hours display → overview Hours panel (read-only).
+  Redirect: GET /settings → /account.
+
+MERGE: /handoff → /chatbot?tab=handoff
+  The handoff page's contact methods form is replaced by the Handoff tab
+  in /chatbot. The tab shows the read-only current state. AI edits via
+  set_handoff_contact and update_handoff_settings tools.
+  The HandoffEditor component can remain as a reference implementation
+  for the detail tab layout.
+  Redirect: GET /handoff → /chatbot?tab=handoff.
+
+MERGE: /widget → /chatbot?tab=appearance
+  The widget appearance page is the one page that stays form-based because
+  widget color/theme editing is explicitly excluded from AI tools in v1
+  (per operator-ai-tool-architecture.txt §1 note). However it is demoted
+  from a top-level nav item to a tab.
+  The ColorPicker, theme draft, and PreviewDockContext all remain intact.
+  Redirect: GET /widget → /chatbot?tab=appearance.
+
+MERGE: /knowledge → /chatbot?tab=knowledge
+  The knowledge page becomes the full FAQ view tab. The form-based "Add FAQ"
+  and "Add Policy" UX is removed (operators use AI for this). The tab shows:
+    - Full FAQ list (read-only cards with expand-to-read)
+    - Imported menu knowledge section (read-only)
+    - Website import panel (WebsiteImportPanel) retained as a trigger
+  Redirect: GET /knowledge → /chatbot?tab=knowledge.
+
+MERGE: /integrations → /account
+  Integrations (POS, reservations) are not operator-daily concerns. Move the
+  integrations card grid to a section at the bottom of /account.
+  Redirect: GET /integrations → /account.
+
+KEEP UNCHANGED: /conversations
+  The conversations page (list + transcript) has good structure and serves
+  a distinct ongoing use case. Retain with one improvement: move the 14-day
+  activity chart from the overview page to the conversations page header,
+  giving it the analytical context it belongs in.
+
+KEEP EXPANDED: /account
+  The account page currently has four stub sections. In 3.0 it gains:
+    - Business identity fields (name, phone, email, website) from /settings
+    - Location management (link to location switcher / add location)
+    - Integrations card grid (from /integrations)
+    - Team management (retained as stub with "coming soon" label)
+    - Billing (retained as stub)
+
+---
+
+10. IMPLEMENTATION STRATEGY
+==============================
+
+PHASE 1: OVERVIEW PAGE REDESIGN  [No backend changes required]
+  Files affected:
+    apps/dashboard/src/app/(console)/overview/page.tsx    (rewrite)
+    apps/dashboard/src/components/ConsoleSidebar.tsx      (add AISidebarContext)
+    apps/dashboard/src/app/(console)/layout.tsx           (remove PreviewPanel from layout)
+
+  Tasks:
+    1a. Rewrite overview/page.tsx with two-column layout.
+        - Replace SetupChecklist with HealthSummaryBar (3 badges).
+        - Add Hours panel reading from location-config API + mock store.
+        - Add Knowledge panel reading faqs from mock store / API.
+        - Add Behavior panel reading training fields from API.
+        - Add Handoff panel reading contactMethods from mock store / API.
+        - Add Recent Conversations panel (top 5 only, no time range picker).
+        - Add right column with embedded ChatWidget (businessToWidgetConfig).
+    1b. Add AISidebarContext.tsx (new file, ~20 lines).
+        - Provides prefillInput(text: string) function.
+        - ConsoleSidebar writes to context on mount.
+    1c. Add PromptChip component (new component, ~15 lines).
+        - Reads from AISidebarContext.
+        - Renders a small pill button.
+    1d. Add prompt chips to each overview panel.
+    1e. Remove the "Open Preview" button from the overview page header.
+
+  Acceptance criteria:
+    - Overview page shows all 5 state panels.
+    - Widget preview is visible in right column without clicking anything.
+    - Clicking a prompt chip focuses the sidebar input.
+    - Health summary bar reflects actual config state.
+
+PHASE 2: NAVIGATION RESTRUCTURE  [No backend changes required]
+  Files affected:
+    apps/dashboard/src/components/BusinessSubNav.tsx       (replace or remove)
+    apps/dashboard/src/app/(console)/chatbot/page.tsx      (new file)
+    apps/dashboard/src/app/(console)/account/page.tsx      (expand)
+    next.config.ts                                         (add redirects)
+
+  Tasks:
+    2a. Create /chatbot page with tab routing (?tab=knowledge|handoff|
+        behavior|appearance).
+        - Knowledge tab: read-only FAQ list, website import panel.
+        - Handoff tab: read-only contact methods list.
+        - Behavior tab: read-only training fields display.
+        - Appearance tab: existing widget color form (form-based) +
+          PreviewPanel dock integration.
+    2b. Remove or replace BusinessSubNav with a 4-item navigation.
+        The new top-level items: Home | Conversations | Chatbot | Account.
+        This replaces the horizontal sub-nav with a cleaner structure.
+    2c. Add redirects in next.config.ts:
+        /settings     → /account
+        /intents      → /chatbot?tab=behavior
+        /menus        → /chatbot?tab=knowledge
+        /handoff      → /chatbot?tab=handoff
+        /widget       → /chatbot?tab=appearance
+        /knowledge    → /chatbot?tab=knowledge
+        /integrations → /account
+    2d. Expand /account page with business info section and integrations grid.
+
+  Acceptance criteria:
+    - Navigation shows four items only.
+    - Old URLs redirect to new destinations.
+    - /chatbot page renders all four tabs.
+
+PHASE 3: AI SIDEBAR WRITE CAPABILITY  [Requires backend work]
+  Files affected (new):
+    apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+    apps/dashboard/src/lib/operator-tools/tool-definitions.ts
+    apps/dashboard/src/lib/operator-tools/tool-executor.ts
+    apps/dashboard/src/lib/operator-tools/pending-change-renderer.tsx
+    apps/dashboard/src/lib/config-store.ts
+  Files affected (modified):
+    apps/dashboard/src/app/api/operator-chat/route.ts     (add tool calls)
+    apps/dashboard/src/components/ConsoleSidebar.tsx      (add pending change handling)
+
+  This phase is fully specified in docs/tandem3transition/operator-ai-tool-architecture.txt.
+  The dashboard redesign plan does not re-specify it — read that document first.
+
+  Post-Phase-3 overview page integration:
+    - Import useConfigStoreVersion() hook (from config-store.ts) in overview page.
+    - Pass configVersion as a dependency to useMemo for businessToWidgetConfig.
+    - Import notifyConfigUpdated from config-store in ConsoleSidebar confirm handler.
+
+PHASE 4: SECONDARY PAGE CLEANUP  [Low risk, low priority]
+  Tasks:
+    4a. Delete apps/dashboard/src/app/(console)/intents/page.tsx
+        (redirected by Phase 2 already).
+    4b. Simplify apps/dashboard/src/app/(console)/menus/page.tsx into
+        a redirect-only file or remove it (knowledge tab replaces it).
+    4c. Delete apps/dashboard/src/app/(console)/settings/page.tsx
+        (redirected by Phase 2 already).
+    4d. Archive or delete apps/dashboard/src/app/(console)/handoff/page.tsx
+        once handoff tab in /chatbot is complete.
+
+PHASE 5: CONVERSATIONS PAGE IMPROVEMENT  [Optional enhancement]
+  Tasks:
+    5a. Move ActivityChart component from overview/page.tsx to
+        conversations/page.tsx header section.
+    5b. Remove activity chart from overview page (it is replaced by panels).
+    5c. Add conversation search input (client-side filter by title/snippet).
+
+  Acceptance criteria:
+    - Conversations page shows activity chart at top.
+    - Overview page shows no activity chart.
+
+PHASE SEQUENCING NOTE:
+  Phases 1 and 2 can be executed independently of each other and of Phase 3.
+  Phase 3 (AI write capabilities) can run in parallel with Phases 1 and 2.
+  Phase 3 has its own agent document and should be picked up by a separate
+  implementation pass. Phases 4 and 5 are cleanup and can be deferred until
+  Phases 1–3 are stable.
+
+---
+
+11. SUMMARY FOR NEXT AGENT
+============================
+
+WHAT IS BEING BUILT:
+Tandem 3.0 transforms the operator dashboard from a form-heavy SaaS admin
+panel into an AI-first interface where:
+  - The AI chat sidebar (always visible on the left) is the single place
+    where configuration changes happen.
+  - The dashboard main content area is a read-only snapshot of what the
+    chatbot currently knows and how it currently behaves.
+  - The overview page (first thing operators see) shows all critical chatbot
+    state in one scrollable page: hours, FAQ count + examples, behavior
+    summary, handoff contacts, recent conversations, and a live widget preview.
+
+KEY DESIGN DECISIONS MADE IN THIS DOCUMENT:
+  1. Navigation reduced from 9 sections to 4: Home | Conversations | Chatbot | Account.
+  2. BusinessSubNav (7-tab horizontal strip) is replaced by the /chatbot
+     page with 4 tabs: Knowledge | Handoff | Behavior | Appearance.
+  3. Widget preview is embedded in the overview page right column — visible
+     without any user action on first load.
+  4. Each chatbot state panel has a prompt chip that pre-fills the AI
+     sidebar input with a specific starter phrase.
+  5. /intents, /menus, /settings, /handoff, /widget, /knowledge,
+     /integrations are all removed from top-level nav and redirected.
+  6. SetupChecklist component is replaced by a HealthSummaryBar with three
+     badges (Hours / Knowledge / Handoff) showing OK or warning state.
+  7. Activity chart moves from overview to conversations page.
+  8. Time range filter is removed from overview (it is a conversations concern).
+  9. ConsoleSidebar gains AISidebarContext with prefillInput(text) function.
+  10. After AI confirms a change: mock store updated + config-store version
+      bumps → all overview panels re-render without full page reload.
+
+FILES THE NEXT AGENT SHOULD READ FIRST (in order):
+  1. docs/tandem3transition/dashboard-redesign-plan.txt (this document)
+  2. docs/tandem3transition/operator-ai-tool-architecture.txt
+  3. apps/dashboard/src/app/(console)/overview/page.tsx
+  4. apps/dashboard/src/components/ConsoleSidebar.tsx
+  5. apps/dashboard/src/app/(console)/layout.tsx
+  6. apps/dashboard/src/components/BusinessSubNav.tsx
+  7. packages/shared/src/types.ts (for domain types)
+  8. apps/dashboard/src/lib/store-hooks.ts (for mock store hooks)
+
+FIRST IMPLEMENTATION TASK (Phase 1):
+Rewrite apps/dashboard/src/app/(console)/overview/page.tsx.
+
+The redesigned overview page:
+  - Requires NO new API routes. Reads from /api/location-config (existing)
+    and /api/conversations (existing).
+  - Requires NO changes to packages/shared.
+  - Requires NO changes to the AI sidebar's backend behavior.
+  - Can be built and tested entirely in the dashboard app.
+  - To wire prompt chips: add AISidebarContext.tsx (~20 lines) and one
+    method to ConsoleSidebar. This does not change any AI behavior.
+
+The HealthSummaryBar component needs these data points:
+  - Hours configured: knowledgeProgram.fields.hours is non-empty OR
+    businessProfile.hours.length > 0 (from /api/location-config response).
+  - FAQs configured: faqs.length > 0 (from activeBusiness in mock store OR
+    from /api/location-config).
+  - Handoff configured: handoff.contactMethods.some(c => c.enabled) (from
+    activeBusiness.handoff in mock store).
+
+The Hours panel must gracefully handle three states:
+  - Structured blocks (hoursBlocks array) → table display.
+  - Narrative only (hoursNarrative string) → text paragraph display.
+  - Not configured → warning card with AI prompt chip.
+
+SECOND IMPLEMENTATION TASK (Phase 2):
+Create /chatbot page with tab routing and update navigation.
+
+The /chatbot page is the consolidation point for all configuration detail
+views that are currently split across separate pages. Each tab renders a
+read-only version of its respective configuration section, with a note
+pointing operators to the AI sidebar for changes.
+
+THIRD IMPLEMENTATION TASK (Phase 3):
+Implement AI write capability per operator-ai-tool-architecture.txt.
+
+This is the most complex phase. The tool architecture document specifies
+all new files, schemas, security model, and confirmation flow. The dashboard
+redesign document (this file) specifies how the UI reflects confirmed changes:
+via AISidebarContext + config-store invalidation → overview panel re-render.
+
+COMPONENTS TO CREATE (Phase 1 only):
+  HealthSummaryBar     — 3-badge status row (Hours / Knowledge / Handoff)
+  ChatbotStatePanel    — reusable panel wrapper (title, content, chip, link)
+  HoursPanel           — displays structured hours or narrative or warning
+  KnowledgePanel       — FAQ count + 3 examples + expand
+  BehaviorPanel        — tone + goals + avoids display
+  HandoffPanel         — contact method list + status badge
+  PromptChip           — clickable chip that calls prefillInput(text)
+  AISidebarContext     — React context providing prefillInput()
+
+COMPONENTS TO MODIFY (Phase 1 only):
+  ConsoleSidebar       — publish prefillInput to AISidebarContext,
+                         replace generic QUICK_ACTIONS with contextual greeting
+  overview/page.tsx    — full rewrite per §5 layout specification
+
+COMPONENTS TO PRESERVE UNCHANGED (Phase 1):
+  ActivityChart        — move to conversations page in Phase 5, not now
+  PreviewPanel         — still used for /chatbot > appearance in Phase 2
+  BusinessSubNav       — replaced in Phase 2, not Phase 1
+  All existing config pages — redirected in Phase 2, deleted in Phase 4
+
+---
+END OF DOCUMENT

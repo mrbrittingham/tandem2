@@ -1,4 +1,5 @@
 import type { CrawledPage, ImportSignals, SocialLink } from "./types";
+import { classifyPageType } from "./extract";
 import {
   WEBSITE_IMPORT_LIMITS,
   decodeHtml,
@@ -560,7 +561,10 @@ function dedupeSignals(signals: ImportSignals): ImportSignals {
   };
 }
 
-export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
+export async function crawlWebsite(
+  seedUrl: string,
+  options?: { onPageCrawled?: (pages: CrawledPage[]) => Promise<void> | void },
+): Promise<CrawlResult> {
   const normalizedSeed = normalizeWebsiteUrl(seedUrl);
   const queue: LinkCandidate[] = [{ url: normalizedSeed, score: 140, depth: 0, anchorText: "seed", sourceSection: "content" }];
   const discovered = new Map<string, { score: number; count: number; depth: number }>();
@@ -698,17 +702,26 @@ export async function crawlWebsite(seedUrl: string): Promise<CrawlResult> {
     const needsStructuredText = /menu|food|dining|drink|wine|cocktail|brunch|dinner|lunch|faq|frequently|policy|policies|about|private.event|club|membership|contact|hours|visit|reservation|dog|pet|parking|dress|cancel/i.test(haystack);
     const structuredText = needsStructuredText ? excerptText(htmlToStructuredText(html), excerptLimit) : undefined;
 
+    const metaDescription = extractMetaDescription(html);
+    const headingText = extractHeadingText(html);
+    const sourceAnchorTexts = Array.from(anchorTextsByUrl.get(nextUrl) ?? []).slice(0, 12);
+
     pages.push({
       url: nextUrl,
       title,
       textExcerpt,
       structuredText,
-      metaDescription: extractMetaDescription(html),
-      headingText: extractHeadingText(html),
-      sourceAnchorTexts: Array.from(anchorTextsByUrl.get(nextUrl) ?? []).slice(0, 12),
+      pageType: classifyPageType({ url: nextUrl, title, textExcerpt, metaDescription, headingText, sourceAnchorTexts }),
+      metaDescription,
+      headingText,
+      sourceAnchorTexts,
     });
 
     totalChars += textExcerpt.length;
+
+    if (options?.onPageCrawled) {
+      await options.onPageCrawled([...pages]);
+    }
 
     collectSignalsFromHtml({ html, signalText, footerText, pageUrl: nextUrl, signals });
 

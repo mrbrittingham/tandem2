@@ -13,6 +13,10 @@ type LocationRow = {
   last_import_run_id: string | null;
 };
 
+type BusinessRow = {
+  slug: string;
+};
+
 export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -26,12 +30,76 @@ export async function GET(request: Request) {
     }
 
     const url = new URL(request.url);
+    const runIdParam = (url.searchParams.get("runId") ?? "").trim();
     const businessIdParam = (url.searchParams.get("businessId") ?? "").trim();
     const businessSlugParam = (url.searchParams.get("businessSlug") ?? "").trim();
     const locationSlug = (url.searchParams.get("locationSlug") ?? "").trim();
 
+    // ── Path A: Direct lookup by runId ──────────────────────────────────────
+    if (runIdParam) {
+      console.info("[website-import/latest] runId request", { runId: runIdParam });
+
+      const run = await getImportRunById(supabase, runIdParam);
+      if (!run) {
+        return NextResponse.json({ error: "Import run not found", code: "NOT_FOUND" }, { status: 404 });
+      }
+
+      const { data: locations, error: locationError } = await supabase
+        .from("business_locations")
+        .select("id,business_id,slug,name,website_url,last_import_run_id")
+        .eq("id", run.location_id)
+        .limit(1)
+        .returns<LocationRow[]>();
+
+      if (locationError) {
+        const apiError = toApiError(locationError, "Failed to load location");
+        return NextResponse.json({ error: apiError.message, code: apiError.code }, { status: apiError.status });
+      }
+
+      const location = locations?.[0];
+      if (!location) {
+        return NextResponse.json({ error: "Location not found for this run", code: "NOT_FOUND" }, { status: 404 });
+      }
+
+      await assertMembership(supabase, location.business_id, user.id);
+
+      const { data: businesses, error: businessError } = await supabase
+        .from("businesses")
+        .select("slug")
+        .eq("id", location.business_id)
+        .limit(1)
+        .returns<BusinessRow[]>();
+
+      if (businessError) {
+        const apiError = toApiError(businessError, "Failed to load business");
+        return NextResponse.json({ error: apiError.message, code: apiError.code }, { status: apiError.status });
+      }
+
+      const businessSlug = businesses?.[0]?.slug ?? null;
+
+      console.info("[website-import/latest] runId resolved", {
+        runId: run.id,
+        locationId: location.id,
+        status: run.status,
+      });
+
+      return NextResponse.json({
+        location: {
+          id: location.id,
+          businessId: location.business_id,
+          businessSlug,
+          slug: location.slug,
+          name: location.name,
+          websiteUrl: location.website_url,
+          lastImportRunId: location.last_import_run_id,
+        },
+        run: mapImportRunRow(run),
+      });
+    }
+
+    // ── Path B: Lookup by businessSlug + locationSlug ───────────────────────
     if (!businessIdParam && !businessSlugParam) {
-      return NextResponse.json({ error: "businessSlug or businessId required" }, { status: 400 });
+      return NextResponse.json({ error: "runId, businessSlug, or businessId required" }, { status: 400 });
     }
 
     if (!locationSlug) {

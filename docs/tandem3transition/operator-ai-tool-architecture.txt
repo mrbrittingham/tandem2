@@ -1,0 +1,685 @@
+TANDEM 3.0 — OPERATOR AI TOOL ARCHITECTURE
+==========================================
+Report generated: 2026-03-15
+Scope: Design phase only. No code has been written.
+
+---
+
+PREAMBLE: FINDINGS FROM CODE INSPECTION
+========================================
+
+The following files were inspected before producing this design:
+
+  apps/dashboard/src/app/api/operator-chat/route.ts
+  apps/dashboard/src/app/api/location-config/route.ts
+  apps/dashboard/src/components/ConsoleSidebar.tsx
+  apps/dashboard/src/lib/knowledge-program.ts
+  packages/shared/src/server/chat-handler.ts
+  packages/shared/src/llm/client.ts
+  packages/shared/src/llm/types.ts
+  packages/shared/src/llm/providers/openai.ts
+  packages/shared/src/types.ts
+  apps/dashboard/src/lib/store-hooks.ts
+  packages/shared/src/mock-store.ts
+
+Key observations:
+
+1. operator-chat/route.ts passes all messages through handleChatPost() from
+   packages/shared/src/server/chat-handler.ts. This handler supports streaming
+   via llmStream() but has no concept of LLM tool/function calling. The operator
+   chat currently has no write capability whatsoever.
+
+2. location-config/route.ts already provides a complete, authenticated PUT
+   endpoint that merges partial config blobs into business_location_configs rows
+   in Supabase. It performs Supabase auth + membership verification. It handles
+   five JSONB columns: assistant_config, knowledge_config, handoff_config,
+   widget_config, integrations_config. This is the correct write path to reuse.
+
+3. ConsoleSidebar.tsx streams responses from /api/operator-chat. It has no
+   handling for structured (non-text) messages, pending change cards, or
+   confirmation UX. The message type is purely { role, text }.
+
+4. knowledge-program.ts defines the KnowledgeProgram type which contains:
+   fields (hours, menus, reservations, etc.), training (tone/behavior rules),
+   faqs (FAQItem[]), policies (PolicyItem[]). This is the structure stored in
+   knowledge_config.knowledgeProgram.
+
+5. packages/shared/src/llm/types.ts: LLMRequest does NOT include a tools field.
+   The OpenAI provider uses Vercel AI SDK (ai package) generateText/streamText.
+   The AI SDK supports tool calling via its tools parameter, but this is not
+   exposed through the current LLMRequest abstraction.
+
+6. The existing mock store pattern (subscribeToMockState / updateMockState) is
+   a lightweight, localStorage-backed pub/sub store. A parallel server-config
+   store using the same pattern can allow dashboard pages to reactively refresh
+   when AI writes occur.
+
+---
+
+1. OPERATOR AI TOOL LIST
+========================
+
+Eight tools cover all operator-writable configuration domains:
+
+  TOOL 1: set_business_hours
+  Purpose: Replace the restaurant's operating hours schedule.
+  Config target: knowledge_config.knowledgeProgram.fields.hours (narrative)
+                 knowledge_config.businessProfile.hours (structured array)
+
+  TOOL 2: add_faq
+  Purpose: Add a new FAQ entry to the chatbot's knowledge base.
+  Config target: knowledge_config.knowledgeProgram.faqs (FAQItem[])
+
+  TOOL 3: update_faq
+  Purpose: Edit the question or answer text of an existing FAQ entry.
+  Config target: knowledge_config.knowledgeProgram.faqs (FAQItem[])
+
+  TOOL 4: remove_faq
+  Purpose: Delete an FAQ entry by its ID.
+  Config target: knowledge_config.knowledgeProgram.faqs (FAQItem[])
+
+  TOOL 5: set_handoff_contact
+  Purpose: Add a new handoff contact method or update an existing one.
+           Used for phone numbers, email addresses, booking links, forms.
+  Config target: handoff_config.contactMethods (ContactMethod[])
+
+  TOOL 6: remove_handoff_contact
+  Purpose: Remove a handoff contact method by ID.
+  Config target: handoff_config.contactMethods (ContactMethod[])
+
+  TOOL 7: update_handoff_settings
+  Purpose: Update the handoff panel headline, online/offline status,
+           status detail text, support hours label, and offline message.
+  Config target: handoff_config (HandoffConfig top-level fields)
+
+  TOOL 8: set_behavior_rules
+  Purpose: Update the AI assistant's tone/voice guidelines, what it should
+           answer, what it should avoid, escalation instructions, and
+           conversion goals.
+  Config target: knowledge_config.knowledgeProgram.training (AssistantTrainingControls)
+                 assistant_config (may overlap)
+
+  TOOL 9: update_business_info
+  Purpose: Update basic business details: display name, tagline, phone,
+           email, website URL, timezone.
+  Config target: knowledge_config.businessProfile (partial update)
+
+Note: Widget appearance (colors, fonts) is intentionally excluded from AI
+tools in this iteration. Those changes are high-visual-impact and should
+remain in the form-based widget settings page until a dedicated preview
+flow is built.
+
+---
+
+2. TOOL PARAMETER SCHEMAS
+==========================
+
+All schemas follow JSON Schema draft-07 conventions as used by OpenAI
+function calling. The LLM will produce arguments matching these schemas.
+All fields are validated server-side before execution regardless of LLM
+output.
+
+TOOL 1 — set_business_hours
+----------------------------
+{
+  "type": "object",
+  "properties": {
+    "hoursNarrative": {
+      "type": "string",
+      "description": "Free-text description of hours for chatbot knowledge (e.g. 'Mon-Fri 11am-10pm, Sat-Sun 10am-11pm'). Max 500 chars."
+    },
+    "hoursBlocks": {
+      "type": "array",
+      "description": "Structured schedule entries. Each entry covers one contiguous time block.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label":  { "type": "string", "description": "Human label e.g. 'Weekdays', 'Weekend'" },
+          "days":   { "type": "array", "items": { "type": "string", "enum": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] } },
+          "open":   { "type": "string", "description": "Opening time in HH:MM 24-hour format" },
+          "close":  { "type": "string", "description": "Closing time in HH:MM 24-hour format" }
+        },
+        "required": ["label", "days", "open", "close"]
+      }
+    }
+  },
+  "required": ["hoursNarrative"]
+}
+
+TOOL 2 — add_faq
+-----------------
+{
+  "type": "object",
+  "properties": {
+    "question": { "type": "string", "description": "The question as it would appear in the chatbot. Max 300 chars." },
+    "answer":   { "type": "string", "description": "The answer the chatbot should give. Max 1000 chars." },
+    "category": { "type": "string", "description": "Grouping label e.g. 'hours', 'reservations', 'menu', 'general'. Defaults to 'general'." }
+  },
+  "required": ["question", "answer"]
+}
+
+TOOL 3 — update_faq
+--------------------
+{
+  "type": "object",
+  "properties": {
+    "id":       { "type": "string", "description": "ID of the existing FAQ to update." },
+    "question": { "type": "string", "description": "New question text. Omit to leave unchanged." },
+    "answer":   { "type": "string", "description": "New answer text. Omit to leave unchanged." },
+    "category": { "type": "string", "description": "New category. Omit to leave unchanged." }
+  },
+  "required": ["id"]
+}
+
+TOOL 4 — remove_faq
+--------------------
+{
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "description": "ID of the FAQ entry to delete." }
+  },
+  "required": ["id"]
+}
+
+TOOL 5 — set_handoff_contact
+-----------------------------
+{
+  "type": "object",
+  "properties": {
+    "id":      { "type": "string", "description": "ID of existing contact to update. Omit to add a new contact." },
+    "type":    { "type": "string", "enum": ["phone", "email", "sms", "link", "form"] },
+    "label":   { "type": "string", "description": "Display label e.g. 'Front desk', 'Email us'" },
+    "value":   { "type": "string", "description": "Phone number, email address, or URL" },
+    "enabled": { "type": "boolean", "description": "Whether this contact is shown to guests. Defaults to true." }
+  },
+  "required": ["type", "label", "value"]
+}
+
+TOOL 6 — remove_handoff_contact
+---------------------------------
+{
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "description": "ID of the contact method to remove." }
+  },
+  "required": ["id"]
+}
+
+TOOL 7 — update_handoff_settings
+----------------------------------
+{
+  "type": "object",
+  "properties": {
+    "headline":          { "type": "string", "description": "Heading shown in the handoff panel e.g. 'Need more help?'" },
+    "status":            { "type": "string", "enum": ["online", "offline"] },
+    "statusDetail":      { "type": "string", "description": "Detail text shown next to the status badge." },
+    "supportHoursLabel": { "type": "string", "description": "Text describing when staff are available e.g. 'Mon-Fri 10am-6pm'" },
+    "offlineMessage":    { "type": "string", "description": "Message shown to guests when status is offline." }
+  }
+}
+(No required fields — partial updates are valid.)
+
+TOOL 8 — set_behavior_rules
+-----------------------------
+{
+  "type": "object",
+  "properties": {
+    "toneVoice":              { "type": "string", "description": "Describe the chatbot's personality and speaking style." },
+    "shouldAnswer":           { "type": "string", "description": "Topics and question types the chatbot should always try to answer." },
+    "shouldAvoid":            { "type": "string", "description": "Topics the chatbot should decline or redirect." },
+    "escalationInstructions": { "type": "string", "description": "When and how to hand off to a human." },
+    "conversionGoals":        { "type": "array", "items": { "type": "string" }, "description": "Business goals to weave into responses e.g. 'promote reservations'." }
+  }
+}
+(No required fields — partial updates are valid.)
+
+TOOL 9 — update_business_info
+-------------------------------
+{
+  "type": "object",
+  "properties": {
+    "businessName": { "type": "string", "description": "Display name of the restaurant." },
+    "tagline":      { "type": "string", "description": "Short brand tagline." },
+    "phone":        { "type": "string", "description": "Primary phone number." },
+    "email":        { "type": "string", "description": "Primary business email." },
+    "website":      { "type": "string", "description": "Website URL." },
+    "timezone":     { "type": "string", "description": "IANA timezone string e.g. 'America/New_York'." }
+  }
+}
+(No required fields — partial updates are valid.)
+
+---
+
+3. API MAPPING
+==============
+
+Each tool maps to a specific field within the location-config PUT payload.
+
+  Tool                    | HTTP Target               | Payload Field
+  ------------------------|---------------------------|------------------------------------------
+  set_business_hours      | PUT /api/location-config  | knowledgeConfig.knowledgeProgram.fields.hours (narrative)
+                          |                           | knowledgeConfig.businessProfile.hours (array)
+  add_faq                 | PUT /api/location-config  | knowledgeConfig.knowledgeProgram.faqs (append item)
+  update_faq              | PUT /api/location-config  | knowledgeConfig.knowledgeProgram.faqs (update item by id)
+  remove_faq              | PUT /api/location-config  | knowledgeConfig.knowledgeProgram.faqs (filter out id)
+  set_handoff_contact     | PUT /api/location-config  | handoffConfig.contactMethods (upsert by id)
+  remove_handoff_contact  | PUT /api/location-config  | handoffConfig.contactMethods (filter out id)
+  update_handoff_settings | PUT /api/location-config  | handoffConfig (merge top-level fields)
+  set_behavior_rules      | PUT /api/location-config  | knowledgeConfig.knowledgeProgram.training (merge)
+  update_business_info    | PUT /api/location-config  | knowledgeConfig.businessProfile (merge)
+
+The existing PUT endpoint in location-config/route.ts performs shallow-merge
+at the top config-column level. The executor (see §7 Code Locations) must
+fetch the existing config via GET /api/location-config, apply the deep merge
+for array-level operations (add/update/remove FAQ and contact items), then
+PUT the full merged payload back. This avoids losing unreferenced fields.
+
+---
+
+4. CONFIRMATION FLOW
+====================
+
+The confirmation flow ensures every AI-proposed configuration change is
+reviewed and explicitly approved by the human operator before it takes effect.
+
+Step-by-step flow:
+
+  1. OPERATOR TYPES A REQUEST
+     Operator types: "Add an FAQ: 'Do you take walk-ins?' with answer
+     'Yes, walk-ins are welcome but reservations are recommended on weekends.'"
+
+  2. OPERATOR-CHAT ROUTE PROCESSES WITH TOOLS ENABLED
+     The updated /api/operator-chat route calls generateText (Vercel AI SDK)
+     with the 9 tool definitions. It does NOT use the shared llmStream() path
+     for tool-enabled calls. The LLM returns a tool_call for add_faq.
+
+  3. PENDING CHANGE IS CONSTRUCTED (NOT EXECUTED)
+     The route detects result.toolCalls.length > 0 and constructs a
+     PendingChange object:
+       {
+         type: "pending_change",
+         toolName: "add_faq",
+         toolArgs: { question: "...", answer: "...", category: "..." },
+         humanSummary: "Add FAQ: 'Do you take walk-ins?' → 'Yes, walk-ins are welcome...'",
+         locationId: "<resolved-from-auth>",
+         locationSlug: "<resolved>",
+         businessId: "<resolved>"
+       }
+
+  4. ROUTE RESPONDS WITH STRUCTURED PAYLOAD (NON-STREAMING)
+     The response is a JSON object (not a text stream):
+       {
+         pendingChange: { ... },
+         assistantMessage: "Here's what I'd add to your FAQ section — confirm to save it:"
+       }
+     The HTTP response Content-Type is application/json, not text/plain.
+     This is different from normal conversational replies (text/plain stream).
+
+  5. CONSOLESIDEBAR DETECTS PENDING CHANGE
+     ConsoleSidebar checks response Content-Type. If application/json and
+     the body contains pendingChange, it renders a ConfirmationCard component
+     instead of streaming text into an assistant bubble.
+
+  6. CONFIRMATION CARD IS DISPLAYED
+     The ConfirmationCard shows:
+       - The assistantMessage as explanatory text
+       - A structured preview of what will change (formatted per tool type)
+       - [Confirm] and [Cancel] buttons
+     The card is visually distinct from normal chat messages.
+
+  7. OPERATOR CLICKS CONFIRM
+     ConsoleSidebar POSTs to /api/operator-chat/confirm:
+       {
+         pendingChange: { toolName, toolArgs, locationId, locationSlug, businessId }
+       }
+     The locationId/businessId are taken from the pendingChange object that
+     came from the server — they are never re-submitted by the client from
+     user input.
+
+  8. CONFIRM ROUTE EXECUTES THE CHANGE
+     The confirm route:
+       a. Authenticates the request (Supabase auth, same as location-config)
+       b. Re-validates that the authenticated user is a member of the businessId
+          in pendingChange (defense-in-depth; the server issued this scope, but
+          we verify again on execution)
+       c. Validates toolArgs against the schema allowlist for the given toolName
+       d. Calls the tool-executor which fetches current config, applies the
+          change, and calls PUT /api/location-config internally
+       e. Returns { ok: true, updatedConfig: { ... } }
+
+  9. CONSOLESIDEBAR HANDLES CONFIRM RESPONSE
+     On success:
+       - Replace the ConfirmationCard with a success bubble: "Done! Your FAQ
+         has been added."
+       - Emit a configUpdated event with the updatedConfig payload so dashboard
+         pages can refresh.
+     On failure:
+       - Display an error bubble with the server error message.
+       - The ConfirmationCard remains available for retry.
+
+  10. OPERATOR CLICKS CANCEL
+      ConsoleSidebar replaces the ConfirmationCard with a neutral message:
+      "Got it — no changes were made." Nothing is written to the server.
+
+---
+
+5. UI UPDATE STRATEGY
+=====================
+
+After a confirmed change, the dashboard must show the new state without
+requiring a full page reload. Two layers are involved:
+
+LAYER 1 — MOCK STORE (LOCAL UI STATE)
+The existing mock store in packages/shared/src/mock-store.ts holds
+BusinessProfile objects in localStorage. For changes like FAQs, hours,
+contacts, the relevant BusinessProfile fields must also be updated locally
+so components that read from mock store stay consistent.
+
+After a successful confirm, ConsoleSidebar calls updateMockState() with
+a targeted mutation derived from the tool change — e.g., for add_faq it
+appends to profile.faqs. This follows the existing updateMockState pattern
+used elsewhere in store-hooks.ts.
+
+LAYER 2 — SERVER CONFIG STORE (NEW)
+A new lightweight module at apps/dashboard/src/lib/config-store.ts provides
+a server-config invalidation bus. It does not duplicate data from the mock
+store — instead, it tracks a per-locationId "dirty" flag and a version counter.
+
+  export type ConfigStoreState = {
+    version: number;       // increments on each confirmed AI write
+    lastUpdatedAt: string; // ISO timestamp
+  };
+
+  export function subscribeToConfigStore(listener: () => void): () => void;
+  export function getConfigStoreState(): ConfigStoreState;
+  export function notifyConfigUpdated(): void;  // called after confirm success
+
+Dashboard pages that fetch config from /api/location-config on mount
+(knowledge page, hours fields, handoff settings etc.) should:
+  a. Subscribe to the config store in a useEffect
+  b. Re-fetch from /api/location-config whenever the version counter changes
+
+This is a one-directional invalidation push pattern — no WebSockets needed.
+The config-store module is ~30 lines using the same subscribe/notify shape
+as mock-store.ts.
+
+NO FULL RELOAD REQUIRED
+The combination of mock store update (for immediate local state) and config
+store invalidation (for pages that re-fetch from server) ensures all visible
+dashboard UI reflects the change within one render cycle after confirmation.
+
+---
+
+6. SECURITY MODEL
+=================
+
+Threat surface and mitigations:
+
+AUTHENTICATION (who can call these routes?)
+  - /api/operator-chat and /api/operator-chat/confirm require a valid Supabase
+    session. Both routes call createSupabaseServerClient() + getUser(). No
+    public or API-key-only access is permitted.
+  - Pattern already established in location-config/route.ts; apply identically.
+
+AUTHORIZATION (which business/location can they modify?)
+  - The confirm route re-resolves businessId and locationId from the
+    authenticated user's membership via resolveLocationId() from location-config
+    logic. It does not trust the businessId/locationId fields in the
+    pendingChange payload at face value.
+  - Defense in depth: even though the server issued those IDs in the
+    pendingChange response, the confirm route re-checks membership independently
+    before executing any write. An attacker who replayed a pendingChange with a
+    different locationId would fail the membership check.
+  - resolveLocationId() already ensures the authenticated user is a member of
+    the business that owns the target location.
+
+TOOL CALL ARGUMENT VALIDATION (what can the LLM inject?)
+  - The LLM produces tool call arguments as structured JSON. These arguments are
+    parsed with JSON.parse() — they are never eval'd or treated as code.
+  - Before the tool executor runs, the arguments must pass an allowlist schema
+    validator (zod or manual field check). Unknown fields are dropped. Fields are
+    type-checked and length-capped.
+  - Individual field limits:
+      question/answer fields: max 1000 characters
+      narrative text fields: max 500 characters
+      URL fields: validated as non-executable strings (no javascript: scheme)
+      enum fields: match against the exact allowed set
+  - The tool executor does not blindly spread toolArgs into the config payload.
+    It maps each known field explicitly to the correct config location.
+
+SCOPE BINDING (which locationId is used?)
+  - locationId, businessId, and locationSlug in the PendingChange are set
+    server-side by the operator-chat route from the authenticated context.
+    The client does not supply these — they flow from the server's own session
+    resolution.
+  - The client only passes the opaque PendingChange object back to /confirm.
+    The confirm route re-resolves the scope independently (see above).
+
+INJECTION AGAINST THE SYSTEM PROMPT (operator prompt tampering)
+  - The existing injection screening in chat-handler.ts screens user input for
+    known injection patterns. This should be applied to operator-chat as well.
+  - The operator system prompt is built server-side; the client cannot override it.
+
+RATE LIMITING (future requirement, not currently in codebase)
+  - /api/operator-chat/confirm writes to the database. Rate limiting per user
+    (e.g., 30 confirmed config changes per hour) should be added before production
+    launch of Tandem 3.0 to prevent runaway automated writes.
+
+SENSITIVE DATA EXPOSURE
+  - The confirm route returns updatedConfig which may contain all config blobs.
+    Minimize the returned surface to only the changed sections.
+  - Do not include integration credentials or API keys in confirmations.
+
+LOGGING
+  - All confirmed tool executions should be logged with: userId, locationId,
+    toolName, and a summary of changed fields (not full values). Use the same
+    console.info pattern as location-config/route.ts.
+
+---
+
+7. CODE LOCATIONS
+=================
+
+NEW FILES TO CREATE:
+
+  apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+    The confirmation execution endpoint. Authenticates the request, re-validates
+    scope, calls into the tool executor, returns { ok, updatedConfig }.
+
+  apps/dashboard/src/lib/operator-tools/tool-definitions.ts
+    Exports the tools array in Vercel AI SDK format (using the `tool` helper from
+    the `ai` package). Each tool has a description and a zod-schema for its
+    parameters. Used by the operator-chat route when calling generateText.
+
+  apps/dashboard/src/lib/operator-tools/tool-executor.ts
+    Contains executeOperatorTool(toolName, toolArgs, locationId, supabase).
+    Fetches current config, applies the change, and POSTs back to location-config.
+    Returns the updated config sections.
+
+  apps/dashboard/src/lib/operator-tools/pending-change-renderer.tsx
+    React component: ConfirmationCard. Receives pendingChange, assistantMessage,
+    onConfirm, onCancel props. Renders a structured diff-style card with confirm/
+    cancel buttons. Used inside ConsoleSidebar's message list.
+
+  apps/dashboard/src/lib/config-store.ts
+    Lightweight pub/sub module (same pattern as mock-store.ts). Holds a version
+    counter. Dashboard pages subscribe and re-fetch when version increments.
+    Exports: subscribeToConfigStore, getConfigStoreState, notifyConfigUpdated.
+
+FILES TO MODIFY:
+
+  apps/dashboard/src/app/api/operator-chat/route.ts
+    - Add import for tool-definitions.ts
+    - Split POST handler: for tool-capable calls use generateText (Vercel AI SDK)
+      directly (not via shared handleChatPost). For normal conversation, the
+      existing streaming path continues.
+    - Detect result.toolCalls.length > 0, construct PendingChange, return as JSON.
+    - Return { pendingChange, assistantMessage } when a tool call is triggered.
+    - Return { message } as text/plain stream for normal conversation (unchanged).
+
+  apps/dashboard/src/components/ConsoleSidebar.tsx
+    - Extend Message type: add type: "text" | "pending_change" | "success" | "error"
+    - In sendMessage(): check response Content-Type. If application/json, parse
+      body and set pendingChange on the assistant message entry.
+    - Render ConfirmationCard for messages with type: "pending_change".
+    - Add handleConfirm(pendingChange) function: POST to /api/operator-chat/confirm,
+      update message to success/error state, call notifyConfigUpdated().
+    - Add handleCancel(): replace pending_change message with neutral text.
+
+  packages/shared/src/mock-store.ts (or store-hooks.ts)
+    - Add helper functions to apply AI-confirmed config changes to mock store:
+        applyHoursChange, applyFaqChange, applyHandoffChange, applyBehaviorChange,
+        applyBusinessInfoChange.
+    - These are called from ConsoleSidebar after successful confirmation to keep
+      mock store in sync with the written server state.
+
+---
+
+8. SCHEMA CHANGES
+=================
+
+NO NEW DATABASE TABLES OR COLUMNS ARE REQUIRED.
+
+All data written by the operator AI tools maps to existing JSONB columns in
+the business_location_configs table:
+
+  Column              | Tools writing to it
+  --------------------|----------------------------------------------------
+  knowledge_config    | set_business_hours, add_faq, update_faq, remove_faq,
+                      | set_behavior_rules, update_business_info
+  handoff_config      | set_handoff_contact, remove_handoff_contact,
+                      | update_handoff_settings
+  assistant_config    | set_behavior_rules (may overlap with knowledge_config)
+  widget_config       | Not written by AI tools in this iteration
+  integrations_config | Not written by AI tools in this iteration
+
+The PUT endpoint in location-config/route.ts already handles partial updates
+to any of these columns and performs deep merge logic for top-level keys.
+The tool executor only needs to construct the correct partial payload for the
+PUT call.
+
+The existing sanitizeKnowledgeConfig() in location-config/route.ts strips
+the immutable fields (locationName, address) from businessProfile writes.
+The tool executor's update_business_info mapping must not attempt to write
+those fields.
+
+---
+
+9. IMPLEMENTATION PLAN
+=======================
+
+The work is divided into five sequential phases. Each phase produces tested,
+individually-shippable increments.
+
+PHASE 1: TOOL DEFINITIONS + LLM INTEGRATION (2–3 days)
+  1.1 Create tool-definitions.ts with all 9 tool schemas using the ai SDK
+      `tool` helper and zod for parameter schemas.
+  1.2 Update operator-chat/route.ts to call generateText with tools when the
+      user's message triggers a tool (the LLM decides automatically using
+      toolChoice: "auto").
+  1.3 When result.toolCalls is non-empty, construct the PendingChange object
+      and return JSON response instead of streaming.
+  1.4 Ensure normal conversational messages (no tool calls) continue to work
+      exactly as before — streaming text response unchanged.
+  Checkpoint: Verify with curl that a message like "Set hours to 11am-10pm
+  Mon-Fri" returns a JSON body with pendingChange.
+
+PHASE 2: CONFIRM ENDPOINT + TOOL EXECUTOR (2–3 days)
+  2.1 Create tool-executor.ts with executeOperatorTool function.
+      For each tool: fetch current config, apply the change, build the PUT
+      payload, call location-config PUT logic.
+  2.2 Create confirm/route.ts: authenticate, re-validate scope, validate
+      toolArgs via zod, call tool executor, return updatedConfig.
+  2.3 Write manual integration test: POST a hardcoded pendingChange to
+      /api/operator-chat/confirm and verify the config in Supabase changed.
+  Checkpoint: Confirm endpoint writes correct data and rejects out-of-scope
+  locationIds.
+
+PHASE 3: UI CONFIRMATION FLOW (2 days)
+  3.1 Create pending-change-renderer.tsx (ConfirmationCard component).
+      Show human-readable change summary, confirm/cancel buttons.
+  3.2 Extend ConsoleSidebar Message type and sendMessage() handler to detect
+      JSON responses and render ConfirmationCard.
+  3.3 Wire handleConfirm() and handleCancel() in ConsoleSidebar.
+  3.4 Verify the full end-to-end UX: ask AI to change hours, see card,
+      confirm, see success message in sidebar.
+  Checkpoint: Full UX flow works in dev environment without page reload.
+
+PHASE 4: UI STATE REFRESH (1–2 days)
+  4.1 Create config-store.ts with subscribe/notify pattern.
+  4.2 Update ConsoleSidebar to call notifyConfigUpdated() after confirm success
+      and to call updateMockState() with the relevant change.
+  4.3 Update knowledge page, hours fields, handoff settings page to subscribe
+      to configStore and re-fetch config on version increment.
+  Checkpoint: After confirming an hours change in the sidebar, the Knowledge
+  page shows the new hours without a reload.
+
+PHASE 5: HARDENING + TYPECHECK (1 day)
+  5.1 Run npm run typecheck — fix all errors.
+  5.2 Run npm run lint — fix all warnings.
+  5.3 Verify no mock-store fields are accidentally overwritten by AI writes.
+  5.4 Add server-side logging to confirm route.
+  5.5 Document rate-limiting as a deferred task in RUNBOOK.md.
+  Checkpoint: Clean typecheck and lint output; smoke test passes.
+
+TOTAL ESTIMATED PHASES: 5
+ESTIMATED EFFORT: 8–11 focused working days for one engineer.
+
+---
+
+10. SUMMARY FOR NEXT AGENT
+===========================
+
+(This section is a concise handoff brief for the implementation agent that
+will write code based on this design.)
+
+WHAT THIS DESIGN ACHIEVES:
+  The Tandem operator AI sidebar gains the ability to propose and safely
+  execute configuration changes (hours, FAQs, handoff contacts, behavior
+  rules, business info) through a confirmation-gated tool-calling flow.
+
+CRITICAL DESIGN DECISIONS:
+  - The operator-chat route splits into two response modes: (a) streaming
+    text for normal conversation, (b) JSON with pendingChange for tool calls.
+  - The confirm route is a separate endpoint (/api/operator-chat/confirm)
+    that re-authenticates and re-authorizes every write independently.
+  - No new database schema is needed. All writes go through the existing
+    PUT /api/location-config endpoint logic.
+  - The shared llmStream() / handleChatPost() path is NOT used for
+    tool-enabled calls. The operator-chat route calls generateText from
+    the Vercel AI SDK directly (same SDK already used by openai.ts provider).
+  - The Vercel AI SDK `tool` helper + zod is the right pattern for defining
+    tool schemas — this integrates cleanly with the existing ai SDK imports.
+
+KEY FILES TO CREATE (in order):
+  1. apps/dashboard/src/lib/operator-tools/tool-definitions.ts
+  2. apps/dashboard/src/lib/operator-tools/tool-executor.ts
+  3. apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+  4. apps/dashboard/src/lib/config-store.ts
+  5. apps/dashboard/src/lib/operator-tools/pending-change-renderer.tsx
+
+KEY FILES TO MODIFY (in order):
+  1. apps/dashboard/src/app/api/operator-chat/route.ts (add tool calling)
+  2. apps/dashboard/src/components/ConsoleSidebar.tsx (add confirmation UX)
+  3. packages/shared/src/mock-store.ts (add AI change helpers)
+  4. Relevant knowledge/handoff pages (subscribe to config-store)
+
+SAFE CHANGE PATTERN (critical constraint):
+  tool-executor.ts must always: (1) fetch current config via GET, (2) apply
+  the change in memory to get the full merged blob, (3) write back via PUT.
+  Never partial-write array columns without first fetching them — this would
+  destroy all existing FAQs/contacts except the one being written.
+
+TYPES TO KNOW:
+  FAQItem, PolicyItem, HandoffConfig, ContactMethod, OperatingHoursBlock,
+  BusinessProfile — all in packages/shared/src/types.ts
+  KnowledgeProgram, AssistantTrainingControls, RestaurantKnowledgeFields
+  — in apps/dashboard/src/lib/knowledge-program.ts
+
+EXIT CRITERIA:
+  Implementation is complete when:
+  - All 9 tools trigger the correct pendingChange JSON response from /operator-chat
+  - /api/operator-chat/confirm writes all 9 tool types to Supabase correctly
+  - ConsoleSidebar shows confirmation cards and success/cancel states
+  - Knowledge and handoff pages refresh after AI writes without page reload
+  - npm run typecheck and npm run lint pass cleanly

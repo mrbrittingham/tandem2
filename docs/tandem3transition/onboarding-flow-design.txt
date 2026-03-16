@@ -1,0 +1,1160 @@
+TANDEM 3.0 — ONBOARDING FLOW DESIGN
+=====================================
+Report generated: 2026-03-15
+Scope: Design phase only. No code has been written.
+Prerequisite reading:
+  docs/tandem3transition/tandem-3-architecture-audit.txt
+  docs/tandem3transition/operator-ai-tool-architecture.txt
+  docs/tandem3transition/dashboard-redesign-plan.txt
+
+---
+
+1. CURRENT ONBOARDING CAPABILITIES
+====================================
+
+The current onboarding is a single static form at:
+  apps/dashboard/src/app/onboarding/page.tsx
+
+It collects three fields:
+  - Business name (required)
+  - First location name (required)
+  - Address (optional)
+
+On submit it calls POST /api/locations, then router.replace("/overview").
+
+The experience ends there. No website URL. No AI greeting. No knowledge
+extraction. No explanation of what Tandem is or what will happen next.
+
+EXISTING SYSTEMS THAT SUPPORT A RICHER FLOW:
+
+a. Website import pipeline — already fully built:
+   - apps/dashboard/src/lib/website-import/run.ts
+     runWebsiteImport(url) -> crawlWebsite() -> buildWebsiteImportResult()
+   - apps/dashboard/src/lib/website-import/crawl.ts
+     Crawls up to a configurable page limit, classifies page types (menu,
+     hours, contact, reservations, events, FAQ, memberships, home, about),
+     extracts signals (phone, email, address, hours, social links, booking
+     platform links).
+   - apps/dashboard/src/lib/website-import/extract.ts
+     Uses llmGenerate() to produce a structured WebsiteImportDraft from
+     crawled page content. Extracts: business name, description, hours,
+     FAQs, policies, events, menu sections, reservations, memberships,
+     brand colors, logo URL, social links.
+   - scripts/worker/website-import-worker.ts
+     Async poll-and-process loop. Claims queued onboarding_import_runs rows
+     atomically (queued -> running), calls runWebsiteImport, stores result.
+   - API routes:
+     POST /api/website-import/start   — enqueue a run
+     GET  /api/website-import/latest  — poll for status and result
+     POST /api/website-import/:id/apply — commit draft to location config
+
+b. WebsiteImportPanel.tsx — review/apply UI already built:
+   - Full React component managing: URL input, start, status polling,
+     draft preview (FAQs, policies, hours, brand, menu, events), apply.
+   - Currently embedded in apps/dashboard/src/app/(console)/knowledge/page.tsx.
+   - Includes toggling individual FAQs/policies include/exclude.
+   - Reads and writes via the import API routes above.
+
+c. ConsoleSidebar.tsx — a full AI chat panel already in the layout:
+   - Present on every console page, left column.
+   - Calls /api/operator-chat, streams responses back.
+   - Has QUICK_ACTIONS chips ("What should I set up first?",
+     "Auto-configure my assistant").
+   - Currently read-only — advisory only.
+
+d. Operator chat system prompt (buildOperatorSystemPrompt):
+   - Already scoped: "You are Tandem — an AI assistant for restaurant operators."
+   - Loads business context from Supabase.
+   - Has section for onboarding use case:
+     "Setting up chatbot knowledge (menu, hours, policies, FAQs, reservation flows)"
+
+e. knowledge-program.ts — KnowledgeProgram typed model:
+   - Fields: hours, menus, reservations, events, memberships, policies,
+     FAQs, social links, training controls (tone, shouldAnswer, shouldAvoid).
+   - This is the exact target type that import extraction populates.
+
+f. location-config/route.ts — PUT endpoint already handles:
+   - assistant_config, knowledge_config, handoff_config, widget_config,
+     integrations_config.
+   - Supabase auth + membership verification.
+   - This is the authoritative write path for all AI-confirmed changes.
+
+g. website-import/apply.ts — merges draft into location config:
+   - mergeImportDraftToConfig() deep-merges structured import knowledge
+     into business_location_configs.
+   - Already handles FAQs, policies, hours, brand theme, structured fields.
+
+SUMMARY: Every building block for a rich AI-guided onboarding flow already
+exists as production code. The onboarding page does not use any of them.
+
+---
+
+2. PROBLEMS WITH CURRENT ONBOARDING
+======================================
+
+A. BLANK-SLATE ARRIVAL
+After submitting the current three-field form, the operator lands on an
+overview page that shows mostly empty state. They must manually navigate to
+eight different pages (settings, knowledge, menus, intents, widget, handoff,
+locations, account) and fill in dozens of fields. There is no guide, no
+AI assistance, and no context for what is needed or why.
+
+B. WEBSITE URL IS NOT COLLECTED
+Most restaurants already have a website with hours, menus, contact info, and
+FAQs. Tandem has a complete website crawl + extraction pipeline that can
+auto-populate 80% of the knowledge base from that URL in under 60 seconds.
+The current onboarding never asks for it.
+
+C. NO AI VOICE IN THE FLOW
+The operator AI chat sidebar is available on the overview page and all console
+pages, but the onboarding flow is a plain HTML form with no conversational
+element. There is no greeting. No explanation of what Tandem does. No
+warmth. The product's most distinctive feature (AI-first interactions) is
+absent from the most important moment in the user journey.
+
+D. VALUE IS DEFERRED, NOT DEMONSTRATED
+A restaurant owner signing up for Tandem should experience its core value
+(an AI chatbot that knows their restaurant) within the first 5 minutes. The
+current onboarding delays this by requiring manual form-filling before
+anything is configured. No aha moment is created during onboarding.
+
+E. KNOWLEDGE PAGE IS THE WRONG HOME FOR IMPORT
+The WebsiteImportPanel currently lives inside the /knowledge console page.
+New operators must: complete basic setup → navigate to knowledge page →
+find the import panel → paste URL → wait → review. This is an 8-step process
+hidden in a secondary page. For Tandem 3.0, the import should be the first
+thing that happens, triggered by the AI during onboarding.
+
+F. NO PROGRESSIVE DISCLOSURE OF WHAT WAS LEARNED
+The current apply flow applies the full import draft in one click (or
+optionally reviews it in the import panel). There is no moment where the
+AI explains to the operator what it found, frames it in human terms, and
+asks for confirmation with context. The experience is transactional, not
+guided.
+
+G. NO HANDOFF CONTACT COLLECTED DURING ONBOARDING
+After configuring knowledge, the most critical piece of information for a
+working chatbot is: how do guests reach a human when the bot can't help?
+The current onboarding never addresses this. Operators frequently launch
+their chatbot with no handoff contact configured.
+
+H. SETUP CHECKLIST IS POST-HOC AND PASSIVE
+The current setup checklist on the overview page (import menu, add 3 Q&As,
+configure live handoff, install widget) is shown after onboarding ends. It
+is a list of things left to do, not an active guide. It never explains why
+each item matters and does not use the AI to complete them conversationally.
+
+---
+
+3. TANDEM 3.0 ONBOARDING PRINCIPLES
+======================================
+
+PRINCIPLE 1: THE AI ASSISTANT IS THE GUIDE
+Onboarding is a conversation, not a form. The operator reads messages from
+the Tandem AI, types replies, and the AI does the work. Forms exist only
+where text input of a URL or phone number is required — and those inputs
+are embedded inside the chat flow, not on separate pages.
+
+PRINCIPLE 2: CAPTURE THE WEBSITE URL AS STEP ONE
+The single most valuable piece of input an operator can give is their
+restaurant website URL. Everything downstream (hours, menu, FAQs, contact
+info, brand colors) can be extracted from it automatically. The URL must
+be collected at the very start of the flow, framed positively: "Your website
+is the fastest way to teach Tandem about your restaurant."
+
+PRINCIPLE 3: SHOW WORK IN PROGRESS
+During the website scan, the operator should see real-time status updates
+that explain what is being discovered. "Looking at your menu... Found your
+tasting hours... Reading your contact page..." This is not just polish — it
+teaches the operator what Tandem is doing and what kinds of knowledge it
+manages.
+
+PRINCIPLE 4: NARRATE THE EXTRACTION
+When the scan completes, the AI does not just say "Import complete." It
+says: "Here's what I learned about your restaurant." It presents the major
+extracted categories — hours, FAQs, contact info, menu summary — in plain
+language. The operator should feel like the AI just read their entire website
+and summarized it.
+
+PRINCIPLE 5: OPERATOR CONFIRMS, NOT APPROVES LINE BY LINE
+The confirmation step should not require reviewing 40 individual FAQ toggles.
+The AI presents categories of knowledge ("I found 12 FAQs. Here are the
+first three...") and asks for category-level approval. Individual editing
+happens later in the chatbot detail view. Onboarding is not the place for
+line-by-line review.
+
+PRINCIPLE 6: COLLECT HANDOFF CONTACT BEFORE LAUNCH
+After knowledge is confirmed, the AI asks for the primary contact method
+(phone number or reservation link). This is framed as: "One more thing —
+when guests need to talk to your team, where should the chatbot send them?"
+This ensures every chatbot that leaves onboarding has at least one handoff
+contact.
+
+PRINCIPLE 7: LAND ON A WORKING CHATBOT
+The final step of onboarding shows the operator the new Tandem 3.0 overview
+page with their live chatbot preview in the right column. At this moment,
+their chatbot already knows their hours, has Q&As populated, and has a
+handoff contact configured. The operator's first impression of the dashboard
+is: this is working.
+
+PRINCIPLE 8: ONBOARDING IS SKIPPABLE BUT NOT HIDDEN
+Operators who want to skip the guided flow should be able to. A "Skip to
+dashboard" link is always visible. But the default path should be the guided
+AI flow. Operators who skip receive a persistent "Finish setup" prompt chip
+in the AI sidebar on the first dashboard visit.
+
+---
+
+4. AI-GUIDED ONBOARDING FLOW
+==============================
+
+The Tandem 3.0 onboarding is a single-page experience at /onboarding.
+The page renders the same two-column layout as the console but without
+the navigation sidebar. The LEFT panel is the AI chat interface. The RIGHT
+panel is a contextual preview that changes with each stage.
+
+STAGE 0: ACCOUNT CREATION (pre-onboarding)
+------------------------------------------
+Route: /onboarding
+Trigger: First time the operator lands post-auth with no business record.
+
+The basic business info is collected first via a minimal form panel on the
+right, while the AI greets the operator in the left panel:
+
+LEFT PANEL (AI message):
+  "Welcome to Tandem! I'm your restaurant AI assistant.
+
+  I'll help you set up a chatbot that knows your menu, hours, and how to
+  handle guest questions — all in the next few minutes.
+
+  First, let's get a few basics so I know your restaurant."
+
+RIGHT PANEL (form):
+  ┌─────────────────────────────────────┐
+  │  Restaurant name  [____________]   │
+  │  First location   [____________]   │
+  │  Address (opt.)   [____________]   │
+  │                                    │
+  │  [ Get started →  ]                │
+  └─────────────────────────────────────┘
+
+On submit: POST /api/locations (exact same call as today).
+Immediately transition to Stage 1 (no page reload).
+
+Implementation note: The form submission sets a local state flag
+  onboardingStage: "website-url"
+which replaces the right panel with the Stage 1 panel.
+
+
+STAGE 1: WEBSITE URL COLLECTION
+---------------------------------
+Trigger: Business and location records exist. Stage flag = "website-url".
+
+LEFT PANEL (AI message, streamed in):
+  "Great, [Restaurant Name] is all set.
+
+  Now — do you have a restaurant website? If you paste the URL, I can
+  scan it to automatically learn your hours, menu, FAQs, and contact info.
+
+  This usually takes about 30–60 seconds and saves you a lot of setup time."
+
+LEFT PANEL (input chip embedded in chat):
+  ┌─────────────────────────────────────────┐
+  │  🌐 Your website URL                    │
+  │  [https://...                       ]   │
+  │  [ Scan my website ] [ Skip for now ]   │
+  └─────────────────────────────────────────┘
+
+The URL input is rendered inside the AI message stream as a controlled input
+component (not a separate form page). On "Scan my website": calls
+POST /api/website-import/start with the URL and current locationId.
+On "Skip for now": transitions to Stage 4 (manual setup path).
+
+RIGHT PANEL (during Stage 1):
+  A simple illustration or placeholder showing:
+  "Your chatbot will appear here once it's set up."
+
+Implementation note: The URL input inside the chat stream is a new
+component: <EmbeddedUrlInput /> rendered as part of the AI message.
+This is the only form element embedded in the stream throughout onboarding.
+
+
+STAGE 2: WEBSITE SCAN IN PROGRESS
+-----------------------------------
+Trigger: POST /api/website-import/start returns successfully with runId.
+
+LEFT PANEL (AI message, updated progressively):
+  Initial:
+    "Scanning [domain.com] now. I'll let you know what I find..."
+
+  As polling updates arrive (via GET /api/website-import/latest
+  with runId), the AI message updates in place with the pages being
+  visited. This is accomplished by the onboarding state machine subscribing
+  to polling events and inserting "status lines" into the AI message:
+
+    "Scanning [domain.com]..."
+    "  ✓ Found your homepage"
+    "  ✓ Reading your menu..."
+    "  ✓ Found your hours page"
+    "  ✓ Reading reservations info..."
+    "  ✓ Found contact details"
+    "  ✓ Checking for FAQs..."
+    "  ✓ Extracting knowledge..."
+
+  The status lines are driven by pageClassification results as they are
+  populated in the import run record. The polling interval is 2 seconds
+  (shorter than the worker's 5-second poll cycle, since the worker may
+  have already started processing).
+
+  The page type labels come from the crawl.ts classification:
+    "menu" → "Reading your menu"
+    "hours" → "Found your hours page"
+    "contact" → "Found contact details"
+    "reservations" → "Reading reservations info"
+    "events" → "Found events page"
+    "faq" → "Checking your FAQ page"
+    "about" → "Reading about page"
+    "policies" → "Found policies page"
+
+RIGHT PANEL (during scan):
+  A live progress display shows:
+  - Domain URL being scanned
+  - "Pages visited: [count] / [limit]"
+  - Animated crawl activity (pulsing dots or step tracker)
+  - Page type badges appearing as each type is discovered
+    (hours, menu, contact, FAQs, reservations — color-coded pills)
+
+  This right panel is the most educational surface in the product.
+  It teaches the operator that Tandem understands page types and is
+  learning specific topics from each page.
+
+STAGE 2 ERROR HANDLING:
+  If the worker returns status "failed":
+    If error code "dns_fail":
+      AI message: "I couldn't reach [domain.com]. Can you double-check
+      the URL? If your site uses a subdomain like 'www.domain.com' or
+      a path like '/location', try including that."
+      Returns to Stage 1 URL input.
+    If error code "blocked":
+      AI message: "Your website blocked my scan — this is common with
+      some platforms. No worries, I can set things up manually. What are
+      your hours?"
+      Transitions to Stage 4 (manual setup).
+    If error code "timeout":
+      AI message: "The scan is taking longer than expected. I've queued
+      it in the background. You can continue setting up manually, and I'll
+      apply any found data once the scan finishes."
+      Transitions to Stage 4 with background scan pending.
+    Default:
+      AI message: "The scan ran into a problem. Want to try again, or
+      should we set things up manually?"
+      Offers retry or skip.
+
+
+STAGE 3: SCAN RESULTS NARRATION
+---------------------------------
+Trigger: GET /api/website-import/latest returns status "succeeded".
+
+This is the most important moment in the onboarding flow. The AI does not
+just acknowledge completion — it narrates what it found in the operator's
+own frame of reference.
+
+LEFT PANEL (AI message, structured):
+  "I finished reading your website. Here's what I learned:
+
+  🕐 Hours
+     [Exact hours narrative from draft, e.g. "Tue–Sun, 11am–9pm. Closed Mondays."]
+
+  📋 Menu
+     Found [N] menu sections: [list first 3 section names].
+     [M] items total.
+
+  ❓ Q&As
+     Found [N] questions and answers your chatbot can use.
+     Examples:
+       • "Do you take reservations?" → Yes, [answer snippet]
+       • "Do you have outdoor seating?" → [answer snippet]
+       • "Is your kitchen nut-free?" → [answer snippet]
+
+  📞 Contact info
+     Found: [phone] / [email] (or "No phone found on your site")
+     Booking link: [booking platform URL if detected, e.g. OpenTable]
+
+  🎨 Brand colors
+     Picked up your primary color ([hex code]) and logo.
+
+  This looks like a solid starting point. Want me to add all of this to
+  your chatbot's knowledge base?"
+
+  ┌─────────────────────────────────────┐
+  │  [ ✓ Yes, set this up ]             │
+  │  [ Review details first ]           │
+  └─────────────────────────────────────┘
+
+RIGHT PANEL (scan results summary):
+  Shows a structured card per category:
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+    │  Hours       │  │  Menu        │  │  Q&As        │
+    │  ✓ Found     │  │  N sections  │  │  N items     │
+    └──────────────┘  └──────────────┘  └──────────────┘
+    ┌──────────────┐  ┌──────────────┐
+    │  Contact     │  │  Brand       │
+    │  ✓ Phone     │  │  ✓ Colors    │
+    │  ✓ Email     │  │  ✓ Logo      │
+    └──────────────┘  └──────────────┘
+
+  Each card is color-coded: emerald = found, orange = not found / partial.
+
+On "Yes, set this up":
+  Calls POST /api/website-import/:runId/apply
+  The existing apply.ts handler merges draft into business_location_configs.
+  Transitions to Stage 5 (handoff setup).
+
+On "Review details first":
+  Transitions to Stage 3b (detailed review).
+
+
+STAGE 3b: DETAILED REVIEW (optional)
+---------------------------------------
+Trigger: Operator clicked "Review details first" in Stage 3.
+
+RIGHT PANEL switches to a simplified version of WebsiteImportPanel.tsx.
+This is the same component already built (with FAQs, policies, hours toggles)
+but styled to fit the onboarding single-page context.
+
+LEFT PANEL (AI message):
+  "Here's a detailed breakdown. You can toggle off anything that doesn't
+  look right before I add it to your chatbot's knowledge base.
+
+  Once you're ready, hit Apply and we'll move on."
+
+The operator can:
+  - Toggle individual FAQ items off
+  - Toggle individual policy items off
+  - View the hours narrative
+  - See brand color swatches
+  - See the booking link if found
+
+After reviewing: "Apply selected items →" button calls
+POST /api/website-import/:runId/apply with include/exclude flags.
+Transitions to Stage 5.
+
+
+STAGE 4: MANUAL SETUP PATH (skip/scan failure)
+------------------------------------------------
+Trigger: Operator skipped URL entry, or scan failed with guidance to manual.
+
+This is the fallback path when no website scan is available. The AI takes
+over as the conversational setup guide.
+
+LEFT PANEL (AI message sequence):
+  "No problem — let's set things up together. I'll ask you a few quick
+  questions to get your chatbot ready."
+
+  QUESTION 1 (Hours):
+    "What are your hours? You can write it however you'd like — like
+    'Tuesday through Sunday 11am to 9pm, closed Mondays.'"
+    → Operator types free-text hours.
+    → AI calls set_business_hours tool (once tool calling is implemented).
+    → AI confirms: "Got it — I've added your hours."
+
+  QUESTION 2 (Contact):
+    "What's the best way for guests to reach your team? A phone number,
+    email, or reservation link all work."
+    → Operator types.
+    → AI calls set_handoff_contact tool.
+    → AI confirms: "Added to your handoff contacts."
+
+  QUESTION 3 (Common FAQ):
+    "What's one question guests ask all the time? I'll add it to your FAQ."
+    → Operator types question + answer (or AI suggests one).
+    → AI calls add_faq tool.
+    → AI confirms: "Added to your Q&As."
+
+  After 3 questions, AI transitions to Stage 5.
+
+Note: Stage 4 requires the operator-chat tool calling capability described
+in docs/tandem3transition/operator-ai-tool-architecture.txt. Until that is
+implemented, Stage 4 can use a parallel form-based fallback (text inputs
+in the right panel hooked to the PUT /api/location-config endpoint directly).
+
+
+STAGE 5: HANDOFF CONTACT SETUP
+--------------------------------
+Trigger: After Stage 3 apply OR after Stage 4 questions complete.
+
+LEFT PANEL (AI message):
+  "Almost done! One last thing — when a guest needs to speak to someone on
+  your team, where should the chatbot send them?
+
+  This is the 'Get more help' button they'll see in the chat widget."
+
+LEFT PANEL (input chips embedded in chat):
+  ┌───────────────────────────────────────────────┐
+  │  📞 Phone number  [                       ]   │
+  │  🔗 Reservation link  [                   ]   │
+  │  📧 Email  [                              ]   │
+  │  [ Save contact method ]  [ Skip for now ] │
+  └───────────────────────────────────────────────┘
+
+On "Save contact method":
+  Calls PUT /api/location-config with the handoff contact.
+  (Or, once tool calling is live: routes through /api/operator-chat/confirm
+  using set_handoff_contact tool after AI confirmation.)
+  AI confirms: "Perfect — your team is now reachable."
+  Transitions to Stage 6.
+
+On "Skip for now":
+  AI message: "You can add a contact method anytime from your dashboard.
+  Let me show you what your chatbot looks like now."
+  Transitions to Stage 6.
+
+Note: If the operator is coming from Stage 3 (website scan), and the scan
+already found contact info (phone, email, booking link), then Stage 5 skips
+the input form and instead asks:
+  "I found your phone number: [X]. Should I use this as your primary
+  contact for the chatbot?"
+  [ Yes ] [ No, use a different one ]
+
+
+STAGE 6: COMPLETION AND TRANSITION
+------------------------------------
+Trigger: Stage 5 complete or skipped.
+
+LEFT PANEL (AI message):
+  "Your chatbot is ready. Here's what it knows right now:
+
+  ✓ Hours: [brief hours summary]
+  ✓ [N] Q&As loaded
+  ✓ Contact method: [phone/email/link]
+  [✓ Brand colors applied]  (if scan ran)
+
+  The preview on the right shows exactly what your guests will see.
+  You can always update anything by telling me — just type what you want
+  to change."
+
+RIGHT PANEL:
+  Live ChatWidget preview using businessToWidgetConfig(activeBusiness).
+  The chatbot response to the first message shows that it knows the hours
+  and FAQs that were just configured.
+  Caption: "This is your chatbot — try asking it a question."
+
+After 3 seconds (or on operator interaction):
+  CTA button appears in LEFT PANEL:
+    [ → Go to my dashboard ]
+
+On click: router.replace("/overview")
+
+The dashboard overview page is the Tandem 3.0 redesign: two-column layout
+with state panels on the left and the live widget preview on the right.
+
+---
+
+5. WEBSITE SCAN WORKFLOW
+==========================
+
+SCAN TRIGGER AND ENTRY POINT
+------------------------------
+The scan is initiated from Stage 1 of the onboarding flow. The operator
+types or pastes their URL into the EmbeddedUrlInput component. On clicking
+"Scan my website", the onboarding client POSTs to:
+
+  POST /api/website-import/start
+  Body: { businessId, locationId, url, source: "onboarding" }
+
+The source: "onboarding" flag allows the backend to:
+  a. Track which import runs originated from onboarding (for analytics).
+  b. Potentially adjust post-apply behavior (e.g., skip apply confirmation
+     and go directly to Stage 3 narration in the onboarding context, rather
+     than staying on the knowledge page).
+
+SCAN EXECUTION
+---------------
+The actual crawl and extraction happen asynchronously in the worker:
+  scripts/worker/website-import-worker.ts
+
+The worker:
+  1. Polls onboarding_import_runs every 5 seconds for status = "queued".
+  2. Claims the row atomically (queued → running) with worker_id.
+  3. Calls runWebsiteImport(url) from apps/dashboard/src/lib/website-import/run.ts.
+  4. runWebsiteImport() calls crawlWebsite() → buildWebsiteImportResult().
+  5. Stores the WebsiteImportResult as result_json in the run record.
+  6. Updates status to "succeeded" or "failed" with error code and message.
+
+SCAN PROGRESS POLLING
+----------------------
+The onboarding UI polls GET /api/website-import/latest?runId=X every 2
+seconds to check for status changes and partial results.
+
+The progress display in Stage 2 is driven by:
+  - run.status: "queued" | "running" | "succeeded" | "failed"
+  - run.result_json.draft.pageClassification (array of { url, pageType })
+    Each entry represents a page that was classified.
+  - run.result_json.draft.restaurantKnowledge (populated when extraction done)
+
+As pageClassification entries arrive, the left panel AI message adds status
+lines for each page type encountered. The right panel updates its discovery
+badges in real time.
+
+SCAN LIMITS AND BEHAVIOR
+--------------------------
+The crawl is governed by WEBSITE_IMPORT_LIMITS in website-import/utils.ts:
+  - Maximum pages to crawl (configurable)
+  - Request timeout per page
+  - Depth limit
+
+The onboarding experience does not need to change these limits. The existing
+worker infrastructure handles timeouts and error classification already via
+classifyImportError() in the worker.
+
+RESULT DATA STRUCTURE
+----------------------
+On success, the import run record contains a WebsiteImportResult in result_json:
+  {
+    draft: WebsiteImportDraft {
+      businessName, shortDescription,
+      phone, email, address,
+      hours (narrative string),
+      brand { primaryColor, accentColor, backgroundColor, textColor, fontFamily, logoUrl },
+      faqs: ImportFaq[],
+      policies: ImportPolicy[],
+      restaurantKnowledge: {
+        menuSections: ImportMenuSection[],
+        events: ImportEvent[],
+        reservations: ImportReservationInfo,
+        memberships: ImportMembershipInfo
+      },
+      pageClassification: Array<{ url, title, pageType }>
+    },
+    sourceUrl, crawledAt, pageCount
+  }
+
+This draft is what the Stage 3 narration reads to construct its summary.
+
+---
+
+6. KNOWLEDGE EXTRACTION PIPELINE
+===================================
+
+PIPELINE OVERVIEW
+------------------
+Website knowledge flows through three sequential stages before being committed
+to the chatbot's knowledge base:
+
+  Stage A: CRAWL (crawl.ts)
+  Stage B: EXTRACT (extract.ts, via llmGenerate)
+  Stage C: APPLY (apply.ts, via location-config PUT)
+
+STAGE A: CRAWL
+--------------
+crawlWebsite(url) fetches the root page, parses links, scores and prioritizes
+candidate URLs using linkPriorityScore(), and crawls up to the page limit.
+
+Classification signals drive the page score:
+  - Links in <nav>, <header>, <footer> get higher weight.
+  - Paths matching /menu, /hours, /contact, /faq, /reservations, /events get
+    HIGH_SIGNAL_PATHS boost.
+  - Links to booking platforms (OpenTable, Resy, Tock, Toast, SevenRooms)
+    are captured as booking signals.
+
+For each page, extraction produces:
+  - textExcerpt (plain text of the page content, truncated)
+  - title
+  - pageType (classified by path + title pattern matching)
+  - The raw HTML is not stored — only the text excerpt and signals.
+
+Signal extraction per page:
+  - EMAIL_PATTERN: \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+  - PHONE_PATTERN: E.164-like patterns
+  - HOURS_PATTERN: Day-of-week followed by time range patterns
+  - ADDRESS_PATTERN: US street address pattern
+  - BOOKING_PLATFORM_REGEX: opentable, resy, tock, toasttab, sevenrooms
+
+crawlWebsite() returns: { pages: CrawledPage[], signals: ImportSignals }
+
+STAGE B: EXTRACT
+-----------------
+buildWebsiteImportResult(sourceUrl, pages, signals) calls llmGenerate()
+with all crawled page excerpts and a structured extraction prompt.
+
+The LLM produces a RawDraft JSON object which is then normalized into
+WebsiteImportDraft. Key extractions:
+
+  HOURS:
+    - Narrative: free-text hours string for chatbot knowledge
+    - Source URL tracked for attribution
+    - Merged with HOURS_PATTERN signal match as fallback
+
+  FAQs (ImportFaq[]):
+    - Generated from: explicit FAQ pages (isLikelyFaqPage heuristic),
+      policy pages, menu items that could trigger questions,
+      reservation info that implies common questions
+    - Each entry: { id, question, answer, source_url, include: true }
+    - include defaults to true; operator can toggle off in review
+    - LLM is prompted to generate FAQ pairs that match real guest queries
+
+  POLICIES (ImportPolicy[]):
+    - Extracted from reservation policies, cancellation terms, dining rules,
+      dress code, parking, group booking terms
+    - Each entry: { id, title, summary, source_url, include: true }
+
+  MENU (ImportMenuSection[]):
+    - Section name, items list, dietary flags
+    - Stored in restaurantKnowledge.menuSections
+    - Surfaced in Stage 3 narration as section count / item count
+
+  EVENTS (ImportEvent[]):
+    - Name, description, schedule hints
+    - Stored in restaurantKnowledge.events
+
+  RESERVATIONS (ImportReservationInfo):
+    - Platform (OpenTable, Resy, etc.), booking URL, guidance text
+    - Stored in restaurantKnowledge.reservations
+
+  BRAND:
+    - Primary color, accent color, background color, text color (hex)
+    - Logo URL (if found in og:image or site header)
+    - Font family (if specified in meta/CSS)
+    - These feed into the widget theme at apply time
+
+WHAT GETS AUTO-APPLIED TO CHATBOT KNOWLEDGE AT APPLY TIME:
+  apply.ts / mergeImportDraftToConfig():
+    - hours → knowledge_config.knowledgeProgram.fields.hours
+    - faqs (include=true) → knowledge_config.knowledgeProgram.faqs (appended)
+    - policies (include=true) → knowledge_config.knowledgeProgram.policies (appended)
+    - brand → widget_config.theme (merged via normalizeWidgetTheme)
+    - restaurantKnowledge → knowledge_config.knowledgeProgram fields:
+        menuSections, events, reservations, memberships
+    - businessName, phone, email, address, hours →
+        knowledge_config.businessProfile (merged)
+
+WHAT IS NOT AUTO-APPLIED:
+  - Social links (informational only, not chatbot knowledge)
+  - Source URLs (attribution metadata, not surfaced to guests)
+  - Raw HTML (not stored)
+
+FAQ QUALITY HEURISTICS (faq-heuristics.ts):
+  isLikelyFaqPage() detects explicit FAQ pages by URL + title patterns.
+  normalizeFaqCandidate() cleans up LLM-generated Q&A pairs:
+    - Trims whitespace, normalizes question marks
+    - Filters out questions that are too short or too generic
+    - Deduplicates by semantic similarity (basic string overlap check)
+
+---
+
+7. CONFIRMATION AND REVIEW UX
+===============================
+
+CATEGORY-LEVEL CONFIRMATION IN ONBOARDING
+-------------------------------------------
+The onboarding confirmation UX is deliberately lighter than the full
+WebsiteImportPanel review flow. The goal is speed-to-value, not exhaustive
+review. The AI presents category-level summaries and asks for one approval
+per category group:
+
+  "I found 12 Q&As. Here are the first three:
+   • Do you take reservations? → Yes, book at [link]
+   • Are you dog-friendly? → We have a dog-friendly patio
+   • Do you have a gluten-free menu? → Yes, ask your server
+
+  Should I add all 12 to your chatbot's knowledge?"
+
+   [ ✓ Add all Q&As ] [ Review individually ] [ Skip Q&As ]
+
+This gives the operator three affordances:
+  1. Bulk accept (most common path)
+  2. Line-by-line review (opens Stage 3b inline review panel)
+  3. Skip entirely (the chatbot will still work; Q&As can be added later)
+
+CATEGORY GROUPS PRESENTED IN STAGE 3:
+  1. Hours — single confirmation ("I found your hours. Does this look right?")
+  2. Q&As (faqs) — count + 3 examples + bulk confirm
+  3. Contact info — phone / email / booking link preview + confirm
+  4. Menu — section count summary (no line-by-line in onboarding)
+  5. Brand colors — color swatches, brief confirm ("Using your site's colors")
+
+WHAT IS SKIPPED DURING ONBOARDING REVIEW:
+  - Individual policy items (applied by default, editable later)
+  - Individual menu items (applied by default, editable later)
+  - Events, memberships (applied by default, shown in /chatbot > Knowledge later)
+  - Brand font (applied by default)
+
+INLINE REVIEW PANEL (Stage 3b):
+  When operator clicks "Review individually" for Q&As, the right panel
+  switches to a simplified WebsiteImportPanel showing only the FAQs section.
+  Each FAQ has an include/exclude toggle. The "Apply" button re-calls
+  POST /api/website-import/:runId/apply with updated include flags.
+
+  This is the same WebsiteImportPanel.tsx component already built. In the
+  onboarding context it is stripped of the URL input, status polling, and
+  the "Apply all" bulk section — only the FAQ list with toggles is shown.
+
+CONFLICT RESOLUTION:
+  If the operator already manually entered hours in Stage 4 (manual path)
+  and then the background scan completes with different hours, the AI
+  prompts: "The website scan found different hours from what you told me.
+  Which is correct: [website hours] or [what you said]?"
+  The operator picks one, and the selected value is saved via PUT /api/location-config.
+
+CHANGE PERSISTENCE:
+  All confirmed changes are written to business_location_configs in Supabase
+  via the apply endpoint or PUT /api/location-config. MockState in localStorage
+  is updated in parallel using updateMockState() so that the overview page
+  panels reflect the changes immediately without requiring a Supabase read
+  on every navigation.
+
+POST-ONBOARDING REVIEW ACCESS:
+  After onboarding completes, the operator can return to any extracted item
+  via the /chatbot page (Tandem 3.0 nav). The /chatbot > Knowledge tab shows
+  all FAQs with edit/delete. The /chatbot > Behavior tab shows tone and
+  training rules. Individual items can be edited by talking to the AI sidebar
+  on any page.
+
+---
+
+8. FIRST DASHBOARD EXPERIENCE
+================================
+
+LANDING STATE
+--------------
+After the operator clicks "→ Go to my dashboard" at the end of onboarding:
+  router.replace("/overview")
+
+The /overview page in Tandem 3.0 is the redesigned two-column state dashboard
+described in docs/tandem3transition/dashboard-redesign-plan.txt §5.
+
+The operator lands on a page that shows:
+
+LEFT COLUMN (state panels):
+  ┌─────────────────────────────────────────────────┐
+  │  HEADER: [Restaurant Name] • [Address]          │
+  │  Health bar: Hours ✓  |  Knowledge ✓  |  Handoff ✓  │
+  ├──────────────────────────────────────────────────┤
+  │  OPERATING HOURS PANEL                           │
+  │  [Extracted hours narrative or structured blocks]│
+  │  💬 Say: "Update my hours"                       │
+  ├──────────────────────────────────────────────────┤
+  │  KNOWLEDGE PANEL                                 │
+  │  "12 Q&As"                                       │
+  │  • Do you take reservations? → Yes...            │
+  │  • Are you dog-friendly? → Yes, patio...         │
+  │  • Do you have GF options? → Yes, ask server...  │
+  │  💬 Say: "Add a Q&A"                             │
+  ├──────────────────────────────────────────────────┤
+  │  HANDOFF CONTACTS PANEL                          │
+  │  Online ●  Front desk: (555) 123-4567            │
+  │  💬 Say: "Add a contact method"                  │
+  ├──────────────────────────────────────────────────┤
+  │  RECENT CONVERSATIONS                            │
+  │  (empty state: "No conversations yet.            │
+  │   Install the widget to start.")                 │
+  └──────────────────────────────────────────────────┘
+
+RIGHT COLUMN (live widget preview, sticky):
+  ┌───────────────────────────────────┐
+  │  [             ☰ ]               │
+  │  ╔═══════════════════════════╗   │
+  │  ║  [Restaurant Logo]        ║   │
+  │  ║  Hi! Ask me about our     ║   │
+  │  ║  menu, hours, or events.  ║   │
+  │  ╚═══════════════════════════╝   │
+  │                                  │
+  │  This is what guests see on      │
+  │  your website.                   │
+  │  ▾ Install snippet               │
+  └───────────────────────────────────┘
+
+LEFT PANEL (AI sidebar, pre-filled greeting):
+  "Hi! Your chatbot is ready. Here's what guests can ask about:
+  hours, [top 3 FAQ categories], and how to reach your team.
+
+  Want to install the widget on your site? I can show you how.
+  Or you can refine anything — just tell me what to change."
+
+KEY FIRST-VISIT DIFFERENCES FROM CURRENT OVERVIEW:
+  - No setup checklist (replaced by health badges in header)
+  - No empty stat cards showing zero conversations with no context
+  - AI sidebar shows contextual greeting, not generic QUICK_ACTIONS
+  - Widget preview is visible without any click
+  - Every panel has a prompt chip connecting it to the AI sidebar
+  - The chatbot actually has knowledge from onboarding — not empty
+
+INSTALL WIDGET PROMPT:
+  Directly below the widget preview is a collapsible "Install snippet"
+  section with the embed script pre-filled with the operator's businessSlug
+  and locationSlug. The AI sidebar is ready to walk them through the
+  installation if they ask: "How do I add this to my website?"
+
+FIRST-TIME OVERLAY (optional):
+  On the very first visit to /overview post-onboarding, a single
+  non-blocking toast notification appears for 5 seconds:
+    "✓ Setup complete. Your chatbot is live."
+  This uses the Toaster component from @tandem/ui-kit.
+  No modals, no overlays, no forced tours. Just one moment of confirmation.
+
+NAVIGATION STATE POST-ONBOARDING:
+  The left panel AI sidebar shows the Tandem 3.0 contextual greeting,
+  not the current generic QUICK_ACTIONS chips. The sidebar has access to
+  all 9 operator tools (once tool calling is implemented) and can begin
+  making changes immediately.
+
+  Navigation items visible:
+    Home (overview) — selected
+    Conversations
+    My Chatbot
+    Account
+  (Per the 4-section simplified nav in dashboard-redesign-plan.txt §4.)
+
+---
+
+9. IMPLEMENTATION STRATEGY
+============================
+
+PHASE 0: PREREQUISITES (no new code yet — validate what exists)
+----------------------------------------------------------------
+Before building the new onboarding, verify:
+
+  a. POST /api/website-import/start works end-to-end in dev.
+     Run: npm run dev + manual POST via curl or UI to confirm queuing.
+
+  b. scripts/worker/website-import-worker.ts processes a run successfully.
+     Run: ts-node scripts/worker/website-import-worker.ts with a test URL.
+
+  c. GET /api/website-import/latest returns expected result_json structure.
+
+  d. POST /api/website-import/:runId/apply populates business_location_configs
+     correctly and can be verified via GET /api/location-config.
+
+  e. businessToWidgetConfig() maps the post-apply config to a valid
+     WidgetContentConfig that ChatWidget can render with real content.
+
+These validations ensure the pipeline is production-functional before
+onboarding UX is built around it.
+
+
+PHASE 1: ENHANCED ONBOARDING PAGE (core flow, no AI tool calling)
+------------------------------------------------------------------
+Files to create / modify:
+
+  MODIFY:
+    apps/dashboard/src/app/onboarding/page.tsx
+      - Replace the current simple form with the multi-stage onboarding state machine.
+      - Implement stages 0 → 1 → 2 → 3 → 5 → 6 using local React state.
+      - Stage machine: type OnboardingStage = "basics" | "website-url" |
+          "scanning" | "results" | "review" | "handoff" | "complete"
+      - All AI messages are hardcoded strings in Phase 1 (no streaming).
+      - Import: WebsiteImportPanel for Stage 3b review panel.
+
+  CREATE:
+    apps/dashboard/src/app/onboarding/components/EmbeddedUrlInput.tsx
+      - URL input + "Scan" / "Skip" buttons rendered inside AI message area.
+
+    apps/dashboard/src/app/onboarding/components/ScanProgressPanel.tsx
+      - Right panel showing crawl status, page type badges, progress animation.
+
+    apps/dashboard/src/app/onboarding/components/ScanResultsNarration.tsx
+      - AI narration panel + category cards (hours, Q&As, contacts, brand).
+
+    apps/dashboard/src/app/onboarding/components/HandoffInputPanel.tsx
+      - Stage 5 contact method input embedded in chat area.
+
+    apps/dashboard/src/app/onboarding/components/OnboardingChatMessage.tsx
+      - A styled message bubble showing AI content in the left panel.
+
+  WIRE UP (no new API routes needed for Phase 1 — reuse existing):
+    POST /api/website-import/start
+    GET  /api/website-import/latest  (polling)
+    POST /api/website-import/:id/apply
+    PUT  /api/location-config  (handoff contact in Stage 5)
+
+
+PHASE 2: STREAMING AI NARRATION
+---------------------------------
+Replace hardcoded onboarding messages with streamed responses from
+/api/operator-chat, adding an onboarding-specific system prompt context.
+
+  MODIFY:
+    apps/dashboard/src/app/api/operator-chat/route.ts
+      - Accept a query param or body flag: ?context=onboarding
+      - When context=onboarding, use a specialized system prompt that:
+          a. Knows the current onboarding stage
+          b. Knows what the scan found (passed as context)
+          c. Generates the narration message for Stage 3
+      - The stage-specific context is passed as additional system prompt text:
+          onboardingContext: { stage, scanResult: { hoursSummary, faqCount,
+            topFaqs (first 3), contactFound, menuSectionCount } }
+
+  MODIFY:
+    apps/dashboard/src/app/onboarding/page.tsx
+      - Replace hardcoded AI messages with streamed responses from
+        /api/operator-chat?context=onboarding, passing stage and scan data.
+      - Use the same streaming pattern as ConsoleSidebar (reader.read() loop).
+
+
+PHASE 3: OPERATOR TOOL CALLING IN ONBOARDING (depends on tool arch)
+--------------------------------------------------------------------
+Once the operator AI tool calling system from operator-ai-tool-architecture.txt
+is implemented (the 9 tools, confirmation flow, /api/operator-chat/confirm route):
+
+  Stage 4 (manual setup path) is upgraded:
+    - AI asks hours question → receives natural language answer → calls
+      set_business_hours tool → shows PendingChange confirmation card →
+      operator confirms → hours written to Supabase.
+    - AI asks contact question → set_handoff_contact tool → confirm → saved.
+    - AI asks FAQ question → add_faq tool → confirm → saved.
+
+  Stage 5 (handoff):
+    - Instead of the HandoffInputPanel form, the AI uses the confirmation
+      card flow: "I'll add this phone number as your primary contact.
+      Confirm?" → operator clicks Confirm → set_handoff_contact executes.
+
+  Stage 6 completion message can reflect tool-written state directly from
+  Supabase (fresh read), not from draft state.
+
+
+PHASE 4: TANDEM 3.0 OVERVIEW PAGE
+------------------------------------
+This is the destination landing page after onboarding. It requires the
+full dashboard redesign described in dashboard-redesign-plan.txt:
+
+  MODIFY:
+    apps/dashboard/src/app/(console)/overview/page.tsx
+      - Replace current content (stat cards, activity chart, setup checklist)
+        with the two-column layout described in §5 of the redesign plan.
+      - Add: HoursPanel, KnowledgePanel, BehaviorPanel, HandoffPanel,
+        RecentConversationsPanel, HealthSummaryBar components.
+      - Add: inline ChatWidget right column (live preview).
+      - Add: prompt chips wired to AISidebarContext.prefillInput().
+
+  CREATE:
+    apps/dashboard/src/components/AISidebarContext.tsx
+      - Context providing prefillInput(text: string) for prompt chips.
+
+    apps/dashboard/src/components/PromptChip.tsx
+      - Reusable "💬 Say: [text]" chip component.
+
+
+IMPLEMENTATION ORDER AND DEPENDENCIES:
+
+  Step 1 (unblock): Validate the existing import pipeline end-to-end (Phase 0).
+  Step 2: Build the onboarding state machine with hardcoded messages (Phase 1).
+  Step 3: Test with a real restaurant URL in dev.
+  Step 4: Add streaming AI narration for Stage 3 (Phase 2).
+  Step 5: Build the new overview page destination (Phase 4 — can run in parallel).
+  Step 6: Add operator tool calling to Stage 4 manual path (Phase 3 — depends on
+          tool arch implementation from operator-ai-tool-architecture.txt).
+
+
+ROUTING LOGIC (when to show onboarding):
+-----------------------------------------
+  The current route guard at apps/dashboard/src/middleware.ts (or equivalent)
+  should redirect to /onboarding when:
+    - User is authenticated
+    - User has no business membership record
+  
+  And also conditionally when:
+    - User has a business but onboarding_completed flag is false
+      (add onboarding_completed boolean to businesses or business_memberships table)
+  
+  After onboarding completion: set onboarding_completed = true on the business
+  membership record. This prevents re-showing onboarding on subsequent logins.
+  The DB migration for this field is minimal (one boolean column with default false).
+
+
+API ROUTE CHANGES SUMMARY:
+---------------------------
+  No new API routes required for Phase 1 — all existing routes are reused.
+
+  Optional additions for Phase 2+:
+    GET /api/onboarding/status
+      Returns: { stage, hasWebsiteUrl, lastImportRunId, onboardingComplete }
+      This allows the UI to resume onboarding state on page refresh.
+
+    POST /api/onboarding/complete
+      Marks onboarding_completed = true on the business membership.
+      Called when operator clicks "Go to my dashboard" in Stage 6.
+
+  These are one-line route handlers using existing Supabase client patterns.
+
+
+DATABASE CHANGES REQUIRED:
+----------------------------
+  MINIMAL — only one new column needed for Phase 1:
+    ALTER TABLE businesses ADD COLUMN onboarding_completed BOOLEAN DEFAULT false;
+  
+  OR alternatively on business_memberships:
+    ALTER TABLE business_memberships ADD COLUMN onboarding_completed BOOLEAN DEFAULT false;
+  
+  The per-membership version is preferred so that if an employee is added to an
+  existing business, their first login doesn't re-trigger onboarding.
+
+  No other schema changes are required for the onboarding flow. The existing
+  onboarding_import_runs table already handles all scan state.
+
+  New migration: supabase/migrations/<timestamp>_onboarding_completed.sql
+
+
+---
+
+10. SUMMARY FOR NEXT AGENT
+=============================
+
+Context this agent was provided:
+  - docs/tandem3transition/tandem-3-architecture-audit.txt (full read)
+  - docs/tandem3transition/operator-ai-tool-architecture.txt (full read)
+  - docs/tandem3transition/dashboard-redesign-plan.txt (full read)
+  - apps/dashboard/src/app/onboarding/page.tsx (read)
+  - apps/dashboard/src/components/WebsiteImportPanel.tsx (read)
+  - apps/dashboard/src/lib/website-import/run.ts, crawl.ts, extract.ts (read)
+  - scripts/worker/website-import-worker.ts (read)
+  - apps/dashboard/src/app/api/operator-chat/route.ts (read)
+
+What this document defines:
+  A complete AI-guided onboarding flow for Tandem 3.0. The flow has 6 stages:
+  (0) Business basics form → (1) Website URL collection → (2) Scan in progress →
+  (3) Scan results narration → (5) Handoff contact → (6) Completion + dashboard.
+  Stage 4 is a fallback for operators without a website or when the scan fails.
+
+What was NOT designed here (out of scope for onboarding doc):
+  - The actual implementation of operator AI tool calling (see operator-ai-tool-architecture.txt)
+  - The full Tandem 3.0 overview page design (see dashboard-redesign-plan.txt)
+  - Changes to the customer-facing chatbot (not part of onboarding)
+  - Integration connectors (Toast, OpenTable) — stub remains
+
+Where to start if implementing:
+  1. Read Phase 0 in §9 of this document.
+  2. File: apps/dashboard/src/app/onboarding/page.tsx — this is the primary file to rewrite.
+  3. The onboarding should be implemented as a self-contained state machine in this file,
+     importing WebsiteImportPanel for the Stage 3b inline review.
+  4. All import API routes already exist — no new backend work required for Phase 1.
+  5. The onboarding page does not need ConsoleSidebar — it has its own AI message area.
+  6. For the landing destination, apps/dashboard/src/app/(console)/overview/page.tsx
+     needs the Tandem 3.0 redesign (see dashboard-redesign-plan.txt §5).
+
+Key integration points to be aware of:
+  - POST /api/website-import/start → requires locationId from the newly created location
+  - The worker must be running (scripts/worker/website-import-worker.ts) for scans to process
+  - In dev without the worker running, scans will queue but never process — add a dev note
+  - businessToWidgetConfig() is the bridge between configured state and widget preview
+  - updateMockState() must be called after each confirmed change so the UI reflects it
+
+Risks:
+  - Worker must be running for scans to work — in production this requires a background
+    process; in Vercel deploy context this needs to be a cron job or external worker.
+  - Phase 3 (tool calling in manual path) depends on operator-ai-tool-architecture.txt
+    being implemented first — it should not block Phase 1 or Phase 2.
+  - The onboarding_completed flag needs a DB migration before routing logic can use it.
+  - If the operator closes their browser during Stage 2 (scan in progress), onboarding
+    state is lost (React local state). Phase 2 adds GET /api/onboarding/status to allow
+    resumption — this should be prioritized.
+
+Files most relevant to implementation:
+  apps/dashboard/src/app/onboarding/page.tsx            (primary: rewrite this)
+  apps/dashboard/src/components/WebsiteImportPanel.tsx  (import for Stage 3b)
+  apps/dashboard/src/lib/website-import/types.ts        (types for draft/result)
+  apps/dashboard/src/app/api/operator-chat/route.ts     (Phase 2: streaming narration)
+  apps/dashboard/src/app/(console)/overview/page.tsx    (Phase 4: landing destination)
+  scripts/worker/website-import-worker.ts               (prerequisite: must be running)
+  supabase/migrations/                                  (new: onboarding_completed col)
+
+This document is ready to hand off to a coding agent for Phase 1 implementation.

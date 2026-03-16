@@ -1,0 +1,1965 @@
+TANDEM 3.0 — IMPLEMENTATION ROADMAP
+=====================================
+Document version: 1.0
+Date: 2026-03-15
+Author: Generated from architecture audit + design documents
+Status: APPROVED FOR IMPLEMENTATION
+
+Prerequisite reading (read in this order before writing any code):
+  docs/tandem3transition/tandem-3-architecture-audit.txt
+  docs/tandem3transition/operator-ai-tool-architecture.txt
+  docs/tandem3transition/dashboard-redesign-plan.txt
+  docs/tandem3transition/onboarding-flow-design.txt
+
+---
+
+TABLE OF CONTENTS
+=================
+ 1. High-Level Transition Strategy
+ 2. Phase Dependency Map
+ 3. Phase 1 — Stabilize Website Import Pipeline
+ 4. Phase 2 — Build New Onboarding Flow
+ 5. Phase 3 — Implement Operator AI Tool Architecture
+ 6. Phase 4 — Build Tandem 3.0 Dashboard
+ 7. Phase 5 — Integrate AI Control of Dashboard Settings
+ 8. Phase 6 — Usage Limits and Token Cost Controls
+ 9. Phase 7 — Documentation Updates
+10. Phase 8 — Launch Readiness
+11. Database Migrations Summary
+12. Backend Changes Summary
+13. Frontend Changes Summary
+14. AI System Changes Summary
+15. Worker / Background Process Considerations
+16. Testing Strategy
+17. Deployment Strategy
+18. Risk Analysis
+19. Rollback Strategy
+20. Development Effort Summary
+
+---
+
+1. HIGH-LEVEL TRANSITION STRATEGY
+====================================
+
+TANDEM 2.0 STATE (starting point)
+  - 12 form-based console pages managed by operators manually.
+  - AI sidebar (ConsoleSidebar.tsx) is advisory only — read-only text responses.
+  - Website import pipeline exists but is buried in the Knowledge page.
+  - Onboarding is a 3-field form with no AI involvement.
+  - Mock state in localStorage is the primary runtime state.
+  - No operator chat session persistence.
+  - No usage tracking or cost controls.
+  - Every configuration action requires human navigation and form submission.
+
+TANDEM 3.0 TARGET STATE
+  - AI sidebar is the single write surface — operators type to configure.
+  - Dashboard pages are read-only reflections of chatbot state.
+  - Onboarding is conversational — AI guides operators through setup in minutes.
+  - Website import feeds directly into onboarding, not a secondary page.
+  - 4 top-level nav sections replace 9+ CRUD pages.
+  - Configuration changes persist to Supabase via authenticated tool execution.
+  - UI refreshes instantly after AI-confirmed changes (no page reload).
+  - Token usage is tracked internally for cost visibility.
+
+TRANSITION PRINCIPLES
+---------------------
+
+1. PRESERVE THE CUSTOMER CHATBOT.
+   The customer-facing chat stack (/api/chat, chat-handler.ts, ChatWidget.tsx)
+   is production-quality. Every phase must treat it as read-only. No
+   refactoring, no route changes, no behavior modifications. The guardrails,
+   streaming, injection detection, and KnowledgeProgram-based system prompt
+   are correct as built.
+
+2. ADDITIVE-FIRST, DESTRUCTIVE-LAST.
+   New pages and routes are created before old ones are deleted. Redirects
+   are added before old page files are removed. This ensures no broken
+   navigation at any stage during development.
+
+3. BACKEND BEFORE FRONTEND.
+   The AI tool calling backend (Phase 3) should be built and validated via
+   API testing before the confirmation UI (Phase 4-5) is wired. You can
+   verify /api/operator-chat/confirm writes correctly to Supabase with curl
+   before ConsoleSidebar is updated.
+
+4. FEATURE FLAGS ARE NOT NEEDED.
+   Each phase produces a shippable increment that does not break the existing
+   system. Pages being rebuilt receive new routes first; old routes redirect
+   after the new destination is complete. The 2.0 pages remain accessible
+   until explicitly removed in Phase 4.
+
+5. MOCK STORE IS A BRIDGE, NOT THE DESTINATION.
+   In the transition period, the mock store in localStorage remains the
+   local state layer. AI-confirmed writes update both the mock store AND
+   Supabase. The mock store remains correct for all dashboard rendering.
+   Moving to fully server-authoritative UI reads is a post-3.0 concern.
+
+6. SECURITY IS NON-NEGOTIABLE AT EVERY PHASE.
+   The AI tool calling surface (Phases 3-5) is a new write path into the
+   database. Every change must be: authenticated (Supabase session), authorized
+   (membership check), validated (zod schema), logged (console.info with
+   userId, locationId, toolName). These checks are not optional and cannot
+   be deferred.
+
+7. TYPE SAFETY THROUGHOUT.
+   npm run typecheck must pass at the end of each phase. No phase ships with
+   TypeScript errors. Lint must also pass. These gates are the primary
+   automated quality checks available in this codebase.
+
+---
+
+2. PHASE DEPENDENCY MAP
+=========================
+
+                    ┌─────────────────────────────────────────┐
+                    │  BEFORE PHASE 1: Read all 4 design docs  │
+                    └─────────────────────────┬───────────────┘
+                                              │
+                              ┌───────────────▼───────────────┐
+                              │  Phase 1: Stabilize Import     │
+                              │  Pipeline (prerequisite)       │
+                              └───────────────┬───────────────┘
+                                              │
+                    ┌─────────────────────────┴──────────────────────┐
+                    │                                                  │
+       ┌────────────▼───────────┐                    ┌───────────────▼──────────────┐
+       │  Phase 2: New          │                    │  Phase 3: Operator AI Tool   │
+       │  Onboarding Flow       │                    │  Architecture (backend)      │
+       └────────────┬───────────┘                    └───────────────┬──────────────┘
+                    │                                                  │
+                    │                    ┌─────────────────────────────┤
+                    │                    │                             │
+                    │       ┌────────────▼───────────┐                │
+                    │       │  Phase 4: Tandem 3.0   │                │
+                    │       │  Dashboard (frontend)  │                │
+                    │       └────────────┬───────────┘                │
+                    │                    │                             │
+                    └────────────────────┴─────────────────────────┐  │
+                                                                    │  │
+                                              ┌─────────────────────▼──▼──────────┐
+                                              │  Phase 5: Integrate AI Control     │
+                                              │  of Dashboard Settings             │
+                                              └─────────────────────┬──────────────┘
+                                                                    │
+                                              ┌─────────────────────▼──────────────┐
+                                              │  Phase 6: Usage Limits and         │
+                                              │  Token Cost Controls                │
+                                              └─────────────────────┬──────────────┘
+                                                                    │
+                                              ┌─────────────────────▼──────────────┐
+                                              │  Phase 7: Documentation Updates    │
+                                              └─────────────────────┬──────────────┘
+                                                                    │
+                                              ┌─────────────────────▼──────────────┐
+                                              │  Phase 8: Launch Readiness         │
+                                              └────────────────────────────────────┘
+
+PARALLELISM NOTES:
+  - Phase 2 and Phase 3 can be worked by separate engineers simultaneously.
+    They share no file conflicts: Phase 2 touches onboarding/page.tsx and
+    new onboarding components; Phase 3 touches operator-chat routes and
+    ConsoleSidebar.
+  - Phase 4 can proceed alongside Phase 3 for the frontend portions (overview
+    page, navigation restructure). Only the config-store.ts integration in
+    Phase 4 depends on Phase 3.
+  - Phase 6 can be started in parallel with Phase 5 once Phase 3 is complete.
+  - Phases 7 and 8 are sequential gate passes that require all previous phases
+    to be functionally complete.
+
+---
+
+3. PHASE 1 — STABILIZE WEBSITE IMPORT PIPELINE
+=================================================
+Dependency: None (this is the first phase)
+Estimated effort: 2–3 days
+Owner: 1 engineer
+
+CONTEXT
+--------
+The website import pipeline is the foundational data-flow that feeds the new
+onboarding experience (Phase 2). Phase 2 depends entirely on the pipeline
+being reliable, reporting accurate error codes, and providing progress data
+that the onboarding UI can poll. The current worker is functional but has
+not been hardened for the onboarding use case.
+
+GOAL
+-----
+The pipeline must be stable enough that:
+  a. The onboarding UI can reliably poll import status and display progress.
+  b. Error cases are categorized with codes the UI can branch on.
+  c. The worker does not silently drop jobs or fail without updating status.
+  d. A source:"onboarding" field is accepted so onboarding-triggered runs
+     are distinguishable from knowledge-page-triggered runs.
+
+FILES TO MODIFY
+----------------
+  scripts/worker/website-import-worker.ts
+    - Ensure every error path sets status="failed" with an error_code field.
+    - Define and handle these error codes:
+        "dns_fail"  — URL unreachable (ENOTFOUND, ECONNREFUSED)
+        "blocked"   — HTTP 403/429, bot-blocking response
+        "timeout"   — crawl or extraction exceeded time limit
+        "parse_error" — malformed HTML preventing classification
+        "llm_error" — LLM extraction call failed
+    - Wrap the entire claim → process → store cycle in try/catch. A worker
+      crash must not leave a run stuck in "running" with no error update.
+    - Add a stale-job reaper: any run in "running" status for more than 5
+      minutes with no update should be reset to "failed" with error_code
+      "timeout" on next worker poll cycle.
+    - Log each job claimed, completed, and failed with run ID.
+
+  apps/dashboard/src/app/api/website-import/start/route.ts
+    - Accept and persist a source field in the request body (valid values:
+      "knowledge-page" | "onboarding"). Default to "knowledge-page".
+    - Store source in the onboarding_import_runs row.
+    - Validate the URL is a well-formed https:// URL before queuing.
+      Reject http:// or javascript: scheme URLs with a 400 error.
+
+  apps/dashboard/src/app/api/website-import/latest/route.ts
+    - Confirm this route returns partial results: status, pageClassification
+      array, and run.result_json when available.
+    - If called with runId query param, return data for that specific run.
+    - Ensure the response includes error_code when status="failed".
+
+  apps/dashboard/src/lib/website-import/run.ts
+    - Verify runWebsiteImport() propagates the structured error codes above.
+    - Ensure crawl page limit is configurable and respected (default 20 pages).
+    - Do not throw unstructured errors — return a typed result or throw with
+      a recognizable error shape.
+
+  apps/dashboard/src/lib/website-import/crawl.ts
+    - Confirm pageClassification results are being written incrementally
+      to result_json as they are discovered (not only at completion).
+      The onboarding Stage 2 progress display depends on incremental updates.
+    - If partial writes are not already implemented, add them.
+
+DATABASE MIGRATION
+-------------------
+  Migration: Add source and error_code columns to onboarding_import_runs.
+  File: supabase/migrations/YYYYMMDDHHMMSS_import_runs_source_and_error.sql
+
+  ALTER TABLE onboarding_import_runs
+    ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'knowledge-page',
+    ADD COLUMN IF NOT EXISTS error_code TEXT;
+
+  Create via: npm run migration:new -- import_runs_source_and_error
+
+BACKEND CHANGES
+----------------
+  - POST /api/website-import/start: validate URL scheme, persist source field.
+  - GET /api/website-import/latest: include error_code in response when present.
+  - Worker stale-job reaper: add 5-minute timeout recovery on poll cycle.
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] Worker claims a queued job and processes it.
+  [ ] Worker handles DNS failure (ENOTFOUND) → sets status="failed",
+      error_code="dns_fail".
+  [ ] Worker handles HTTP 403/429 → sets status="failed", error_code="blocked".
+  [ ] Worker handles LLM timeout → sets status="failed", error_code="timeout".
+  [ ] A job accidentally left in "running" for 5+ minutes is auto-recovered.
+  [ ] GET /api/website-import/latest?runId=X returns pageClassification
+      incrementally during run.
+  [ ] POST /api/website-import/start rejects javascript: or non-http(s) URLs.
+  [ ] source="onboarding" is stored and returned in the run record.
+  [ ] npm run typecheck passes.
+
+---
+
+4. PHASE 2 — BUILD NEW ONBOARDING FLOW
+=========================================
+Dependency: Phase 1 complete
+Estimated effort: 3–5 days
+Owner: 1 engineer
+
+CONTEXT
+--------
+The current onboarding is a 3-field form that drops operators on an empty
+overview page with no guidance. The full design specification is in:
+  docs/tandem3transition/onboarding-flow-design.txt
+
+The onboarding is a single-page AI-guided experience with 6 stages:
+  Stage 0: Business/location creation form (right panel) + AI greeting
+  Stage 1: Website URL collection embedded in AI chat
+  Stage 2: Live scan progress (polling) with page-type discovery display
+  Stage 3: Scan results narration — AI summarizes what it found
+  Stage 3b: Optional detailed review using WebsiteImportPanel
+  Stage 4: Manual fallback path (scan failed or skipped)
+  Stage 5: Handoff contact setup
+  Stage 6: Completion — live widget preview + transition to dashboard
+
+NOTE: Stage 4's AI-driven variant (tool calling for set_business_hours,
+set_handoff_contact, add_faq) requires Phase 3 to be complete. Stage 4
+must be implemented with a form-based fallback for Phase 2, then upgraded
+in Phase 5 once tool calling is live.
+
+FILES TO CREATE (new)
+----------------------
+  apps/dashboard/src/app/onboarding/components/EmbeddedUrlInput.tsx
+    A controlled input component rendered inside the AI chat stream.
+    Props: onScan(url: string), onSkip().
+    Validates URL format client-side before calling onScan.
+
+  apps/dashboard/src/app/onboarding/components/ScanProgressPanel.tsx
+    Right-panel component for Stage 2. Displays:
+    - Domain URL being scanned.
+    - Animated activity indicator.
+    - "Pages visited: [count]" counter.
+    - Color-coded page type badges (hours/menu/contact/FAQs/reservations)
+      appearing as pageClassification entries arrive.
+
+  apps/dashboard/src/app/onboarding/components/ScanResultsSummary.tsx
+    Right-panel component for Stage 3. Displays category cards:
+    Hours | Menu | Q&As | Contact | Brand.
+    Each card shows found/not-found state (emerald/orange).
+
+  apps/dashboard/src/app/onboarding/components/HandoffContactInput.tsx
+    Embedded form for Stage 5 with three input fields (phone, link, email)
+    and Save / Skip buttons. Calls PUT /api/location-config directly
+    in Phase 2 (tool-calling upgrade in Phase 5).
+
+  apps/dashboard/src/app/onboarding/hooks/useImportPolling.ts
+    Custom hook that polls GET /api/website-import/latest?runId=X every
+    2 seconds. Returns: { status, pageClassification, draft }, stops polling
+    when status is "succeeded" or "failed". Exports the error_code when
+    status is "failed".
+
+  apps/dashboard/src/app/onboarding/lib/onboarding-state-machine.ts
+    Type-safe state machine (or useReducer) managing onboardingStage:
+    "business-form" | "website-url" | "scanning" | "scan-results" |
+    "scan-review" | "manual-setup" | "handoff" | "complete"
+    State transitions are event-driven (form submit, scan start, scan
+    complete, apply, skip, etc.). This module has no UI dependencies.
+
+FILES TO MODIFY
+----------------
+  apps/dashboard/src/app/onboarding/page.tsx
+    Full rewrite. The existing 3-field form logic is replaced.
+    Structure: two-column layout (left: AI chat thread, right: contextual panel).
+    No top navigation is rendered on this page (standalone auth experience).
+    The AI chat thread is a controlled list of message bubbles. It is NOT
+    wired to /api/operator-chat — messages are programmatic (the onboarding
+    state machine drives them). The operator's typed replies drive state
+    transitions only in Stage 4 (manual setup).
+
+    Stage routing in the component:
+      switch (onboardingStage) {
+        case "business-form":    → right panel = <BusinessSetupForm />
+        case "website-url":      → left panel message + <EmbeddedUrlInput />
+        case "scanning":         → right panel = <ScanProgressPanel />
+        case "scan-results":     → right panel = <ScanResultsSummary />
+        case "scan-review":      → right panel = <WebsiteImportPanel />
+        case "manual-setup":     → left panel = conversational Q&A
+        case "handoff":          → left panel message + <HandoffContactInput />
+        case "complete":         → right panel = <ChatWidget config={...} />
+      }
+
+REUSED EXISTING COMPONENTS
+----------------------------
+  apps/dashboard/src/components/WebsiteImportPanel.tsx
+    Reused as-is for Stage 3b (detailed review). The component must be
+    validated to work correctly outside the knowledge page context.
+    Pass the runId as a prop; the panel uses POST /api/website-import/:id/apply.
+
+  packages/ui-kit/src/ChatWidget.tsx
+    Used in Stage 6 completion (right panel live preview).
+    businessToWidgetConfig(activeBusiness) provides the config.
+
+API ROUTES USED (ALL EXISTING — NO NEW ROUTES REQUIRED)
+---------------------------------------------------------
+  POST /api/locations               Stage 0: create business + location
+  POST /api/website-import/start    Stage 1: trigger the scan
+  GET  /api/website-import/latest   Stage 2: poll for progress
+  POST /api/website-import/:id/apply Stage 3: commit import to config
+  PUT  /api/location-config         Stage 5: save handoff contact directly
+
+DATABASE MIGRATIONS
+--------------------
+  None required in Phase 2 beyond Phase 1's migration.
+  (The onboarding_import_runs.source field added in Phase 1 supports
+  the source:"onboarding" flag used here.)
+
+FRONTEND CHANGES
+-----------------
+  - /onboarding: Complete page rewrite. Two-column layout, stage machine,
+    6 stages, progressive AI chat narration.
+  - Stage 4 (manual path) in Phase 2 uses form inputs in the right panel
+    wired directly to PUT /api/location-config. This is the temporary
+    form-based fallback. Tool-calling upgrade is Phase 5.
+  - "Skip to dashboard" link visible at all times.
+  - On skip: call router.replace("/overview"). No state is applied.
+    The AI sidebar on /overview shows a "Finish setup" chip for operators
+    who skipped.
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] Stage 0 → Stage 1 transition works after form submit.
+  [ ] Stage 1 URL input validates format before scan starts.
+  [ ] Stage 2 polling updates left panel with page type lines as they arrive.
+  [ ] Stage 3 shows narrated summary with correct counts from draft.
+  [ ] Stage 3b review panel allows individual FAQ/policy toggles.
+  [ ] Apply in Stage 3/3b calls POST /api/website-import/:id/apply.
+  [ ] Stage 4 collects hours, contact, 1 FAQ via form fallback.
+  [ ] Stage 5 saves handoff contact to PUT /api/location-config.
+  [ ] Stage 6 shows live ChatWidget with applied configuration.
+  [ ] "Skip to dashboard" is visible and functional at every stage.
+  [ ] DNS failure in scan transitions to Stage 4 with error message.
+  [ ] Blocked scan transitions to Stage 4 with explanation.
+  [ ] npm run typecheck passes.
+
+---
+
+5. PHASE 3 — IMPLEMENT OPERATOR AI TOOL ARCHITECTURE
+======================================================
+Dependency: Phase 1 (for confirmed understanding of existing write paths)
+Note: Can run in parallel with Phase 2 (no file conflicts)
+Estimated effort: 8–12 days
+Owner: 1 engineer (dedicated backend focus)
+
+CONTEXT
+--------
+This is the most complex and highest-risk phase. The full design specification
+is in: docs/tandem3transition/operator-ai-tool-architecture.txt
+
+Phase 3 adds tool/function calling to the operator AI so it can propose and
+execute configuration changes (hours, FAQs, handoff contacts, behavior rules,
+business info). Every change requires an explicit operator confirmation step.
+No change is ever applied automatically.
+
+Read operator-ai-tool-architecture.txt §1–§9 in full before writing any code.
+
+THE 9 OPERATOR TOOLS
+---------------------
+  1. set_business_hours     → knowledge_config.knowledgeProgram.fields.hours
+                               knowledge_config.businessProfile.hours
+  2. add_faq                → knowledge_config.knowledgeProgram.faqs (append)
+  3. update_faq             → knowledge_config.knowledgeProgram.faqs (update by id)
+  4. remove_faq             → knowledge_config.knowledgeProgram.faqs (filter by id)
+  5. set_handoff_contact    → handoff_config.contactMethods (upsert by id)
+  6. remove_handoff_contact → handoff_config.contactMethods (filter by id)
+  7. update_handoff_settings → handoff_config (top-level field merge)
+  8. set_behavior_rules     → knowledge_config.knowledgeProgram.training
+  9. update_business_info   → knowledge_config.businessProfile (partial merge)
+
+PHASE 3 SUB-PHASES
+-------------------
+
+PHASE 3A: TOOL DEFINITIONS + LLM INTEGRATION (2–3 days)
+  3A.1 Install zod if not already in apps/dashboard dependencies.
+  3A.2 Create apps/dashboard/src/lib/operator-tools/tool-definitions.ts
+       - Export a `tools` array using the Vercel AI SDK `tool` helper.
+       - Each tool has: description, parameters (zod schema).
+       - Parameter schemas match the JSON Schema spec in operator-ai-tool-
+         architecture.txt §2 exactly.
+  3A.3 Modify apps/dashboard/src/app/api/operator-chat/route.ts:
+       - Import generateText from the ai package (Vercel AI SDK).
+       - Import the tools array from tool-definitions.ts.
+       - Split the POST handler into two branches:
+           Branch A (default): existing streaming path via handleChatPost()
+             unchanged. Returns text/plain stream.
+           Branch B (when tools should be considered): call generateText with
+             tools, toolChoice: "auto". If result.toolCalls.length > 0,
+             construct PendingChange and return application/json.
+       - The tool-enabled branch triggers for ALL operator messages in this
+         phase. The LLM decides via toolChoice:"auto" whether to call a tool.
+  3A.4 Test with curl: POST to /api/operator-chat with message
+         "Set our hours to Monday-Friday 11am to 10pm, closed weekends"
+       Expected response: Content-Type: application/json, body contains
+         { pendingChange: { toolName: "set_business_hours", toolArgs: {...},
+           humanSummary: "..." }, assistantMessage: "..." }
+  Checkpoint: Tool detection and PendingChange construction works via API.
+
+PHASE 3B: CONFIRM ENDPOINT + TOOL EXECUTOR (2–3 days)
+  3B.1 Create apps/dashboard/src/lib/operator-tools/tool-executor.ts
+       - Export: executeOperatorTool(toolName, toolArgs, locationId,
+         businessId, supabase): Promise<{ updatedConfig: ... }>
+       - Each tool implementation MUST follow this pattern:
+           a. Fetch current config via GET /api/location-config (or via
+              Supabase client directly to avoid HTTP round-trip in server context)
+           b. Apply the in-memory change (deep merge, array append/filter)
+           c. Build the partial payload for PUT /api/location-config
+           d. Execute the PUT and return the updated config sections
+       - CRITICAL: Never partially write array columns. Always fetch → mutate
+         in memory → write the full array. Failing to do this destroys all
+         existing FAQs or contacts except the one being written.
+       - Validate toolArgs against expected shape before applying. Drop
+         unknown fields. Cap string lengths (question/answer: 1000 chars,
+         narrative: 500 chars, URLs: no javascript: scheme).
+       - sanitizeKnowledgeConfig() must be respected for update_business_info
+         — do not write locationName or address fields.
+  3B.2 Create apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+       - POST handler. Auth: createSupabaseServerClient() + getUser().
+         Reject unauthenticated requests with 401.
+       - Re-resolve the operator's businessId and locationId from authenticated
+         membership (not from the pendingChange payload). Use the same
+         resolveLocationId() pattern as in location-config/route.ts.
+       - Validate that the pendingChange.locationId matches the re-resolved
+         locationId. Reject with 403 if mismatch.
+       - Validate toolArgs via zod against the schema for the named tool.
+         Reject with 400 if validation fails.
+       - Call executeOperatorTool(). On error, return 500 with error message.
+       - Return { ok: true, updatedConfig: { ... } } on success.
+       - Log each confirmed execution: userId, locationId, toolName, summary
+         of changed fields (not full values).
+  3B.3 Manual integration test: craft a POST to /api/operator-chat/confirm
+       with hardcoded pendingChange matching add_faq. Verify:
+         - The FAQ appears in Supabase business_location_configs.knowledge_config.
+         - Re-testing with a different authenticated user's locationId fails
+           with 403.
+         - Testing with invalid toolArgs fails with 400.
+  Checkpoint: Confirm endpoint writes correct data, rejects invalid auth/args.
+
+PHASE 3C: UI CONFIRMATION FLOW (2 days)
+  3C.1 Create apps/dashboard/src/lib/operator-tools/pending-change-renderer.tsx
+       - ConfirmationCard component.
+       - Props: pendingChange, assistantMessage, onConfirm(), onCancel().
+       - Renders: explanation text, structured human-readable summary of
+         the proposed change (formatted per tool type), [Confirm] and
+         [Cancel] buttons.
+       - Visual style: distinct from normal message bubbles (bordered card,
+         light highlight background). Use ui-kit primitives where available.
+       - Tool-specific rendering:
+           add_faq: shows question + answer in quote block
+           set_business_hours: shows day/time table
+           set_handoff_contact: shows type icon + label + value
+           update_business_info: shows changed fields as key/value list
+           All others: show a summary sentence from humanSummary field.
+  3C.2 Extend apps/dashboard/src/components/ConsoleSidebar.tsx:
+       - Extend the Message type: add type field:
+           type Message = { role: ...; text: string; type: "text" |
+             "pending_change" | "confirm_success" | "confirm_error" }
+         Add pendingChange?: PendingChange to Message.
+       - In sendMessage(), after receiving the response:
+           If Content-Type is application/json and body.pendingChange exists:
+             append an assistant message with type:"pending_change" and
+             pendingChange set.
+           Otherwise: continue existing streaming text path unchanged.
+       - In the message list render, if message.type === "pending_change":
+           render <ConfirmationCard /> instead of a text bubble.
+       - Add handleConfirm(pendingChange): POST to /api/operator-chat/confirm.
+           On success: replace message with type:"confirm_success" bubble.
+           On failure: replace message with type:"confirm_error" bubble.
+           Do not remove the confirmation card on success — replace it with
+           a success message showing what changed.
+       - Add handleCancel(): replace message with type:"text", role:"assistant",
+           text:"Got it — no changes were made."
+  3C.3 End-to-end UX test in dev environment:
+       Ask AI to set hours or add an FAQ. Confirm the flow:
+       user message → pending_change card appears → click Confirm →
+       success bubble appears → config updated in Supabase.
+  Checkpoint: Full UX end-to-end works without page reload.
+
+PHASE 3D: CONFIG STORE + UI STATE SYNC (1–2 days)
+  3D.1 Create apps/dashboard/src/lib/config-store.ts
+       Lightweight pub/sub module, same shape as mock-store.ts.
+       Export:
+         type ConfigStoreState = { version: number; lastUpdatedAt: string }
+         subscribeToConfigStore(listener: () => void): () => void
+         getConfigStoreState(): ConfigStoreState
+         notifyConfigUpdated(): void
+         useConfigStoreVersion(): number  (React hook using useSyncExternalStore)
+       The version number increments every time notifyConfigUpdated() is called.
+       Storage: in-memory only (not localStorage). Resets on page reload.
+  3D.2 Update ConsoleSidebar handleConfirm():
+       After a successful confirm POST, call:
+         a. updateMockState() with the relevant field mutation (e.g., append
+            FAQ to profile.faqs, update hours, update contacts).
+         b. notifyConfigUpdated() to increment the config-store version.
+       Per-tool mock store update helpers to add (in mock-store.ts or a
+       separate apps/dashboard/src/lib/operator-tools/mock-store-updaters.ts):
+         applyHoursChange(profile, toolArgs)
+         applyFaqChange(profile, toolArgs, toolName)
+         applyHandoffChange(profile, toolArgs, toolName)
+         applyBehaviorChange(profile, toolArgs)
+         applyBusinessInfoChange(profile, toolArgs)
+  Checkpoint: After confirming a change, dashboard UI reflects new state
+  without any page reload.
+
+PHASE 3E: HARDENING (1–2 days)
+  3E.1 Run npm run typecheck. Fix all TypeScript errors.
+  3E.2 Run npm run lint. Fix all warnings.
+  3E.3 Verify injection screening is applied to the operator-chat branch
+       that calls generateText. The existing INJECTION_PATTERNS check from
+       chat-handler.ts should be applied to the user message before it is
+       passed to the LLM.
+  3E.4 Verify no mock store fields are accidentally overwritten. Each
+       applyXChange helper must do a targeted mutation, not a spread of
+       the entire toolArgs onto the profile.
+  3E.5 Add server-side logging to confirm route (userId, locationId,
+       toolName, summary). Verify logs appear in dev console on confirm.
+  3E.6 Add a comment in RUNBOOK.md noting that rate limiting for
+       /api/operator-chat/confirm is deferred: target 30 confirmed writes
+       per user per hour before production launch.
+  Checkpoint: Clean typecheck + lint. Smoke test of all 9 tools passes.
+
+DATABASE MIGRATIONS
+--------------------
+  None required for Phase 3. All writes go to existing JSONB columns in
+  business_location_configs. No new tables or columns needed.
+  (See operator-ai-tool-architecture.txt §8 for confirmation.)
+
+SECURITY CHECKLIST FOR PHASE 3
+--------------------------------
+  [ ] /api/operator-chat requires authenticated Supabase session.
+  [ ] /api/operator-chat/confirm requires authenticated Supabase session.
+  [ ] /confirm re-resolves businessId and locationId from auth membership —
+      does NOT trust values from the pendingChange payload.
+  [ ] toolArgs are validated against zod schema before execution.
+  [ ] Unknown fields in toolArgs are dropped, not passed through.
+  [ ] URL fields in toolArgs are validated — reject javascript: scheme.
+  [ ] String fields are length-capped as specified in tool architecture §6.
+  [ ] sanitizeKnowledgeConfig() blocks write of locationName/address.
+  [ ] Injection pattern screening applied before tool calls.
+  [ ] All confirmed writes are logged with userId, locationId, toolName.
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] All 9 tools return correct pendingChange from /api/operator-chat.
+  [ ] /api/operator-chat/confirm writes all 9 tool types correctly to Supabase.
+  [ ] /confirm rejects wrong locationId (403), invalid toolArgs (400),
+      unauthenticated requests (401).
+  [ ] ConsoleSidebar renders ConfirmationCard for tool-call responses.
+  [ ] Confirm and Cancel flows work and show appropriate feedback.
+  [ ] After any confirm, mock store and config-store are both updated.
+  [ ] Overview page (Phase 4) panels re-render after a confirmed change.
+  [ ] npm run typecheck passes. npm run lint passes.
+  [ ] npm run smoke:chat passes (customer chatbot unaffected).
+
+---
+
+6. PHASE 4 — BUILD TANDEM 3.0 DASHBOARD
+==========================================
+Dependency: Phase 1 (for data contracts); Phase 3D complete for config-store
+Note: Frontend portions (4A, 4B) can run parallel with Phase 3
+Estimated effort: 5–8 days
+Owner: 1 engineer (frontend focus)
+
+CONTEXT
+--------
+The full design specification is in: docs/tandem3transition/dashboard-redesign-plan.txt
+Read that document in full before writing any code for this phase.
+
+The transformation:
+  - 9+ navigation sections → 4 top-level sections
+  - Form-heavy pages → read-only state panels
+  - Widget preview hidden → embedded permanently in overview right column
+  - SetupChecklist → HealthSummaryBar (3 status badges)
+  - Overview page shows all critical chatbot state on one screen
+  - AI sidebar gains AISidebarContext with prefillInput() for prompt chips
+
+PHASE 4 SUB-PHASES
+-------------------
+
+PHASE 4A: OVERVIEW PAGE REDESIGN (2–3 days)
+Backend requirements: None (reads from existing /api/location-config and
+  /api/conversations; falls back to mock store).
+
+  4A.1 Create apps/dashboard/src/contexts/AISidebarContext.tsx
+       Exposes { prefillInput: (text: string) => void }.
+       Default implementation: no-op (in case sidebar is not mounted).
+       ~20 lines. Wrap the console layout in this provider.
+
+  4A.2 Create apps/dashboard/src/components/console/PromptChip.tsx
+       Small pill button that reads AISidebarContext and calls prefillInput.
+       Props: text (string to pre-fill), label (display text).
+       ~15 lines.
+
+  4A.3 Create apps/dashboard/src/components/console/HealthSummaryBar.tsx
+       Three inline status badges: Hours | Knowledge | Handoff.
+       Badge props: label, ok (boolean). Emerald = ok, orange = warning.
+       State calculation:
+         Hours ok: knowledgeProgram.fields.hours is non-empty OR
+                   businessProfile.hours.length > 0
+         Knowledge ok: faqs.length > 0
+         Handoff ok: handoff.contactMethods.some(c => c.enabled)
+       ~30 lines.
+
+  4A.4 Create PANEL COMPONENTS (can be a single panels/ directory):
+         OperatingHoursPanel.tsx
+           - Three render states: structured blocks → table, narrative only
+             → text paragraph, not configured → warning card.
+           - Data source: /api/location-config response or mock store fallback.
+           - PromptChip below: 'Update my hours'
+         KnowledgePanel.tsx
+           - Shows FAQ count (large stat) + first 3 FAQs expandable.
+           - Warning if faqs.length === 0.
+           - PromptChips: 'Add a Q&A', 'Remove a Q&A'
+           - 'See all →' link to /chatbot?tab=knowledge
+         BehaviorPanel.tsx
+           - Shows tone, shouldAnswer, shouldAvoid, conversionGoals (truncated).
+           - Empty state: "Not customized yet."
+           - PromptChip: 'Update tone or goals'
+         HandoffPanel.tsx
+           - Shows status badge (Online/Offline) + contact method list.
+           - Warning if no enabled contact methods.
+           - PromptChips: 'Add a contact', 'Set my status'
+         RecentConversationsPanel.tsx
+           - Last 5 sessions from GET /api/conversations.
+           - Skeleton loading state (3 rows).
+           - 'View all →' link to /conversations.
+
+  4A.5 Rewrite apps/dashboard/src/app/(console)/overview/page.tsx
+       Two-column desktop layout (lg: breakpoint).
+       Left column: HealthSummaryBar + 5 panels (stacked).
+       Right column (sticky): ChatWidget preview + install snippet.
+
+       Widget preview:
+         const configVersion = useConfigStoreVersion();  // from Phase 3D
+         const config = useMemo(
+           () => businessToWidgetConfig(activeBusiness),
+           [activeBusiness, configVersion]
+         );
+         <ChatWidget config={config} mode="preview" />
+
+       Remove:
+         - SetupChecklist component usage.
+         - "Open Preview" button and PreviewDockContext usage.
+         - Activity chart (moved to /conversations in Phase 4C).
+         - Time range filter.
+
+  4A.6 Update ConsoleSidebar.tsx to write to AISidebarContext.
+       On mount, call context.setPrefillFn(() => setInput) (or equivalent
+       implementation) so PromptChips can focus the sidebar and pre-fill it.
+
+  Acceptance criteria (4A):
+    [ ] Overview page shows all 5 panels on desktop.
+    [ ] Widget preview visible without any click.
+    [ ] HealthSummaryBar shows correct warn/ok state based on config.
+    [ ] PromptChip click focuses sidebar and pre-fills input text.
+    [ ] configVersion bump (from Phase 3D) causes widget to re-render.
+    [ ] Mobile: columns stack, right column collapses appropriately.
+
+PHASE 4B: NAVIGATION RESTRUCTURE (1–2 days)
+
+  4B.1 Create apps/dashboard/src/app/(console)/chatbot/page.tsx
+       Tab-based page: ?tab=knowledge|handoff|behavior|appearance
+       Tab routing via URL search param; default to "knowledge".
+       Tab content:
+         knowledge: Read-only FAQ list (expand to view answer) + WebsiteImportPanel.
+           Displays: full faqs array with category grouping if available.
+           No "Add FAQ" form — operators use AI sidebar.
+           Import panel retained as a trigger (re-run import at any time).
+           "Imported menu knowledge" read-only section: shows last import
+           menuSections data if available.
+         handoff: Read-only contact methods list + status badge + headline.
+           Operators use AI sidebar to edit; this tab shows current state.
+         behavior: Read-only training fields (tone, shouldAnswer, shouldAvoid,
+           escalationInstructions, conversionGoals list).
+         appearance: Existing widget form-based color/theme editor UNCHANGED.
+           PreviewDockContext and PreviewPanel retained for this tab ONLY.
+           This is the one tab that retains form-based editing (by design).
+
+  4B.2 Update apps/dashboard/src/components/ConsoleSidebar.tsx navigation:
+       Existing nav items: replace with 4-item structure.
+       New items: Home (/overview), Conversations (/conversations),
+                  Chatbot (/chatbot), Account (/account).
+       Remove from nav: settings, menus, intents, widget, handoff, knowledge,
+         integrations, locations.
+       Keep: sidebar AI chat area below the nav links (unchanged).
+
+  4B.3 Remove BusinessSubNav from layout:
+       Modify apps/dashboard/src/app/(console)/layout.tsx (or the component
+       that renders BusinessSubNav) to no longer render it.
+       The 7-tab horizontal strip is replaced by the /chatbot page's 4 tabs.
+
+  4B.4 Add URL redirects to apps/dashboard/next.config.ts (or next.config.js):
+       {
+         source: '/settings',     destination: '/account',         permanent: false
+         source: '/intents',      destination: '/chatbot?tab=behavior',   permanent: false
+         source: '/menus',        destination: '/chatbot?tab=knowledge',  permanent: false
+         source: '/handoff',      destination: '/chatbot?tab=handoff',    permanent: false
+         source: '/widget',       destination: '/chatbot?tab=appearance', permanent: false
+         source: '/knowledge',    destination: '/chatbot?tab=knowledge',  permanent: false
+         source: '/integrations', destination: '/account',         permanent: false
+       }
+
+  4B.5 Expand /account page:
+       apps/dashboard/src/app/(console)/account/page.tsx
+       Add sections:
+         - Business identity: name, tagline, phone, email, website (from /settings).
+           These fields remain form-based in /account (AI handles them too but
+           explicit form editing is preserved here for operator convenience).
+         - Location management: link to location switcher + add location stub.
+         - Integrations: move the card grid from the removed /integrations page.
+         - Team management: retained as stub with "coming soon" label.
+         - Billing: retained as stub.
+
+  Acceptance criteria (4B):
+    [ ] Navigation shows exactly 4 items: Home, Conversations, Chatbot, Account.
+    [ ] BusinessSubNav is no longer rendered.
+    [ ] /chatbot page renders all 4 tabs with correct content.
+    [ ] All 7 old routes redirect to their new destinations.
+    [ ] /account shows business identity section and integrations grid.
+
+PHASE 4C: PAGE CLEANUP + CONVERSATIONS IMPROVEMENT (1–2 days)
+
+  4C.1 Move activity chart from overview to conversations page:
+       Remove ActivityChart from overview/page.tsx.
+       Add ActivityChart to the header of conversations/page.tsx.
+       The chart's time range filter moves here as well.
+
+  4C.2 Remove or neutralize the deleted pages (after redirects are confirmed):
+       apps/dashboard/src/app/(console)/intents/page.tsx — delete
+       apps/dashboard/src/app/(console)/menus/page.tsx — delete
+       apps/dashboard/src/app/(console)/settings/page.tsx — delete
+       apps/dashboard/src/app/(console)/handoff/page.tsx — delete
+       apps/dashboard/src/app/(console)/integrations/page.tsx — delete
+       apps/dashboard/src/app/(console)/locations/page.tsx — assess; if this
+         is largely a stub, delete. If not, redirect to /account.
+       apps/dashboard/src/app/(console)/widget/page.tsx — delete (content
+         is now /chatbot?tab=appearance).
+       NOTE: Delete only after verifying redirects in 4B.4 work correctly
+       for all those routes in local dev. Do not delete until redirect is live.
+
+  4C.3 Remove PreviewPanel from console layout.tsx:
+       Currently PreviewPanel may be rendered globally via PreviewDockContext.
+       Limit its rendering to the /chatbot route only (specifically the
+       appearance tab). Remove it from apps/dashboard/src/app/(console)/layout.tsx.
+       It remains in: apps/dashboard/src/app/(console)/chatbot/page.tsx
+       within the appearance tab render.
+
+  4C.4 Optional: Add basic conversation search (client-side filter by message
+       text) to conversations/page.tsx. Filter the sessions list by a text
+       input. This is low-effort and addresses a real operator need.
+
+  Acceptance criteria (4C):
+    [ ] Activity chart appears in conversations page header.
+    [ ] Overview page has no activity chart and no time range picker.
+    [ ] Deleted page files are gone; routes redirect correctly.
+    [ ] PreviewPanel no longer floats globally on every page.
+    [ ] npm run typecheck passes. npm run lint passes.
+
+DATABASE MIGRATIONS
+--------------------
+  None required for Phase 4. This is a frontend-only phase.
+
+ACCEPTANCE CRITERIA (FULL PHASE 4)
+------------------------------------
+  [ ] Overview page: two-column layout, 5 panels, embedded widget preview.
+  [ ] HealthSummaryBar shows correct states.
+  [ ] PromptChips work end-to-end with AI sidebar prefill.
+  [ ] Navigation: 4 items only.
+  [ ] /chatbot page: 4 functional tabs.
+  [ ] 7 old routes redirect correctly.
+  [ ] /account expanded with business identity + integrations.
+  [ ] Activity chart on conversations page.
+  [ ] Deleted files removed (after redirect validation).
+  [ ] npm run typecheck passes. npm run lint passes. npm run build passes.
+
+---
+
+7. PHASE 5 — INTEGRATE AI CONTROL OF DASHBOARD SETTINGS
+=========================================================
+Dependency: Phase 2, Phase 3, Phase 4 all complete
+Estimated effort: 2–4 days
+Owner: 1 engineer
+
+CONTEXT
+--------
+Phase 5 wires together the pieces built separately in Phases 2, 3, and 4.
+The primary goals are:
+  a. Upgrade the onboarding Stage 4 (manual setup) from form-based to
+     tool-calling driven conversations.
+  b. Confirm that the full config-store.ts state refresh path works across
+     the new Phase 4 overview panels.
+  c. Add operator chat session persistence so the AI sidebar remembers
+     context across page navigations.
+  d. Add AI sidebar contextual greeting on first load.
+
+TASK LIST
+----------
+
+5.1 UPGRADE ONBOARDING STAGE 4 TO TOOL CALLING
+  Modify apps/dashboard/src/app/onboarding/page.tsx Stage 4 handling:
+    - Replace the form-based fallback with actual API calls to
+      /api/operator-chat/confirm using tool invocations.
+    - Hours question → AI calls set_business_hours tool → confirm route writes.
+    - Contact question → AI calls set_handoff_contact tool → confirm route writes.
+    - FAQ question → AI calls add_faq tool → confirm route writes.
+    - The confirmation flow within onboarding Stage 4 should be seamless:
+      since the onboarding AI is programmatic (not live operator-chat), the
+      tool call + confirm should happen in one step (no ConfirmationCard during
+      onboarding — the AI is asking the question and knows what to do with the
+      answer). POST directly to /api/operator-chat/confirm internally.
+  Note: This requires the onboarding onSubmitAnswer() handler to construct
+  the pendingChange itself from the operator's typed answer and call
+  /api/operator-chat/confirm directly with the pre-constructed tool call.
+  This is secure because the pendingChange is constructed server-side from
+  the authenticated session (same as all other confirms).
+
+5.2 WIRE CONFIG-STORE VERSION TO OVERVIEW PANELS
+  After Phase 3D implements config-store.ts and Phase 4A uses
+  useConfigStoreVersion(), verify this integration actually works:
+    - Confirm a set_business_hours tool call in the AI sidebar.
+    - Verify the OperatingHoursPanel on the overview page re-renders
+      with the new hours without a page reload.
+    - Confirm an add_faq tool call.
+    - Verify the KnowledgePanel FAQ count increments.
+    - Verify the widget preview in the right column re-renders.
+  Fix any missing dependency or stale closure issues.
+
+5.3 OPERATOR CHAT SESSION PERSISTENCE
+  Context: ConsoleSidebar currently initializes messages as useState([]).
+  Every page navigation resets the conversation.
+  
+  Implementation:
+    - Add a new operator_chat_sessions table (see Database Migrations below).
+    - On ConsoleSidebar mount: GET /api/operator-chat/history?locationId=X
+      to fetch the last N messages (max 20) for the location.
+      Preload them into the messages state.
+    - After each exchange, POST new messages to
+      /api/operator-chat/history to persist them.
+    - Limit stored history: keep last 50 messages. Trim on write.
+    - On page navigation, the sidebar re-mounts and reloads the persisted
+      history. The conversation continues seamlessly.
+  
+  New API routes:
+    GET  /api/operator-chat/history?locationId=X&limit=20
+    POST /api/operator-chat/history
+      Body: { locationId, messages: Message[] }
+    
+  Security: Both routes require authenticated Supabase session and must
+  verify operator membership for the given locationId before reading or
+  writing.
+
+5.4 AI SIDEBAR CONTEXTUAL GREETING
+  Modify ConsoleSidebar.tsx:
+    - Replace the three generic QUICK_ACTIONS chips ("What should I set
+      up first?", "Auto-configure my assistant", "Tell me what you can do")
+      with a contextual greeting message when messages.length === 0.
+    - Greeting (location-aware):
+        "Hi! I can update your hours, add Q&As, change your bot's tone,
+        or configure how guests reach your team. What would you like to do?"
+    - Show quick-action chips for the most common first tasks:
+        "Update my hours" | "Add a Q&A" | "Set a contact method"
+    - These chips send the message immediately (not just prefill) since they
+      are complete actions, unlike PromptChips which prefill for completion.
+
+5.5 FINISH SETUP PROMPT FOR SKIPPED ONBOARDING
+  If an operator skipped onboarding (came directly to /overview without
+  completing the flow), show a persistent chip in the AI sidebar:
+    "Finish setting up your chatbot →"
+  Detection: check if handoff.contactMethods is empty AND faqs.length === 0.
+  On click: pre-fill the sidebar with "Help me set up my chatbot."
+  This chip disappears once both handoff AND at least 1 FAQ are configured.
+
+DATABASE MIGRATIONS
+--------------------
+  Migration: Create operator_chat_sessions table.
+  File: supabase/migrations/YYYYMMDDHHMMSS_operator_chat_sessions.sql
+
+  CREATE TABLE IF NOT EXISTS operator_chat_sessions (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id   TEXT NOT NULL,
+    location_id   UUID NOT NULL REFERENCES business_locations(id) ON DELETE CASCADE,
+    messages      JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (business_id, location_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_operator_chat_sessions_location
+    ON operator_chat_sessions (location_id);
+
+  Enable RLS: operator can only read/write their own session.
+  CREATE POLICY "operators_own_chat" ON operator_chat_sessions
+    USING (
+      EXISTS (
+        SELECT 1 FROM business_memberships bm
+        WHERE bm.business_id = operator_chat_sessions.business_id
+          AND bm.user_id = auth.uid()
+      )
+    );
+
+  Create via: npm run migration:new -- operator_chat_sessions
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] Onboarding Stage 4 uses actual tool calls, not form fallback.
+  [ ] Config-store version bump causes all 5 overview panels to refresh.
+  [ ] Widget preview refreshes after any AI-confirmed change.
+  [ ] Operator chat messages persist across page navigations within a session.
+  [ ] On fresh browser load, the last 20 messages are restored.
+  [ ] Contextual greeting shows when no chat history exists.
+  [ ] "Finish setup" chip appears for operators with empty handoff + FAQs.
+  [ ] npm run typecheck passes. npm run lint passes.
+
+---
+
+8. PHASE 6 — USAGE LIMITS AND TOKEN COST CONTROLS
+====================================================
+Dependency: Phase 3 complete (tool calling is the main LLM cost surface)
+Note: Can start in parallel with Phase 5 once Phase 3 is done
+Estimated effort: 3–5 days
+Owner: 1 engineer
+
+CONTEXT
+--------
+Token usage is currently untracked. maxTokens is hardcoded (400 for customer
+chat, 800 for operator chat). There is no per-location budget, no usage
+visibility, and no rate limiting. Phase 6 corrects this without exposing any
+cost complexity to operators.
+
+TASK LIST
+----------
+
+6.1 ADD TOKEN COUNTING TO LLM RESPONSES
+  Modify packages/shared/src/llm/client.ts (or providers/openai.ts):
+    - After each llmGenerate() or llmStream() call that has usage data in the
+      OpenAI response (response.usage.total_tokens), record the usage.
+    - Create a usage recording interface: recordTokenUsage(event: UsageEvent).
+    - This function is no-op in non-server environments; it writes to
+      usage_events table in server contexts.
+  
+  Type: UsageEvent = {
+    businessId: string;
+    locationId: string;
+    userId: string;
+    chatType: "customer" | "operator";
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    toolCallsCount?: number;
+    timestamp: string;
+  }
+
+6.2 DATABASE MIGRATION — USAGE EVENTS TABLE
+  File: supabase/migrations/YYYYMMDDHHMMSS_usage_events.sql
+
+  CREATE TABLE IF NOT EXISTS usage_events (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id      TEXT NOT NULL,
+    location_id      UUID REFERENCES business_locations(id) ON DELETE SET NULL,
+    user_id          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    chat_type        TEXT NOT NULL CHECK (chat_type IN ('customer', 'operator')),
+    model            TEXT NOT NULL,
+    input_tokens     INTEGER NOT NULL DEFAULT 0,
+    output_tokens    INTEGER NOT NULL DEFAULT 0,
+    tool_calls_count INTEGER NOT NULL DEFAULT 0,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_usage_events_business_created
+    ON usage_events (business_id, created_at DESC);
+
+  -- No RLS: usage_events is internal only. Not exposed to operator queries.
+  -- Only accessible via server-side admin routes.
+
+  Create via: npm run migration:new -- usage_events
+
+6.3 WIRE USAGE RECORDING INTO CHAT ROUTES
+  apps/dashboard/src/app/api/chat/route.ts
+    - After llmStream() completes, record usage event (chat_type: "customer").
+    - Streaming responses: the OpenAI streaming API returns usage in the final
+      chunk. Extract from the stream before returning to client (or use the
+      includeUsage: true option if the SDK supports it).
+  apps/dashboard/src/app/api/operator-chat/route.ts
+    - After generateText() returns, record usage event (chat_type: "operator").
+    - generateText returns result.usage with promptTokens + completionTokens.
+  apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+    - Record any LLM usage that occurs during confirm execution (tool executor
+      does not call LLM, so this may be zero — but ensure the accounting is
+      present for future tool types that may call LLM).
+
+6.4 RATE LIMITING ON OPERATOR CHAT CONFIRM
+  Context: /api/operator-chat/confirm writes to the database. Without rate
+  limiting, a compromised session or automated script could make hundreds of
+  writes per minute.
+  
+  Implementation:
+    - Add a simple per-user rate limiter using a windowed counter.
+    - Use an in-memory counter map keyed by userId (acceptable for single-
+      server deployment; revisit with Redis for multi-server).
+    - Limit: 30 confirmed writes per user per hour.
+    - On limit exceeded: return HTTP 429 with body { error: "Too many changes.
+      Please wait before making more updates." }
+    - Log rate limit hits with userId (for monitoring).
+  
+  Note: This is a production hardening step. The limit is intentionally
+  generous (30/hour) — human operators won't hit it. It exists to catch
+  runaway automated writes.
+
+6.5 INTERNAL USAGE DASHBOARD (OPTIONAL — HIGH VALUE)
+  If time permits: create an internal admin route at /api/admin/usage that
+  returns aggregate token usage by business_id and date range. Protect with
+  a server-side environment variable check (TANDEM_ADMIN_KEY).
+  This is not operator-facing. It is internal cost visibility only.
+  Do not build a full UI — a JSON API response is sufficient for Phase 6.
+
+DATABASE MIGRATIONS
+--------------------
+  usage_events table (see 6.2 above).
+  Create via: npm run migration:new -- usage_events
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] Every customer chat LLM call records a usage_events row.
+  [ ] Every operator chat LLM call records a usage_events row.
+  [ ] Token counts are accurate (match OpenAI API response usage fields).
+  [ ] /api/operator-chat/confirm returns 429 after 30 writes/hour for same user.
+  [ ] Rate limit counter resets after 1 hour.
+  [ ] usage_events table is not accessible to operators via any API route.
+  [ ] npm run typecheck passes.
+
+---
+
+9. PHASE 7 — DOCUMENTATION UPDATES
+=====================================
+Dependency: Phases 1–6 functionally complete
+Estimated effort: 1–2 days
+Owner: 1 engineer (or documentation pass alongside Phase 8)
+
+CONTEXT
+--------
+The existing docs still describe Tandem 2.0. The AGENTS.md, copilot-
+instructions.md, and product docs need updating to reflect the Tandem 3.0
+architecture so future coding agents work from the correct model.
+
+TASK LIST
+----------
+
+7.1 UPDATE AGENTS.md
+  File: AGENTS.md (repo root)
+  Changes:
+    - Update §1 (Project Overview) to describe the AI-first operator model.
+    - Update §2 (Architecture Overview) to reflect the 4-page navigation.
+    - Update §3 (Repository Structure) to list new files created in Phases 3-5.
+    - Update §4 (File Reading Strategy): update key file list in "Most Relevant"
+      tables to include tool-definitions.ts, tool-executor.ts, confirm/route.ts,
+      config-store.ts, pending-change-renderer.tsx.
+    - Update §8 (Dashboard Development Patterns): note that new console pages
+      are read-only state views; configuration is via AI sidebar.
+    - Remove references to pages that were deleted (/intents, /menus, /settings,
+      /handoff, /widget, /knowledge, /integrations as standalone pages).
+    - Add entry for the operator AI tool architecture (Phase 3) as a primary
+      system.
+    - Add entry for operator_chat_sessions persistence.
+
+7.2 UPDATE .github/copilot-instructions.md
+  File: .github/copilot-instructions.md
+  Changes:
+    - Update "Core data flows you should preserve" to add:
+        AI tool calling: ConsoleSidebar → POST /api/operator-chat (tool call
+        detected) → user confirms → POST /api/operator-chat/confirm →
+        tool-executor.ts → PUT /api/location-config → notifyConfigUpdated.
+    - Update "Server integration points" to note operator_chat_sessions table.
+    - Add note that /intents, /menus, /settings, /handoff, /widget, /knowledge,
+      /integrations top-level pages have been removed (redirected to new paths).
+    - Update navigation reference from 12 pages to 4: Home, Conversations,
+      Chatbot, Account.
+
+7.3 ARCHIVE TANDEM 2.0 PLAN
+  File: docs/product-plan.md
+  Change: Add a header note: "ARCHIVED — This is the Tandem 2.0 product plan.
+  It is kept for historical reference only. Tandem 3.0 follows the architecture
+  described in docs/tandem3transition/."
+  Do NOT delete this file — it may be useful for understanding what was
+  built and why.
+
+7.4 CREATE TANDEM 3.0 PRODUCT MODEL DOC
+  New file: docs/tandem-3-product-model.md
+  Contents:
+    - One paragraph describing the AI-first operator model.
+    - The 4-page navigation structure.
+    - The tool calling architecture summary.
+    - The onboarding flow summary.
+    - Links to the four design documents in docs/tandem3transition/.
+    - Key conventions: AI sidebar is the write surface, pages are read-only,
+      businessId = business.slug, scope = businessId + locationSlug.
+
+7.5 UPDATE RUNBOOK.md
+  File: RUNBOOK.md
+  Changes:
+    - Add section: "Operator AI Tools" with the 9 tool names and their
+      config targets.
+    - Add section: "Rate Limiting" noting the 30 confirmed writes/hour limit
+      and the deferred production upgrade path (Redis).
+    - Add section: "Operator Chat Session Persistence" noting the
+      operator_chat_sessions table and 50-message limit.
+    - Add section: "Usage Tracking" noting usage_events table and the
+      internal /api/admin/usage endpoint.
+    - Update the onboarding flow description.
+
+7.6 UPDATE DATABASE_SCHEMA.md (if maintained)
+  File: docs/DATABASE_SCHEMA.md
+  Add the two new tables added in Phases 5 and 6:
+    - operator_chat_sessions
+    - usage_events
+  Add the Phase 1 column additions to onboarding_import_runs:
+    - source
+    - error_code
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] AGENTS.md accurately describes the Tandem 3.0 architecture.
+  [ ] copilot-instructions.md reflects the tool-calling data flow.
+  [ ] product-plan.md has archived header.
+  [ ] docs/tandem-3-product-model.md exists and is accurate.
+  [ ] RUNBOOK.md has all new sections.
+  [ ] DATABASE_SCHEMA.md reflects all new tables and column additions.
+
+---
+
+10. PHASE 8 — LAUNCH READINESS
+================================
+Dependency: Phases 1–7 complete
+Estimated effort: 2–4 days
+Owner: Full team (engineering + product)
+
+CONTEXT
+--------
+Phase 8 is not about building new features. It is a hardening and validation
+pass that ensures every system built in Phases 1–7 is stable, secure, and
+ready for production traffic.
+
+TASK LIST
+----------
+
+8.1 END-TO-END SMOKE TEST SUITE
+  The codebase has no automated test suite. For launch readiness, perform a
+  structured manual smoke test that covers the following scenarios:
+
+  NEW OPERATOR ONBOARDING PATH (with website URL):
+    [ ] Sign up → land on /onboarding
+    [ ] Enter restaurant name + location → proceed to Stage 1
+    [ ] Enter a restaurant website URL → scan starts
+    [ ] Wait for scan to complete → Stage 3 narration appears with correct data
+    [ ] Click "Yes, set this up" → import applied successfully
+    [ ] Enter handoff contact → saved
+    [ ] Land on /overview → overview shows hours, FAQs, handoff contact,
+        live widget preview
+
+  NEW OPERATOR ONBOARDING PATH (manual, no URL):
+    [ ] Skip URL → Stage 4 manual path
+    [ ] Enter hours, contact, one FAQ via conversational AI flow
+    [ ] Land on /overview with correct data
+
+  OPERATOR AI TOOL CALLING (all 9 tools):
+    [ ] set_business_hours → confirm → hours panel updates on overview
+    [ ] add_faq → confirm → FAQ count increments on overview
+    [ ] update_faq → confirm → FAQ answer updated in /chatbot Knowledge tab
+    [ ] remove_faq → confirm → FAQ removed
+    [ ] set_handoff_contact → confirm → contact appears in Handoff panel
+    [ ] remove_handoff_contact → confirm → contact removed
+    [ ] update_handoff_settings → confirm → status badge updates
+    [ ] set_behavior_rules → confirm → Behavior panel updates
+    [ ] update_business_info → confirm → /account shows new value
+
+  CANCEL TOOL FLOW:
+    [ ] AI proposes change → operator clicks Cancel → no change to Supabase
+    [ ] Overview panel shows unchanged data
+
+  PAGE NAVIGATION:
+    [ ] All 7 redirected routes actually redirect (test each in browser)
+    [ ] /chatbot has all 4 tabs functional
+    [ ] /conversations shows activity chart
+    [ ] /account shows business identity + integrations
+
+  CUSTOMER CHATBOT UNAFFECTED:
+    [ ] npm run smoke:chat passes (or equivalent manual test)
+    [ ] Guest-facing ChatWidget still streams responses correctly
+    [ ] KnowledgeProgram-based system prompt includes recently-applied data
+
+  SESSION PERSISTENCE:
+    [ ] Send messages in AI sidebar → navigate to /conversations → return
+        to /overview → sidebar shows previous messages
+
+8.2 SECURITY REVIEW OF TOOL-CALLING PATHS
+  Go through the Phase 3 security checklist in §5 of this document and verify
+  each item in the live application:
+    [ ] Unauthenticated request to /api/operator-chat/confirm → 401
+    [ ] Wrong locationId in pendingChange → 403
+    [ ] Invalid toolArgs (missing required field) → 400
+    [ ] Overlong string in toolArgs → trimmed or rejected
+    [ ] javascript: URL in toolArgs → rejected
+    [ ] Replay of an old pendingChange from a different session → 403
+
+8.3 TYPECHECK + LINT GATE
+  [ ] npm run typecheck — zero errors across all packages
+  [ ] npm run lint — zero errors, zero warnings (fix all)
+  [ ] npm run build — production build succeeds without error
+
+8.4 PERFORMANCE BASELINE CHECK
+  Not a full perf audit. Verify:
+  [ ] Overview page loads in < 3 seconds on a development connection
+      with all API calls completing (check Network tab).
+  [ ] Website scan progress polling (2-second interval) does not cause
+      visible UI jank.
+  [ ] AI sidebar confirmation flow (pending → confirm → success) completes
+      visually within 2 seconds of clicking Confirm on a fast connection.
+
+8.5 WIDGET EMBED VALIDATION
+  [ ] Install snippet on /overview right column is correct for the active
+      business.slug and locationSlug.
+  [ ] Embedded widget on a test HTML page renders correctly with the latest
+      configured knowledge (post AI updates).
+  [ ] ChatWidget in preview mode does not accept chat input (mode="preview"
+      should be read-only or clearly labeled as preview).
+
+8.6 SUPABASE RLS VALIDATION
+  For each new table added (operator_chat_sessions, usage_events):
+  [ ] Confirm RLS is enabled.
+  [ ] Confirm an operator can only read/write their own operator_chat_sessions.
+  [ ] Confirm usage_events is not readable by operators (server-only).
+  [ ] Confirm onboarding_import_runs row-level access is still correct.
+
+8.7 DEPLOYMENT CHECKLIST
+  [ ] All required environment variables are documented:
+        LLM_PROVIDER, LLM_MODEL, OPENAI_API_KEY
+        NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+        TANDEM_DATA_DIR (optional, overrides .data/ path)
+        TANDEM_ADMIN_KEY (optional, for /api/admin/usage)
+  [ ] New Supabase migrations pushed to remote:
+        npm run guard:migrations (verify no stale migrations)
+        npm run db:push
+  [ ] Website import worker deployed or confirmed running.
+  [ ] RUNBOOK.md has deployment notes for the worker process.
+  [ ] Rate limiting configuration is documented for ops team.
+
+ACCEPTANCE CRITERIA
+--------------------
+  [ ] All smoke test scenarios pass.
+  [ ] Security review checklist items all pass.
+  [ ] npm run typecheck: zero errors.
+  [ ] npm run lint: zero errors.
+  [ ] npm run build: succeeds.
+  [ ] All new Supabase tables have RLS enabled and correct policies.
+  [ ] All migrations pushed to production Supabase via npm run db:push.
+  [ ] Website import worker is confirmed running in production.
+
+---
+
+11. DATABASE MIGRATIONS SUMMARY
+==================================
+
+ALL NEW MIGRATIONS (in phase order):
+
+Phase 1:
+  File: supabase/migrations/YYYYMMDDHHMMSS_import_runs_source_and_error.sql
+  Content:
+    ALTER TABLE onboarding_import_runs
+      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'knowledge-page',
+      ADD COLUMN IF NOT EXISTS error_code TEXT;
+  Purpose: Supports onboarding-triggered scans and structured error reporting.
+  Command: npm run migration:new -- import_runs_source_and_error
+
+Phase 2: None.
+
+Phase 3: None.
+  (All AI tool writes go to existing JSONB columns in business_location_configs.)
+
+Phase 4: None.
+
+Phase 5:
+  File: supabase/migrations/YYYYMMDDHHMMSS_operator_chat_sessions.sql
+  Content: CREATE TABLE operator_chat_sessions with RLS policy.
+  Purpose: Persists operator AI chat history across page navigations.
+  Command: npm run migration:new -- operator_chat_sessions
+
+Phase 6:
+  File: supabase/migrations/YYYYMMDDHHMMSS_usage_events.sql
+  Content: CREATE TABLE usage_events (no RLS, server-only).
+  Purpose: Internal token usage tracking for cost visibility.
+  Command: npm run migration:new -- usage_events
+
+MIGRATION SAFETY:
+  - Run npm run guard:migrations before each push.
+  - All new migrations must be in supabase/migrations/ (not packages/shared/).
+  - Push to remote via npm run db:push after guard passes.
+  - Test each migration on a staging Supabase project before production push.
+
+TABLES MODIFIED (existing):
+  onboarding_import_runs: +source TEXT, +error_code TEXT
+
+TABLES CREATED (new):
+  operator_chat_sessions: persists operator AI chat messages
+  usage_events: tracks LLM token usage per request
+
+---
+
+12. BACKEND CHANGES SUMMARY
+==============================
+
+Phase 1 backend changes:
+  - POST /api/website-import/start: validate URL scheme, persist source field.
+  - GET /api/website-import/latest: include error_code when status=failed.
+  - scripts/worker/website-import-worker.ts: structured error codes, stale-job
+    reaper, per-job logging.
+  - apps/dashboard/src/lib/website-import/run.ts: typed error shapes.
+  - apps/dashboard/src/lib/website-import/crawl.ts: incremental writes to
+    result_json during crawl.
+
+Phase 2 backend changes:
+  None (uses existing API routes).
+
+Phase 3 backend changes:
+  NEW: apps/dashboard/src/lib/operator-tools/tool-definitions.ts
+  NEW: apps/dashboard/src/lib/operator-tools/tool-executor.ts
+  NEW: apps/dashboard/src/app/api/operator-chat/confirm/route.ts
+  NEW: apps/dashboard/src/lib/config-store.ts
+  MODIFIED: apps/dashboard/src/app/api/operator-chat/route.ts
+    (add generateText + tool calling branch, PendingChange construction)
+  MODIFIED: packages/shared/src/mock-store.ts
+    (add applyHoursChange, applyFaqChange, applyHandoffChange, etc.)
+
+Phase 5 backend changes:
+  NEW: GET /api/operator-chat/history
+  NEW: POST /api/operator-chat/history
+
+Phase 6 backend changes:
+  MODIFIED: packages/shared/src/llm/client.ts (or openai.ts provider)
+    (add token counting + recordTokenUsage)
+  MODIFIED: apps/dashboard/src/app/api/chat/route.ts (record customer usage)
+  MODIFIED: apps/dashboard/src/app/api/operator-chat/route.ts (record operator usage)
+  MODIFIED: apps/dashboard/src/app/api/operator-chat/confirm/route.ts (rate limiting)
+  OPTIONAL NEW: GET /api/admin/usage (internal cost summary)
+
+KEY UNCHANGED BACKEND:
+  - /api/chat (customer chatbot): DO NOT MODIFY
+  - /api/location-config GET + PUT: DO NOT MODIFY (tool-executor calls it internally)
+  - packages/shared/src/server/chat-handler.ts: DO NOT MODIFY
+  - packages/shared/src/llm/client.ts core interface: DO NOT BREAK (only additive)
+
+---
+
+13. FRONTEND CHANGES SUMMARY
+==============================
+
+Phase 2 frontend changes:
+  REWRITTEN: apps/dashboard/src/app/onboarding/page.tsx
+  NEW: apps/dashboard/src/app/onboarding/components/ (6 new components)
+  NEW: apps/dashboard/src/app/onboarding/hooks/useImportPolling.ts
+  NEW: apps/dashboard/src/app/onboarding/lib/onboarding-state-machine.ts
+
+Phase 3 frontend changes:
+  NEW: apps/dashboard/src/lib/operator-tools/pending-change-renderer.tsx
+  MODIFIED: apps/dashboard/src/components/ConsoleSidebar.tsx
+    (Message type extension, ConfirmationCard rendering, handleConfirm,
+    handleCancel, AISidebarContext write, contextual greeting)
+
+Phase 4 frontend changes:
+  NEW: apps/dashboard/src/contexts/AISidebarContext.tsx
+  NEW: apps/dashboard/src/components/console/PromptChip.tsx
+  NEW: apps/dashboard/src/components/console/HealthSummaryBar.tsx
+  NEW: apps/dashboard/src/components/console/panels/ (5 panel components)
+  REWRITTEN: apps/dashboard/src/app/(console)/overview/page.tsx
+  NEW: apps/dashboard/src/app/(console)/chatbot/page.tsx
+  MODIFIED: apps/dashboard/src/app/(console)/account/page.tsx (expanded)
+  MODIFIED: apps/dashboard/src/app/(console)/conversations/page.tsx
+    (moved activity chart here from overview)
+  MODIFIED: apps/dashboard/src/components/ConsoleSidebar.tsx
+    (navigation reduced to 4 items)
+  MODIFIED: apps/dashboard/next.config.ts (7 URL redirects)
+  MODIFIED: apps/dashboard/src/app/(console)/layout.tsx
+    (remove BusinessSubNav, limit PreviewPanel to /chatbot route)
+  DELETED: apps/dashboard/src/app/(console)/intents/page.tsx
+  DELETED: apps/dashboard/src/app/(console)/menus/page.tsx
+  DELETED: apps/dashboard/src/app/(console)/settings/page.tsx
+  DELETED: apps/dashboard/src/app/(console)/handoff/page.tsx
+  DELETED: apps/dashboard/src/app/(console)/widget/page.tsx
+  DELETED: apps/dashboard/src/app/(console)/integrations/page.tsx
+  DELETED or REMOVED: apps/dashboard/src/components/BusinessSubNav.tsx
+
+Phase 5 frontend changes:
+  MODIFIED: apps/dashboard/src/app/onboarding/page.tsx
+    (Stage 4 upgrade to tool-calling; direct confirm route POST)
+  MODIFIED: apps/dashboard/src/components/ConsoleSidebar.tsx
+    (session history load on mount, contextual greeting, "Finish setup" chip)
+
+KEY UNCHANGED FRONTEND:
+  - packages/ui-kit/src/ChatWidget.tsx: DO NOT MODIFY
+  - apps/dashboard/src/app/(console)/conversations/page.tsx core structure
+  - PreviewDockContext + PreviewPanel: retain for /chatbot?tab=appearance only
+
+---
+
+14. AI SYSTEM CHANGES SUMMARY
+================================
+
+OPERATOR AI (ConsoleSidebar + /api/operator-chat) — Phase 3
+
+Before: Advisory only. Generates text responses. No writes. No memory.
+        Shares handleChatPost() with the customer chatbot.
+
+After:
+  - Tool calling: generateText (Vercel AI SDK) with 9 tools via toolChoice:"auto".
+  - Two response modes: (a) streaming text for conversation, (b) JSON with
+    PendingChange for tool calls.
+  - Confirmation gate: every tool call requires explicit operator Confirm click.
+  - Execution: /api/operator-chat/confirm route, zod validation, fetch→mutate
+    →write pattern, auth + membership re-verification.
+  - Session persistence: last 50 messages stored in operator_chat_sessions.
+  - Context: buildOperatorSystemPrompt() remains unchanged; it loads business
+    context correctly. No system prompt changes needed for tool calling.
+
+CUSTOMER CHATBOT (/api/chat + ChatWidget) — NO CHANGES
+
+  The customer chatbot is production-quality. All Phases must leave it untouched:
+  - /api/chat route.ts: unchanged
+  - packages/shared/src/server/chat-handler.ts: unchanged
+  - buildKnowledgeSystemPrompt(): unchanged
+  - ChatWidget.tsx: unchanged (only used as a view component in overview)
+  - Injection detection, guardrails, streaming: unchanged
+
+LLM CLIENT — Phase 6 (additive only)
+
+  packages/shared/src/llm/client.ts gains usage recording capability.
+  The llmGenerate() and llmStream() function signatures are NOT changed.
+  Usage recording is added as a side effect (fire-and-forget database write).
+  The core interface contract is preserved.
+
+OPERATOR SYSTEM PROMPT — Phase 5 (minor)
+
+  buildOperatorSystemPrompt() in /api/operator-chat/route.ts may benefit from
+  a brief addition describing the 9 available tools, so the LLM is prompted
+  to use them proactively in onboarding Stage 4 scenarios. This is a low-risk
+  text addition, not a structural change.
+
+---
+
+15. WORKER / BACKGROUND PROCESS CONSIDERATIONS
+=================================================
+
+EXISTING WORKER: scripts/worker/website-import-worker.ts
+  Status: Functional. Requires Phase 1 hardening before Phase 2 depends on it.
+  
+  Phase 1 changes to the worker:
+    - Structured error code output (dns_fail, blocked, timeout, parse_error,
+      llm_error) instead of generic Error.message strings.
+    - Stale-job reaper: on each poll cycle, query for runs in "running" status
+      with updated_at < NOW() - 5 minutes and reset them to "failed" with
+      error_code="timeout".
+    - Comprehensive try/catch ensuring no crash leaves a job in "running"
+      with no further update.
+    - Per-job structured logging: console.info for each claimed job and result.
+
+  Worker deployment:
+    - The worker is a long-running Node.js process that must be started
+      separately from the Next.js app server.
+    - RUNBOOK.md should document how to start the worker in production.
+    - In the Replit environment, confirm the worker can run as a background
+      process alongside the Next.js dev server.
+    - The worker polls the Supabase database directly using the Supabase client.
+      It does not call HTTP routes — this is correct and should not be changed.
+
+  Worker and onboarding connection:
+    - Phase 2 onboarding UI polls GET /api/website-import/latest every 2 seconds.
+    - The worker polls the database every 5 seconds for queued jobs.
+    - This means there is a potential 5-second delay from "scan my website" click
+      to the worker claiming the job. This is acceptable.
+    - If the worker is not running, the scan will sit in "queued" indefinitely.
+      The onboarding UI should show a timeout message after 90 seconds of no
+      progress and offer a fallback to Stage 4 (manual setup).
+      This UI timeout is built in Phase 2 and is separate from the worker's
+      own stale-job reaper (which handles recovery for the database state,
+      not the UI state).
+
+  Future consideration (NOT in scope for Tandem 3.0):
+    - If Tandem scales to many simultaneous signups, the single-process worker
+      may become a bottleneck. The existing architecture already has
+      atomic job claiming (queued → running), so multiple worker instances
+      could run without conflict. This is a post-3.0 scaling concern.
+
+NO NEW WORKERS are introduced in Tandem 3.0. The operator AI tool execution
+happens synchronously within the confirm route handler (it is fast — a
+database GET + in-memory mutation + database PUT). No background queuing is
+needed for tool execution.
+
+---
+
+16. TESTING STRATEGY
+======================
+
+NOTE: The codebase currently has no automated test suite. This strategy
+describes the feasible testing approach given that constraint.
+
+TYPE SAFETY AS PRIMARY AUTOMATED GATE
+  npm run typecheck must pass at the end of every phase.
+  TypeScript catches the majority of structural regressions:
+    - Wrong prop shapes on new components.
+    - Missing fields in tool schemas.
+    - Incorrect API response shapes.
+    - Type mismatches between tool executor and config types.
+  This is the PRIMARY automated quality gate throughout the transition.
+
+LINT AS SECONDARY AUTOMATED GATE
+  npm run lint must pass at the end of every phase.
+  Catches: unused imports, unreachable code, missing dependency arrays in
+  useEffect, potential runtime errors.
+
+MANUAL SMOKE TESTS PER PHASE
+  Each phase has a defined set of acceptance criteria that should be verified
+  manually in a local dev environment before moving to the next phase.
+  The Phase 8 smoke test suite (see §10) is the comprehensive final check.
+
+UNIT TEST RECOMMENDATIONS (high value, low cost)
+  If the team wants to add minimal automated tests, these are the highest-value
+  targets:
+  
+  executor.test.ts (Phase 3):
+    - Test that add_faq appends correctly to an existing FAQs array.
+    - Test that remove_faq filters the correct item by ID.
+    - Test that update_faq modifies only the target item.
+    - Test that none of the above modify other config fields.
+    - These tests can use in-memory config objects (no Supabase needed).
+  
+  tool-definitions.test.ts (Phase 3):
+    - Test that each tool's zod schema accepts valid args and rejects invalid ones.
+    - Specifically test: overlong strings are rejected, invalid enums rejected,
+      javascript: URLs rejected.
+  
+  onboarding-state-machine.test.ts (Phase 2):
+    - Test each state transition: verify that given event X in state Y, the
+      machine reaches state Z.
+    - Pure function tests, no React needed.
+  
+  TO CREATE THESE TESTS:
+    - Add vitest to apps/dashboard (or packages/shared for executor tests).
+    - Follow the existing project's pattern for test config if any exists.
+    - Do not add test infrastructure unless time permits — typecheck + lint
+      + manual verification is acceptable for the Tandem 3.0 launch.
+
+INTEGRATION TESTING FOR TOOL CALLING (Phase 3 critical)
+  Manual integration tests using curl are specified in Phase 3B.3.
+  These are required, not optional. The confirm route must be verified
+  against a real Supabase dev/staging database:
+    - Verify correct Supabase row updates for each of the 9 tools.
+    - Verify rejection of wrong-scope locationId requests.
+    - Verify rejection of invalid toolArgs.
+
+REGRESSION CHECK — CUSTOMER CHATBOT
+  After Phase 3 (most risky phase), run npm run smoke:chat if available.
+  If not available, manually test:
+    - A guest chat session via the ChatWidget.
+    - Verify streaming works.
+    - Verify the knowledge system prompt includes recently written data
+      (e.g., after a FAQ is added via AI tool, a guest can ask about it
+      and get the right answer).
+
+---
+
+17. DEPLOYMENT STRATEGY
+=========================
+
+ENVIRONMENTS
+  Development: local Next.js dev server (npm run dev, port 3100) + local
+    worker process + Supabase local or remote dev project.
+  Staging: deploy to staging environment before production push.
+    Run all smoke tests on staging.
+  Production: deploy Next.js app + worker; push Supabase migrations.
+
+MIGRATION DEPLOYMENT ORDER
+  For each phase that includes a database migration:
+  1. Run npm run guard:migrations.
+  2. Review the migration SQL manually before pushing.
+  3. Push to staging Supabase first: npm run db:push (pointed at staging URL).
+  4. Verify no data corruption in staging.
+  5. Push to production: npm run db:push.
+  6. Deploy Next.js app changes.
+  7. Restart worker process (if worker changes were made).
+
+DEPLOYMENT ORDER WITHIN PHASES
+  For phases with both backend and frontend changes:
+  1. Deploy API route changes first (backend).
+  2. Verify API routes work via curl.
+  3. Deploy frontend changes.
+  4. Verify end-to-end in deployed environment.
+
+ROLLBACK WINDOW
+  Each phase produces a shippable increment. If a phase introduces a
+  regression, roll back to the previous deployment while the issue is fixed.
+  The redirect-first strategy (adding redirects before deleting pages) means
+  page deletions in Phase 4 can be rolled back by reverting the page deletions
+  without breaking navigation.
+
+ZERO-DOWNTIME DEPLOYMENT
+  The Next.js app is stateless between requests. Rolling deployments are safe.
+  The worker is a separate process; it can be restarted independently.
+  Database migrations that are additive (ADD COLUMN IF NOT EXISTS,
+  CREATE TABLE IF NOT EXISTS) are backward-compatible and safe to deploy
+  before the application code that uses them.
+
+ENVIRONMENT VARIABLE CHECKLIST (for Phases 3–6)
+  Existing vars (must remain configured):
+    LLM_PROVIDER           (default: openai)
+    LLM_MODEL              (default: gpt-5.2)
+    OPENAI_API_KEY         (required for all LLM calls)
+    NEXT_PUBLIC_SUPABASE_URL
+    NEXT_PUBLIC_SUPABASE_ANON_KEY
+  New vars (optional):
+    TANDEM_ADMIN_KEY       (Phase 6: gates /api/admin/usage)
+
+---
+
+18. RISK ANALYSIS
+==================
+
+RISK 1: AGENT WRITE-BACK SECURITY SURFACE (CRITICAL)
+  Description: The AI operator tool system creates a new write path into
+  the database. If authentication, authorization, or argument validation
+  has gaps, an attacker could modify any operator's configuration.
+  Likelihood: Medium (if implementation shortcuts are taken).
+  Impact: Critical (unauthorized data modification).
+  Mitigation:
+    - The confirm route re-resolves scope from auth — never trusts client payload.
+    - Zod validation applied to all toolArgs before execution.
+    - Length limits on all string fields.
+    - URL fields validated against javascript: and data: scheme injection.
+    - All confirmed writes logged with userId.
+    - Phase 8 security review specifically tests injection and IDOR scenarios.
+  Residual risk: Low if mitigations are implemented as specified.
+
+RISK 2: MOCK STORE / SUPABASE STATE DIVERGENCE (HIGH)
+  Description: The dashboard currently reads from the localStorage mock store.
+  If an AI tool write updates Supabase but the mock store update helper
+  (applyFaqChange etc.) has a bug, the operator will see stale data after
+  a confirmed change. This creates a confusing "it said it worked but
+  nothing changed" UX.
+  Likelihood: Medium (array mutation bugs are easy to introduce).
+  Impact: High (poor operator experience, loss of trust in the AI).
+  Mitigation:
+    - Each mock store update helper must be individually tested (unit test
+      or manual verification for each of the 9 tools).
+    - After confirming any change in dev, visually verify the overview panel
+      reflects the new value.
+    - The config-store version bump is a second-line refresh (if mock store
+      update misses something, the page re-fetches from /api/location-config).
+  Residual risk: Medium without unit tests; Low with tests.
+
+RISK 3: WEBSITE IMPORT WORKER NOT RUNNING (HIGH FOR ONBOARDING)
+  Description: Phase 2 onboarding depends on the worker to process scans.
+  If the worker is not running in production, every onboarding scan will
+  sit in "queued" indefinitely and the operator will see no progress.
+  Likelihood: Medium (process restarts, environment issues).
+  Impact: High (onboarding flow cannot proceed, first impression destroyed).
+  Mitigation:
+    - Phase 2 builds a 90-second UI timeout that gracefully falls back to
+      Stage 4 (manual setup) if no progress is detected.
+    - Add worker health monitoring: a simple last_poll_at column on a worker
+      health table, or a heartbeat log entry. Alert if no poll in 2 minutes.
+    - Document worker startup in RUNBOOK.md.
+  Residual risk: Medium (depends on operational monitoring quality).
+
+RISK 4: LLM MODEL BEHAVIOR VARIABILITY (MEDIUM)
+  Description: Tool calling behavior (when the LLM chooses to call a tool
+  vs. respond with text) varies between model versions. With toolChoice:"auto",
+  the LLM may call tools when a conversational response was expected, or
+  fail to call tools when the operator asks for a change in casual language.
+  Additionally, gpt-5.2 is the configured default — its function calling
+  behavior should be verified before Phase 3 cutover.
+  Likelihood: Medium.
+  Impact: Medium (unexpected tool calls, or AI not responding to change requests).
+  Mitigation:
+    - Test the 9 tools with a variety of phrasings during Phase 3B.3.
+    - The confirmation card prevents any surprise writes — even if the LLM
+      calls a tool unexpectedly, the operator must click Confirm.
+    - Tune the operator system prompt to explicitly note the available tools
+      and when to use them (vs. when to just answer a question).
+  Residual risk: Low (confirmation gate prevents harmful surprises).
+
+RISK 5: ONBOARDING STATE MACHINE EDGE CASES (MEDIUM)
+  Description: The 6-stage onboarding flow has many state transitions. Edge
+  cases (browser refresh mid-scan, network error during apply, partial apply)
+  may leave the operator in an unclear state.
+  Likelihood: Medium.
+  Impact: Medium (confused operator, incomplete setup).
+  Mitigation:
+    - The state machine (onboarding-state-machine.ts) must handle the
+      "unknown stage" case gracefully — default to Stage 1 URL input.
+    - On browser refresh, re-detect stage from server-side state:
+        if import run exists and is "succeeded" → go to Stage 3
+        if import run exists and is "running" → go to Stage 2 (resume polling)
+        if import run does not exist → go to Stage 1
+    - This detection uses GET /api/website-import/latest on onboarding mount.
+    - All "Skip for now" paths lead somewhere reasonable.
+  Residual risk: Low if stage recovery logic is implemented.
+
+RISK 6: PAGE DELETION BREAKING EXISTING OPERATOR BOOKMARKS (LOW)
+  Description: Operators who have bookmarked /settings, /knowledge, /intents,
+  /menus, /handoff, /widget, or /integrations will land on a 404 if pages are
+  deleted before redirects are added.
+  Likelihood: Low (small operator base at this stage).
+  Impact: Low (frustration, not data loss).
+  Mitigation:
+    - Phase 4B.4 adds all redirects before Phase 4C deletes any pages.
+    - Verify redirects work in dev environment before deleting any page files.
+  Residual risk: Very low.
+
+RISK 7: SUPABASE CONCURRENT WRITE RACE (LOW)
+  Description: If an operator rapidly confirms multiple AI tool changes, two
+  concurrent confirm requests could race on the fetch→mutate→write pattern,
+  with the second write overwriting the first.
+  Likelihood: Low (human confirmation flow makes rapid consecutive confirms
+  unlikely; the UI replaces the card on confirm so a second card cannot
+  be confirmed while the first is in flight).
+  Impact: Low (one change might be lost in an extremely unusual scenario).
+  Mitigation:
+    - The rate limiter (30/hour) prevents rapid automated confirms.
+    - In Phase 8, document this as a known limitation and note that optimistic
+      locking (etag-based or version field) is a post-3.0 improvement.
+  Residual risk: Very low.
+
+---
+
+19. ROLLBACK STRATEGY
+=======================
+
+PHASE 1 ROLLBACK
+  The Phase 1 changes are additive (new DB columns with defaults, better
+  error handling in worker). Rollback: revert the migration (drop columns)
+  and revert worker to prior version. Risk: low.
+
+PHASE 2 ROLLBACK
+  The new onboarding page is a rewrite of an existing page. Rollback: revert
+  apps/dashboard/src/app/onboarding/page.tsx to prior version.
+  No new API routes — all API routes used are existing and unmodified.
+  The new onboarding components can be left in place (they are not called
+  by any other page). Risk: very low.
+
+PHASE 3 ROLLBACK (most critical)
+  Phase 3 modifies the operator-chat route and ConsoleSidebar. If a rollback
+  is needed:
+    1. Revert apps/dashboard/src/app/api/operator-chat/route.ts to previous
+       version (remove generateText branch, restore pure streaming via
+       handleChatPost).
+    2. Revert ConsoleSidebar.tsx Message type extension and new rendering.
+    3. The new files (tool-definitions.ts, tool-executor.ts, confirm/route.ts,
+       config-store.ts, pending-change-renderer.tsx) can remain in place —
+       they are not called by any other system.
+    4. The mock store helpers (applyXChange functions) are additive and
+       cause no regression if not called.
+  Rollback restores exactly the Tandem 2.0 operator advisory chat behavior.
+  Risk of rollback: Low (clear revert targets).
+
+PHASE 4 ROLLBACK
+  Pages are added before old pages are deleted. Redirects are added before
+  page files are removed.
+  If needed:
+    1. Revert next.config.ts redirects (remove the 7 redirect entries).
+    2. Restore any deleted page files from git history.
+    3. Revert ConsoleSidebar navigation to full list.
+    4. Revert overview/page.tsx to prior version.
+  The /chatbot page and panel components can remain (they do not affect
+  other pages if navigation items pointing to them are removed).
+  Risk: Low if each sub-phase has a clear commit boundary.
+
+PHASE 5 ROLLBACK
+  Operator chat history: revert the GET/POST /api/operator-chat/history routes.
+    If ConsoleSidebar reverts its history-loading mount logic, the table
+    remains in Supabase but is no longer written to. No data corruption.
+  Onboarding Stage 4 tool-calling: revert to form-based fallback (Phase 2 code).
+  Risk: Low.
+
+PHASE 6 ROLLBACK
+  Usage recording is fire-and-forget (errors are logged but do not fail
+  requests). If the usage recording has a bug, it can be disabled by reverting
+  the recordTokenUsage calls without affecting chat functionality.
+  The usage_events table remains but stops receiving new rows.
+  Rate limiter: revert the 429 check in the confirm route. No data impact.
+  Risk: Very low.
+
+GIT STRATEGY FOR ROLLBACK
+  Each phase should have a clearly labeled commit (or PR) so that git revert
+  targets are unambiguous. Recommended commit messages:
+    "feat(phase-1): stabilize import pipeline with error codes and stale-job reaper"
+    "feat(phase-2): new AI-guided onboarding flow"
+    "feat(phase-3a): operator AI tool definitions and LLM integration"
+    "feat(phase-3b): confirm endpoint and tool executor"
+    "feat(phase-3c): confirmation card UI in ConsoleSidebar"
+    "feat(phase-3d): config-store for UI state sync after AI writes"
+    "feat(phase-4a): overview page redesign with state panels"
+    "feat(phase-4b): navigation restructure (4 sections, chatbot page)"
+    "feat(phase-4c): page cleanup, conversations improvement"
+    "feat(phase-5): AI tool calling integration, session persistence"
+    "feat(phase-6): usage tracking and rate limiting"
+
+---
+
+20. DEVELOPMENT EFFORT SUMMARY
+================================
+
+Phase 1 — Stabilize Website Import Pipeline
+  Tasks: Worker error codes, stale reaper, incremental writes, start validation.
+  DB migration: 1 (import_runs source + error_code column addition).
+  Estimated effort: 2–3 days
+  Parallelism: Must complete before Phase 2.
+
+Phase 2 — Build New Onboarding Flow
+  Tasks: Rewrite onboarding page, 6 new components, state machine, polling hook.
+  DB migration: 0 (reuses Phase 1 migration).
+  Estimated effort: 3–5 days
+  Parallelism: Can run in parallel with Phase 3.
+
+Phase 3 — Implement Operator AI Tool Architecture
+  Tasks: 9 tool schemas, tool executor, confirm route, config-store, sidebar UI.
+  DB migration: 0.
+  Estimated effort: 8–12 days (most complex phase)
+  Parallelism: Can run in parallel with Phase 2 and Phase 4 frontend portions.
+
+Phase 4 — Build Tandem 3.0 Dashboard
+  Tasks: Overview rewrite, 5 panel components, navigation restructure, 7 redirects,
+    /chatbot page (4 tabs), account expansion, page deletions.
+  DB migration: 0.
+  Estimated effort: 5–8 days
+  Parallelism: Frontend portions (4A, 4B) can run parallel with Phase 3.
+    config-store integration (uses Phase 3D) needs Phase 3D complete.
+
+Phase 5 — Integrate AI Control of Dashboard Settings
+  Tasks: Onboarding Stage 4 upgrade, config-store overview wiring, session
+    persistence, contextual greeting, "Finish setup" chip.
+  DB migration: 1 (operator_chat_sessions).
+  Estimated effort: 2–4 days
+  Parallelism: Sequential after Phases 2, 3, 4.
+
+Phase 6 — Usage Limits and Token Cost Controls
+  Tasks: Token counting, usage_events write, rate limiter, optional admin route.
+  DB migration: 1 (usage_events).
+  Estimated effort: 3–5 days
+  Parallelism: Can start right after Phase 3 is complete.
+
+Phase 7 — Documentation Updates
+  Tasks: AGENTS.md, copilot-instructions.md, product-plan.md archive,
+    tandem-3-product-model.md, RUNBOOK.md sections, DATABASE_SCHEMA.md.
+  DB migration: 0.
+  Estimated effort: 1–2 days
+  Parallelism: Can be done concurrently with Phase 8 preparation.
+
+Phase 8 — Launch Readiness
+  Tasks: Full smoke test suite, security review, typecheck/lint/build gate,
+    perf baseline, widget validation, RLS check, deployment checklist.
+  DB migration: 0.
+  Estimated effort: 2–4 days
+  Parallelism: Sequential after all other phases.
+
+────────────────────────────────────────────────────────────
+TOTAL ESTIMATED EFFORT RANGE:  26–43 development days
+
+SINGLE ENGINEER (sequential): approximately 6–10 weeks
+TWO ENGINEERS (phases 2+3 in parallel, 4 partially parallel): approximately 4–6 weeks
+────────────────────────────────────────────────────────────
+
+CRITICAL PATH (longest sequential chain):
+  Phase 1 → Phase 3 (sequential subs: 3A→3B→3C→3D→3E) → Phase 5 → Phase 8
+  Approximate critical path: 14–21 days
+
+QUICK WIN PHASES (can ship value earlier):
+  Phase 4A (overview redesign) and Phase 4B (navigation) can be shipped
+  independently and immediately improve operator UX without requiring
+  Phase 3 (tool calling) to be complete. Ship Phase 4A + 4B as soon as they
+  pass typecheck — they have zero backend dependencies.
+
+---
+
+END OF DOCUMENT
+================
+This roadmap covers the full Tandem 2.0 → Tandem 3.0 transition.
+Always read the referenced design documents for each phase before
+writing any code — this document provides the execution sequence and
+cross-phase context; the design documents provide the file-level
+specifications.
+
+For questions about specific implementation decisions, refer to:
+  docs/tandem3transition/tandem-3-architecture-audit.txt  (§7: Refactor Buckets)
+  docs/tandem3transition/operator-ai-tool-architecture.txt (§9: Implementation Plan)
+  docs/tandem3transition/dashboard-redesign-plan.txt (§10: Implementation Strategy)
+  docs/tandem3transition/onboarding-flow-design.txt (§4–§6: Flow + Workflow Detail)

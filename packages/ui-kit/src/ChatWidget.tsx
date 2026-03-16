@@ -869,7 +869,7 @@ export function ChatWidget({
                 const hintFromArray = parsed.missingEnv?.[0];
                 const hintFromMessage = parsed.serverMessage?.match(/missing\s+([A-Z0-9_]+)/)?.[1];
                 const envName = hintFromArray || hintFromMessage;
-                if (envName && typeof window !== "undefined" && window.location.port === "3100") {
+                if (envName) {
                   devHint = `Missing ${envName}`;
                 }
               }

@@ -63,11 +63,11 @@ function classifyImportError(error: unknown): ClassifiedError {
     return { code: "timeout", message };
   }
 
-  if (lower.includes("enotfound") || lower.includes("eai_again") || lower.includes("dns")) {
+  if (lower.includes("enotfound") || lower.includes("eai_again") || lower.includes("dns") || lower.includes("econnrefused")) {
     return { code: "dns_fail", message };
   }
 
-  if (lower.includes("forbidden") || lower.includes("blocked") || lower.includes("robots") || lower.includes("403")) {
+  if (lower.includes("forbidden") || lower.includes("blocked") || lower.includes("robots") || lower.includes("403") || lower.includes("429")) {
     return { code: "blocked", message };
   }
 
@@ -175,9 +175,52 @@ async function markRunFailed(client: WorkerSupabaseClient, runId: string, errorI
   }
 }
 
+async function reaperStalledRuns(client: WorkerSupabaseClient) {
+  const staleCutoffIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+  const { data, error } = await client
+    .from("onboarding_import_runs")
+    .update({
+      status: "failed",
+      finished_at: new Date().toISOString(),
+      error: "Worker timeout: job was in running state for more than 5 minutes without completing.",
+      error_code: "timeout",
+    })
+    .eq("status", "running")
+    .lt("started_at", staleCutoffIso)
+    .select("id")
+    .returns<Array<{ id: string }>>();
+
+  if (error) {
+    console.error("[import-worker] reaper error", { error: error.message });
+    return;
+  }
+
+  if (data && data.length > 0) {
+    console.warn("[import-worker] reaper recovered stalled runs", {
+      workerId: WORKER_ID,
+      count: data.length,
+      runIds: data.map((row) => row.id),
+    });
+  }
+}
+
 async function processRun(client: WorkerSupabaseClient, run: ClaimedRun) {
   try {
-    const result = await runWebsiteImport(run.url);
+    const result = await runWebsiteImport(run.url, {
+      onPagesCrawled: async (pages) => {
+        const { error: progressError } = await client
+          .from("onboarding_import_runs")
+          .update({ pages_json: pages })
+          .eq("id", run.id);
+        if (progressError) {
+          console.warn("[import-worker] incremental pages_json write failed", {
+            runId: run.id,
+            error: progressError.message,
+          });
+        }
+      },
+    });
     await markRunSucceeded(client, run, result);
 
     const pageTypeCounts = result.draft.pageClassification.reduce<Record<string, number>>((accumulator, page) => {
@@ -223,6 +266,13 @@ async function processBatch(client: WorkerSupabaseClient) {
       continue;
     }
 
+    console.info("[import-worker] run claimed", {
+      workerId: WORKER_ID,
+      runId: claimed.id,
+      locationId: claimed.location_id,
+      url: claimed.url,
+    });
+
     processed += 1;
     await processRun(client, claimed);
   }
@@ -249,6 +299,7 @@ async function main() {
 
   while (true) {
     try {
+      await reaperStalledRuns(client);
       const processed = await processBatch(client);
       if (processed > 0) {
         console.info("[import-worker] batch processed", { workerId: WORKER_ID, processed });
