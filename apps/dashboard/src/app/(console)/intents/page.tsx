@@ -51,7 +51,7 @@ const ROUTE_OPTIONS = [
   { value: "handoff", label: "Route to a person", icon: "🙋" },
 ] as const;
 
-export default function AssistantPage() {
+export default function AssistantPage({ hideHeader }: { hideHeader?: boolean }) {
   const hydrated = useIsStoreHydrated();
   const locationsFetched = useIsLocationsServerFetched();
   const business = useActiveBusiness();
@@ -70,10 +70,10 @@ export default function AssistantPage() {
     );
   }
 
-  return <AssistantEditor key={business.id} />;
+  return <AssistantEditor key={business.id} hideHeader={hideHeader} />;
 }
 
-function AssistantEditor() {
+function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
   const business = useActiveBusiness()!;
   const { open: openPreview } = usePreviewDock();
   const [persona, setPersona] = useState<Persona>({ name: "Tandem Assistant", greeting: "Hi! How can I help you today?", responseStyle: "balanced" });
@@ -183,11 +183,13 @@ function AssistantEditor() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text)]">Assistant</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Configure your AI assistant's personality and the topics it can handle.</p>
-        </div>
+      <div className={`flex items-start ${hideHeader ? "justify-end" : "justify-between"}`}>
+        {!hideHeader && (
+          <div>
+            <h1 className="text-xl font-bold text-[var(--color-text)]">Assistant</h1>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Configure your AI assistant's personality and the topics it can handle.</p>
+          </div>
+        )}
         <button
           type="button"
           onClick={openPreview}

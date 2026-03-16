@@ -309,7 +309,17 @@ export function ConsoleSidebar() {
         }),
       });
 
-      if (!response.ok || !response.body) throw new Error("Failed");
+      if (!response.ok) {
+        // Try to surface the server's error message for better debugging
+        let errMsg = `Request failed (${response.status})`;
+        try {
+          const errBody = await response.json();
+          if (typeof errBody?.error === "string") errMsg = errBody.error;
+        } catch { /* ignore parse failure */ }
+        console.error("[operator-chat] API error:", response.status, errMsg);
+        throw new Error(errMsg);
+      }
+      if (!response.body) throw new Error("Empty response");
 
       const contentType = response.headers.get("content-type") ?? "";
 
@@ -355,11 +365,19 @@ export function ConsoleSidebar() {
           }
         }
       }
-    } catch {
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Failed to connect";
+      console.error("[operator-chat] sendMessage failed:", errMsg);
+      const friendlyMsg =
+        errMsg.includes("LLM not configured")
+          ? "AI is not yet configured — check the server environment."
+          : errMsg.includes("Unauthorized")
+          ? "Your session expired. Please refresh the page."
+          : "Sorry, I couldn't connect. Please try again.";
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, text: "Sorry, I couldn't connect. Please try again." }
+            ? { ...m, text: friendlyMsg }
             : m,
         ),
       );
@@ -536,7 +554,7 @@ export function ConsoleSidebar() {
                   <div key={msg.id} className="flex justify-start">
                     {avatar}
                     <div className="max-w-[85%] min-w-0 break-words rounded-2xl rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-emerald-500/20 text-emerald-200">
-                      {msg.text}
+                      <span className="mr-1 font-bold">✓</span>{msg.text}
                     </div>
                   </div>
                 );

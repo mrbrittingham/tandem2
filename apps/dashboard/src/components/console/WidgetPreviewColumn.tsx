@@ -90,6 +90,7 @@ export function WidgetPreviewColumn({ location }: Props) {
     () => (location.theme ? widgetThemeToChatTheme(location.theme) : undefined),
     [location.theme],
   );
+  const scope = useMemo(() => resolveChatScope(location), [location]);
 
   return (
     <div className="flex flex-col">
@@ -103,6 +104,10 @@ export function WidgetPreviewColumn({ location }: Props) {
           <ChatWidget
             config={config}
             theme={theme}
+            businessId={scope.businessId}
+            businessSlug={scope.businessSlug}
+            locationId={scope.locationId}
+            locationSlug={scope.locationSlug}
             initiallyOpen
             showLauncher={false}
             hydrateHistory={false}

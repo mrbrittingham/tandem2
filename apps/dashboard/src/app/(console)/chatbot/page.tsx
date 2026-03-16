@@ -67,9 +67,9 @@ function ChatbotTabs() {
 
       {/* Tab content */}
       <div role="tabpanel">
-        {activeTab === "knowledge" && <KnowledgePage />}
+        {activeTab === "knowledge" && <KnowledgePage hideHeader />}
         {activeTab === "handoff" && <HandoffPage />}
-        {activeTab === "behavior" && <AssistantPage />}
+        {activeTab === "behavior" && <AssistantPage hideHeader />}
         {activeTab === "appearance" && <WidgetPage />}
       </div>
     </div>

@@ -14,7 +14,7 @@ import { buildKnowledgeProgramFromBusiness, hydrateKnowledgeProgram, toKnowledge
 import { saveLocationConfig } from "@/lib/location-config-client";
 import { updateBusiness, useActiveBusiness, useIsLocationsServerFetched, useIsStoreHydrated } from "@/lib/store-hooks";
 
-export default function KnowledgePage() {
+export default function KnowledgePage({ hideHeader }: { hideHeader?: boolean }) {
   const hydrated = useIsStoreHydrated();
   const locationsFetched = useIsLocationsServerFetched();
   const business = useActiveBusiness();
@@ -33,10 +33,10 @@ export default function KnowledgePage() {
     );
   }
 
-  return <KnowledgeEditor key={business.id} />;
+  return <KnowledgeEditor key={business.id} hideHeader={hideHeader} />;
 }
 
-function KnowledgeEditor() {
+function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
   const business = useActiveBusiness()!;
   const [program, setProgram] = useState<KnowledgeProgram | null>(null);
   const [snapshot, setSnapshot] = useState("");
@@ -159,10 +159,12 @@ function KnowledgeEditor() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--color-text)]">Knowledge</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Everything your chatbot knows. Import from your website, add Q&amp;A pairs, and manage custom knowledge.</p>
-      </div>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-xl font-bold text-[var(--color-text)]">Knowledge</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Everything your chatbot knows. Import from your website, add Q&amp;A pairs, and manage custom knowledge.</p>
+        </div>
+      )}
 
       {/* Website import */}
       <SectionCard title="Import from website" description="Scan your website to automatically pull in menus, hours, FAQs, and more.">

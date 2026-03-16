@@ -204,6 +204,19 @@ const TOOL_LABELS: Record<string, string> = {
   update_business_info: "Update Business Info",
 };
 
+// Map tool name → config section label for operator context
+const TOOL_SECTION: Record<string, string> = {
+  set_business_hours: "Knowledge",
+  add_faq: "Knowledge",
+  update_faq: "Knowledge",
+  remove_faq: "Knowledge",
+  set_handoff_contact: "Handoff",
+  remove_handoff_contact: "Handoff",
+  update_handoff_settings: "Handoff",
+  set_behavior_rules: "Behavior",
+  update_business_info: "Business Info",
+};
+
 // ---------------------------------------------------------------------------
 // ConfirmationCard component
 // ---------------------------------------------------------------------------
@@ -224,6 +237,7 @@ export function ConfirmationCard({
   onCancel,
 }: ConfirmationCardProps) {
   const toolLabel = TOOL_LABELS[pendingChange.toolName] ?? pendingChange.toolName;
+  const section = TOOL_SECTION[pendingChange.toolName];
 
   return (
     <div className="rounded-xl border border-white/15 bg-white/6 p-3 space-y-3 text-sm">
@@ -232,11 +246,16 @@ export function ConfirmationCard({
         <p className="text-white/80 text-xs leading-relaxed">{assistantMessage}</p>
       )}
 
-      {/* Change type badge */}
-      <div className="flex items-center gap-2">
+      {/* Change type badge + section */}
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="rounded-full bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/30 px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-primary)]">
           {toolLabel}
         </span>
+        {section && (
+          <span className="text-[10px] font-medium text-white/35 uppercase tracking-wide">
+            {section}
+          </span>
+        )}
       </div>
 
       {/* Structured preview of the proposed change */}
@@ -253,7 +272,7 @@ export function ConfirmationCard({
           disabled={isConfirming}
           className="flex-1 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {isConfirming ? "Saving…" : "Confirm"}
+          {isConfirming ? "Saving…" : "Apply change"}
         </button>
         <button
           type="button"

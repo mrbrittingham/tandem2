@@ -214,6 +214,14 @@ export async function POST(request: Request) {
     const openai = createOpenAI({ apiKey });
     const model = process.env.LLM_MODEL || "gpt-5.2";
 
+    console.info("[operator-chat] llm-request", {
+      userId: user.id,
+      locationId: locationId || null,
+      businessId: businessId || null,
+      model,
+      messageCount: messages.length,
+    });
+
     const result = await generateText({
       model: openai(model),
       system: systemPrompt,
@@ -228,6 +236,13 @@ export async function POST(request: Request) {
       const call = result.toolCalls[0];
       const toolName = call.toolName as string;
       const toolArgs = ((call as { input?: unknown }).input ?? {}) as Record<string, unknown>;
+
+      console.info("[operator-chat] tool-call", {
+        userId: user.id,
+        toolName,
+        locationId: locationId || null,
+        businessId: businessId || null,
+      });
 
       const humanSummary = generateHumanSummary(toolName, toolArgs);
 
@@ -251,6 +266,11 @@ export async function POST(request: Request) {
 
     // ── No tool call — return text as a plain-text streaming response ─────
     const text = result.text ?? "";
+    console.info("[operator-chat] text-response", {
+      userId: user.id,
+      chars: text.length,
+      locationId: locationId || null,
+    });
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
@@ -263,8 +283,9 @@ export async function POST(request: Request) {
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to process message";
-    return Response.json({ error: message }, { status: 500 });
+    const raw = error instanceof Error ? error.message : String(error);
+    console.error("[operator-chat] unhandled error:", raw);
+    // Return a safe generic message — do not leak internal error details
+    return Response.json({ error: "Failed to process message. Please try again." }, { status: 500 });
   }
 }
