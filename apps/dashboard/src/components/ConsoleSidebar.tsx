@@ -2,13 +2,29 @@
 
 import { useState, useRef, useEffect, type ReactNode, type KeyboardEvent, type FormEvent } from "react";
 import { Sidebar } from "@tandem/ui-kit";
+import { updateMockState } from "@tandem/shared";
 import { useActiveLocation } from "@/lib/store-hooks";
 import { resolveChatScope } from "@/lib/chat-scope";
+import { notifyConfigUpdated } from "@/lib/config-store";
+import { ConfirmationCard } from "@/lib/operator-tools/pending-change-renderer";
+import type { PendingChange } from "@/lib/operator-tools/tool-definitions";
+import {
+  applyHoursChange,
+  applyFaqChange,
+  applyHandoffChange,
+  applyBehaviorChange,
+  applyBusinessInfoChange,
+} from "@/lib/operator-tools/mock-store-updaters";
+
+type MessageType = "text" | "pending_change" | "confirm_success" | "confirm_error";
 
 type Message = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  type?: MessageType;
+  pendingChange?: PendingChange;
+  assistantMessage?: string;
 };
 
 const QUICK_ACTIONS = [
@@ -102,6 +118,8 @@ export function ConsoleSidebar() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // Set of message IDs currently awaiting /api/operator-chat/confirm response
+  const [confirmingIds, setConfirmingIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -109,14 +127,147 @@ export function ConsoleSidebar() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // ── Confirm handler ────────────────────────────────────────────────────
+  const handleConfirm = async (messageId: string, pendingChange: PendingChange) => {
+    setConfirmingIds((prev) => new Set(prev).add(messageId));
+
+    try {
+      const res = await fetch("/api/operator-chat/confirm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pendingChange }),
+      });
+
+      const body: { ok?: boolean; error?: string } = await res.json().catch(() => ({}));
+
+      if (res.ok && body.ok) {
+        // Replace the ConfirmationCard with a success message
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  type: "confirm_success" as MessageType,
+                  text: `Done! ${pendingChange.humanSummary}`,
+                  pendingChange: undefined,
+                  assistantMessage: undefined,
+                }
+              : m,
+          ),
+        );
+
+        // Apply mock store update so dashboard UI reflects the change immediately
+        const toolName = pendingChange.toolName;
+        const toolArgs = pendingChange.toolArgs;
+        const locationId = scope.locationId;
+
+        if (locationId) {
+          updateMockState((draft) => {
+            const idx = draft.businesses.findIndex((b) => b.id === locationId);
+            if (idx < 0) return;
+            const profile = draft.businesses[idx];
+
+            if (toolName === "set_business_hours") {
+              draft.businesses[idx] = applyHoursChange(profile, toolArgs);
+            } else if (
+              toolName === "add_faq" ||
+              toolName === "update_faq" ||
+              toolName === "remove_faq"
+            ) {
+              draft.businesses[idx] = applyFaqChange(
+                profile,
+                toolArgs,
+                toolName as "add_faq" | "update_faq" | "remove_faq",
+              );
+            } else if (
+              toolName === "set_handoff_contact" ||
+              toolName === "remove_handoff_contact" ||
+              toolName === "update_handoff_settings"
+            ) {
+              draft.businesses[idx] = applyHandoffChange(
+                profile,
+                toolArgs,
+                toolName as "set_handoff_contact" | "remove_handoff_contact" | "update_handoff_settings",
+              );
+            } else if (toolName === "set_behavior_rules") {
+              draft.businesses[idx] = applyBehaviorChange(profile, toolArgs);
+            } else if (toolName === "update_business_info") {
+              draft.businesses[idx] = applyBusinessInfoChange(profile, toolArgs);
+            }
+          });
+        }
+
+        // Notify config-store subscribers to re-fetch from server
+        notifyConfigUpdated();
+      } else {
+        const errMsg = body.error ?? "Something went wrong. Please try again.";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  type: "confirm_error" as MessageType,
+                  text: `Error: ${errMsg}`,
+                  pendingChange: undefined,
+                  assistantMessage: undefined,
+                }
+              : m,
+          ),
+        );
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                type: "confirm_error" as MessageType,
+                text: "Failed to connect. Please try again.",
+                pendingChange: undefined,
+                assistantMessage: undefined,
+              }
+            : m,
+        ),
+      );
+    } finally {
+      setConfirmingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
+    }
+  };
+
+  // ── Cancel handler ─────────────────────────────────────────────────────
+  const handleCancel = (messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              type: "text" as MessageType,
+              text: "Got it — no changes were made.",
+              pendingChange: undefined,
+              assistantMessage: undefined,
+            }
+          : m,
+      ),
+    );
+  };
+
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
 
     const userId = `u-${Date.now()}`;
     const assistantId = `a-${Date.now() + 1}`;
-    const userMsg: Message = { id: userId, role: "user", text: trimmed };
-    const assistantMsg: Message = { id: assistantId, role: "assistant", text: "" };
+    const userMsg: Message = { id: userId, role: "user", text: trimmed, type: "text" };
+    const assistantMsg: Message = {
+      id: assistantId,
+      role: "assistant",
+      text: "",
+      type: "text",
+    };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInput("");
@@ -149,17 +300,48 @@ export function ConsoleSidebar() {
 
       if (!response.ok || !response.body) throw new Error("Failed");
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      const contentType = response.headers.get("content-type") ?? "";
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk) {
+      if (contentType.includes("application/json")) {
+        // Tool-call response — AI is proposing a config change
+        const body: { pendingChange?: PendingChange; assistantMessage?: string; error?: string } =
+          await response.json().catch(() => ({}));
+
+        if (body.pendingChange) {
           setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + chunk } : m)),
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    type: "pending_change" as MessageType,
+                    text: "",
+                    pendingChange: body.pendingChange,
+                    assistantMessage: body.assistantMessage ?? "",
+                  }
+                : m,
+            ),
           );
+        } else {
+          // JSON response but no pending change — show message or error text
+          const fallback = body.assistantMessage ?? body.error ?? "Something went wrong.";
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, text: fallback } : m)),
+          );
+        }
+      } else {
+        // Streaming text response — read chunks
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantId ? { ...m, text: m.text + chunk } : m)),
+            );
+          }
         }
       }
     } catch {
@@ -301,49 +483,97 @@ export function ConsoleSidebar() {
         /* Messages state: messages scroll, input pinned at bottom */
         <>
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-3 py-3">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {msg.role === "assistant" && (
-                  <div
-                    className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-1"
-                    style={{
-                      background:
-                        "radial-gradient(circle at 35% 35%, #5fe3c0 0%, #2bb5e0 40%, #3263d9 80%, #1a2d6b 100%)",
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 32 32" fill="none">
-                      <circle cx="11" cy="14" r="2.5" fill="white" fillOpacity="0.9" />
-                      <circle cx="21" cy="14" r="2.5" fill="white" fillOpacity="0.9" />
-                      <path d="M10 20.5 C12 23 20 23 22 20.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.9" fill="none" />
-                    </svg>
-                  </div>
-                )}
+            {messages.map((msg) => {
+              const isAssistant = msg.role === "assistant";
+              const avatar = isAssistant ? (
                 <div
-                  className={`max-w-[85%] min-w-0 break-words rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                    msg.role === "user"
-                      ? "rounded-tr-sm bg-[var(--color-primary)] text-white"
-                      : "rounded-tl-sm bg-white/10 text-white/90"
-                  }`}
+                  className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-1"
+                  style={{
+                    background:
+                      "radial-gradient(circle at 35% 35%, #5fe3c0 0%, #2bb5e0 40%, #3263d9 80%, #1a2d6b 100%)",
+                  }}
                 >
-                  {msg.role === "assistant" ? (
-                    msg.text ? (
-                      <div className="space-y-1">{renderSimpleMarkdown(msg.text)}</div>
-                    ) : (
-                      <span className="inline-flex gap-1 items-center opacity-60">
-                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:0ms]" />
-                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:150ms]" />
-                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:300ms]" />
-                      </span>
-                    )
-                  ) : (
-                    msg.text
-                  )}
+                  <svg width="12" height="12" viewBox="0 0 32 32" fill="none">
+                    <circle cx="11" cy="14" r="2.5" fill="white" fillOpacity="0.9" />
+                    <circle cx="21" cy="14" r="2.5" fill="white" fillOpacity="0.9" />
+                    <path d="M10 20.5 C12 23 20 23 22 20.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.9" fill="none" />
+                  </svg>
                 </div>
-              </div>
-            ))}
+              ) : null;
+
+              // Pending change — show ConfirmationCard
+              if (isAssistant && msg.type === "pending_change" && msg.pendingChange) {
+                return (
+                  <div key={msg.id} className="flex justify-start">
+                    {avatar}
+                    <div className="min-w-0 flex-1">
+                      <ConfirmationCard
+                        pendingChange={msg.pendingChange}
+                        assistantMessage={msg.assistantMessage ?? ""}
+                        isConfirming={confirmingIds.has(msg.id)}
+                        onConfirm={() => handleConfirm(msg.id, msg.pendingChange!)}
+                        onCancel={() => handleCancel(msg.id)}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              // Confirm success
+              if (isAssistant && msg.type === "confirm_success") {
+                return (
+                  <div key={msg.id} className="flex justify-start">
+                    {avatar}
+                    <div className="max-w-[85%] min-w-0 break-words rounded-2xl rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-emerald-500/20 text-emerald-200">
+                      {msg.text}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Confirm error
+              if (isAssistant && msg.type === "confirm_error") {
+                return (
+                  <div key={msg.id} className="flex justify-start">
+                    {avatar}
+                    <div className="max-w-[85%] min-w-0 break-words rounded-2xl rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-red-500/20 text-red-200">
+                      {msg.text}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Default text message (user or assistant)
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  {isAssistant && avatar}
+                  <div
+                    className={`max-w-[85%] min-w-0 break-words rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? "rounded-tr-sm bg-[var(--color-primary)] text-white"
+                        : "rounded-tl-sm bg-white/10 text-white/90"
+                    }`}
+                  >
+                    {isAssistant ? (
+                      msg.text ? (
+                        <div className="space-y-1">{renderSimpleMarkdown(msg.text)}</div>
+                      ) : (
+                        <span className="inline-flex gap-1 items-center opacity-60">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:0ms]" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:150ms]" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-bounce [animation-delay:300ms]" />
+                        </span>
+                      )
+                    ) : (
+                      msg.text
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
           {inputBar}

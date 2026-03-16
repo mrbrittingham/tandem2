@@ -301,6 +301,7 @@ Optional one-command flow (starts/stops dev server automatically):
 - Anthropic and Google provider adapters are currently placeholders and throw at runtime.
 - Conversations average-response-time metric is not implemented yet.
 - No automated test suite is currently configured; rely on lint/typecheck plus targeted API/page verification.
+- **Operator AI tool rate limiting deferred**: `/api/operator-chat/confirm` has no per-user rate limit in the current implementation. A future improvement should enforce ~30 confirmed writes/hour/user via Supabase or an in-memory token-bucket to prevent runaway AI-assisted mutations.
 
 ## Supabase client safety model
 

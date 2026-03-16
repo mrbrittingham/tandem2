@@ -1,0 +1,139 @@
+Pass 3: Operator AI Tool Architecture
+======================================
+Branch: tandem3/pass-3-operator-tools
+Date: 2025-05-12
+
+## Summary
+
+Implemented the Operator AI Tool Architecture (Pass 3 of the Tandem 3.0 transition).
+Operators can now ask the ConsoleSidebar AI assistant to make configuration changes
+(hours, FAQs, handoff contacts, behavior rules, basic business info). The AI proposes
+a change via a ConfirmationCard UI; the operator confirms or cancels. Confirmed changes
+are written directly to Supabase and reflected immediately in the dashboard via mock store
+updates and a config-store version invalidation signal.
+
+## Files Created
+
+### packages/shared — no changes
+
+### apps/dashboard/src/lib/config-store.ts (NEW)
+- Pure in-memory pub/sub that tracks a version counter.
+- Increments on every confirmed AI write (via notifyConfigUpdated()).
+- Dashboard pages that display config can subscribe and re-fetch from /api/location-config
+  when the version changes, giving immediate UI refresh without a full page reload.
+- Resets on page reload by design; uses no localStorage.
+- Exports: ConfigStoreState, subscribeToConfigStore, getConfigStoreState, notifyConfigUpdated.
+
+### apps/dashboard/src/lib/operator-tools/tool-definitions.ts (NEW)
+- Defines the 9 operator tools using AI SDK v6 tool() + jsonSchema():
+    set_business_hours, add_faq, update_faq, remove_faq,
+    set_handoff_contact, remove_handoff_contact, update_handoff_settings,
+    set_behavior_rules, update_business_info
+- Uses inputSchema (AI SDK v6 field name, renamed from "parameters" in v3).
+- Exports: operatorTools, PendingChange type, OperatorToolName, OPERATOR_TOOL_NAMES,
+  generateHumanSummary(toolName, toolArgs): string.
+- PendingChange includes server-resolved locationId/businessId/locationSlug to prevent
+  client-side scope forgery.
+
+### apps/dashboard/src/lib/operator-tools/tool-executor.ts (NEW)
+- Executes confirmed tool calls by reading then writing business_location_configs in Supabase.
+- Full-read → in-memory mutate → full-write pattern prevents partial array corruption.
+- Security controls:
+    - URL fields reject javascript: scheme.
+    - All string lengths are capped.
+    - Only explicit field mappings are applied (no unknown field spread).
+    - update_business_info NEVER writes locationName or address (sanitizeKnowledgeConfig rule).
+- Exports: executeOperatorTool(toolName, toolArgs, locationId, supabase): ToolExecutorResult.
+
+### apps/dashboard/src/lib/operator-tools/mock-store-updaters.ts (NEW)
+- Updates the localStorage mock store after a confirmed tool execution so the dashboard
+  UI reflects changes without a page reload.
+- Exports: applyHoursChange, applyFaqChange, applyHandoffChange, applyBehaviorChange,
+  applyBusinessInfoChange.
+- applyBehaviorChange is a no-op at mock-store level (no training field in BusinessProfile);
+  config-store invalidation handles the UI refresh for behavior settings.
+
+### apps/dashboard/src/lib/operator-tools/pending-change-renderer.tsx (NEW)
+- ConfirmationCard React component rendered in ConsoleSidebar for "pending_change" messages.
+- Tool-specific previews for all 9 tools (PreviewSetBusinessHours, PreviewAddFaq, etc.).
+- Props: pendingChange, assistantMessage, isConfirming, onConfirm, onCancel.
+- Shows tool name badge, human-readable summary, Confirm/Cancel buttons, "Saving…" state.
+
+### apps/dashboard/src/app/api/operator-chat/confirm/route.ts (NEW)
+- POST endpoint that executes a confirmed operator tool call.
+- Auth: requires Supabase session (401 if unauthenticated).
+- Scope validation: verifies user is a member of the business owning the locationId
+  via business_memberships table (prevents cross-business config writes).
+- toolName validated against OPERATOR_TOOL_NAMES allowlist (400 on unknown tool).
+- Calls executeOperatorTool and logs: userId, locationId, businessId, toolName,
+  changedFields, humanSummary.
+- Returns: { ok: true, updatedConfig: { knowledgeConfig?, handoffConfig? } }.
+- DEFERRED: per-user rate limiting (30 writes/hour). See RUNBOOK.md Known Limitations.
+
+## Files Modified
+
+### apps/dashboard/src/app/api/operator-chat/route.ts (REPLACED)
+- Removed: handleChatPost dependency from @tandem/shared/server.
+- Added: Supabase auth check (401 if unauthenticated).
+- Added: INJECTION_PATTERNS / screenUserInput() import-injection guardrails.
+- Added: generateText with operatorTools, toolChoice "auto", maxOutputTokens 800.
+- Added: createOpenAI from @ai-sdk/openai (not "ai" package — fixed TypeScript error).
+- Tool call response: returns PendingChange JSON ({ pendingChange, assistantMessage }).
+- No-tool response: streams result as text/plain (backward-compatible with sidebar reader).
+
+### apps/dashboard/src/components/ConsoleSidebar.tsx (MODIFIED)
+- Added imports: updateMockState, notifyConfigUpdated, ConfirmationCard, PendingChange,
+  5 mock-store-updater helpers.
+- Extended Message type: type?: MessageType, pendingChange?: PendingChange,
+  assistantMessage?: string.
+- Added MessageType = "text" | "pending_change" | "confirm_success" | "confirm_error".
+- Added confirmingIds: Set<string> state for per-message loading state.
+- sendMessage(): detects Content-Type: application/json responses; if body.pendingChange
+  exists, sets message type to "pending_change" and attaches the PendingChange object.
+  Falls back to streaming reader for text/plain responses.
+- Added handleConfirm(): POSTs to /api/operator-chat/confirm, applies mock store updaters,
+  calls notifyConfigUpdated(), sets type to "confirm_success" or "confirm_error".
+- Added handleCancel(): sets type back to "text" with dismissal message.
+- Message renderer: conditionally shows ConfirmationCard for "pending_change" messages,
+  emerald-tinted bubble for "confirm_success", red-tinted bubble for "confirm_error".
+
+### apps/dashboard/src/lib/store-hooks.ts (MODIFIED)
+- Added import of subscribeToConfigStore, getConfigStoreState from @/lib/config-store.
+- Added useConfigStoreVersion(): number hook using useSyncExternalStore, for use by
+  dashboard pages that need to re-fetch after confirmed AI writes.
+
+### RUNBOOK.md (MODIFIED)
+- Added known limitation: rate limiting for /api/operator-chat/confirm is deferred.
+
+## TypeScript Fixes Required
+
+Two API changes between Vercel AI SDK versions required corrections:
+1. tool() uses "inputSchema:" in SDK v6, not "parameters:" (v3 name) — fixed in tool-definitions.ts.
+2. generateText result.toolCalls items use ".input" not ".args" — accessed via type cast in route.ts.
+3. createOpenAI must be imported from "@ai-sdk/openai", not "ai" — fixed in route.ts.
+4. updatedKnowledgeConfig needed explicit Record<string, unknown> annotation in tool-executor.ts
+   to allow businessProfile field assignment.
+
+## Verification
+
+- npm run typecheck: PASS (0 errors)
+- npm run lint: PASS for all Pass-3 files (pre-existing errors in other files not introduced)
+- npm run build: EXIT 0 — both /api/operator-chat and /api/operator-chat/confirm appear in
+  the route table as dynamic server-rendered routes.
+
+## Security Design
+
+- Both operator-chat and operator-chat/confirm require authenticated Supabase sessions.
+- Confirm route re-verifies user has membership for the business owning the locationId.
+- toolName is validated against an explicit allowlist before execution.
+- Tool executor drops unknown fields, caps string lengths, rejects javascript: URLs.
+- update_business_info cannot overwrite locationName or address (data integrity constraint).
+- INJECTION_PATTERNS screen operator prompts for common prompt-injection patterns.
+
+## Not Implemented (Out of Scope for Pass 3)
+
+- Rate limiting on /api/operator-chat/confirm (deferred, see RUNBOOK.md).
+- Dashboard redesign, nav restructure, usage tracking metrics.
+- Operator chat message persistence.
+- Customer-facing chat changes.
+- Automated test suite (no test framework configured in this repo).

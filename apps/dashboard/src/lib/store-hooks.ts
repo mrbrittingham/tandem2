@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore, useState, useEffect } from "react";
+import { subscribeToConfigStore, getConfigStoreState } from "@/lib/config-store";
 import {
   businessToWidgetConfig,
   createBusiness,
@@ -264,3 +265,11 @@ export {
   selectActiveLocation,
   updateBusiness,
 };
+
+export function useConfigStoreVersion(): number {
+  return useSyncExternalStore(
+    subscribeToConfigStore,
+    () => getConfigStoreState().version,
+    () => 0,
+  );
+}
