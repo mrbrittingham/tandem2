@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessProfile, FAQItem, PolicyItem, WidgetThemeSettings } from "@tandem/shared";
 import type {
   ImportEvent,
@@ -16,6 +16,187 @@ import { normalizeWidgetTheme } from "@/lib/widget-theme";
 import { pickReadableTextColor } from "@/lib/website-import/utils";
 import { TextInput } from "./TextInput";
 import { updateBusiness } from "@/lib/store-hooks";
+
+// ── Color helpers ────────────────────────────────────────────────────────────
+function hexToHsl(hex: string): [number, number, number] {
+  const h = hex.startsWith("#") ? hex : `#${hex}`;
+  const r = parseInt(h.slice(1, 3), 16) / 255;
+  const g = parseInt(h.slice(3, 5), 16) / 255;
+  const b = parseInt(h.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, Math.round(l * 100)];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let hue = max === r ? (g - b) / d + (g < b ? 6 : 0)
+          : max === g ? (b - r) / d + 2
+          : (r - g) / d + 4;
+  hue /= 6;
+  return [Math.round(hue * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sl = s / 100;
+  const ll = l / 100;
+  const a = sl * Math.min(ll, 1 - ll);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = ll - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, "0").toUpperCase();
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// ── HueWheelPicker ───────────────────────────────────────────────────────────
+const W = 180, CX = 90, CY = 90, OUTER = 78, INNER = 54, MID = 66, THUMB_R = 8, CENTER_R = 28;
+
+function HueWheelPicker({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragging = useRef(false);
+  const [hsl, setHsl] = useState<[number, number, number]>(() => hexToHsl(value));
+  // Ref mirrors hsl so applyAngle always reads the latest S/L without stale closures
+  const hslRef = useRef(hsl);
+  useEffect(() => { hslRef.current = hsl; }, [hsl]);
+
+  // Sync hsl from external value prop, but only when the user is not mid-drag
+  // so local state is never overwritten while dragging.
+  useEffect(() => {
+    if (!dragging.current) {
+      setHsl(hexToHsl(value));
+    }
+  }, [value]);
+
+  // Draw wheel — depends on hsl only; center uses hslToHex(hsl) so it always
+  // matches the thumb position rather than the (potentially one-render-behind) value prop.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, W, W);
+
+    // Hue ring as annulus slices
+    for (let i = 0; i < 360; i++) {
+      const a0 = ((i - 90) * Math.PI) / 180;
+      const a1 = ((i + 1.5 - 90) * Math.PI) / 180;
+      ctx.beginPath();
+      ctx.arc(CX, CY, OUTER, a0, a1);
+      ctx.arc(CX, CY, INNER, a1, a0, true);
+      ctx.closePath();
+      ctx.fillStyle = `hsl(${i},100%,50%)`;
+      ctx.fill();
+    }
+
+    // Center circle — derived from local hsl state so it stays in sync during drag
+    const localHex = hslToHex(...hsl);
+    ctx.beginPath();
+    ctx.arc(CX, CY, CENTER_R, 0, Math.PI * 2);
+    ctx.fillStyle = localHex;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Hue thumb
+    const thumbAngle = ((hsl[0] - 90) * Math.PI) / 180;
+    const tx = CX + MID * Math.cos(thumbAngle);
+    const ty = CY + MID * Math.sin(thumbAngle);
+    ctx.beginPath();
+    ctx.arc(tx, ty, THUMB_R, 0, Math.PI * 2);
+    ctx.fillStyle = "white";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.22)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }, [hsl]);
+
+  // applyAngle reads S/L from hslRef synchronously — no setState updater needed,
+  // so onChange is never called inside a state updater (the root cause of the error).
+  const applyAngle = useCallback((clientX: number, clientY: number) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const scale = W / rect.width;
+    const x = (clientX - rect.left) * scale - CX;
+    const y = (clientY - rect.top) * scale - CY;
+    const dist = Math.sqrt(x * x + y * y);
+    if (dist < INNER - 10 || dist > OUTER + 10) return;
+    let angle = (Math.atan2(y, x) * 180) / Math.PI + 90;
+    if (angle < 0) angle += 360;
+    if (angle >= 360) angle -= 360;
+    const newHue = Math.round(angle);
+    const [, s, l] = hslRef.current;
+    const newS = s < 10 ? 80 : s;
+    // L=0 (black) and L=100 (white) are achromatic at any hue — snap to a
+    // visible lightness the first time the user drags so color actually appears.
+    const newL = l < 5 ? 45 : l > 95 ? 85 : l;
+    const next: [number, number, number] = [newHue, newS, newL];
+    // Two independent calls — no side effects inside a state updater
+    setHsl(next);
+    onChange(hslToHex(...next));
+  }, [onChange]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={W}
+      height={W}
+      style={{ width: W, height: W, cursor: "crosshair", borderRadius: "50%" }}
+      onMouseDown={(e) => { dragging.current = true; applyAngle(e.clientX, e.clientY); }}
+      onMouseMove={(e) => { if (dragging.current) applyAngle(e.clientX, e.clientY); }}
+      onMouseUp={() => { dragging.current = false; }}
+      onMouseLeave={() => { dragging.current = false; }}
+    />
+  );
+}
+
+// ── ColorPickerSwatch ────────────────────────────────────────────────────────
+function ColorPickerSwatch({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (hex: string) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative flex items-center justify-center">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="group relative h-10 w-10 rounded-full border-2 border-white shadow-md ring-2 ring-amber-400 ring-offset-1 transition-transform hover:scale-110 focus:outline-none focus:ring-blue-400"
+        style={{ background: value }}
+        title={`Edit ${label}: ${value}`}
+      >
+        <span className="absolute inset-0 flex items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: "rgba(0,0,0,0.28)" }}>
+          <svg className="h-3.5 w-3.5 drop-shadow" style={{ color: "#fff" }} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+            <path d="M12.854.146a.5.5 0 0 0-.707 0L4.5 7.793 3.354 6.646a.5.5 0 1 0-.708.708l1.5 1.5a.5.5 0 0 0 .708 0l8-8a.5.5 0 0 0 0-.708zM1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
+          </svg>
+        </span>
+      </button>
+      {open && (
+        <div
+          className="absolute z-50 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/10"
+          style={{ top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" }}
+        >
+          <HueWheelPicker value={value} onChange={onChange} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 type LatestImportResponse = {
   location?: {
@@ -244,6 +425,11 @@ export function WebsiteImportPanel({
   const [menuImportMode, setMenuImportMode] = useState<"url" | "text" | null>(null);
   const [menuImportInput, setMenuImportInput] = useState("");
   const [isMenuImporting, setIsMenuImporting] = useState(false);
+  const [colorSchemeAccepted, setColorSchemeAccepted] = useState<boolean | null>(null);
+  const [colorOverrides, setColorOverrides] = useState<Record<string, string>>({});
+
+  // Reset color overrides whenever a new scan result arrives
+  useEffect(() => { setColorOverrides({}); }, [run?.id]);
 
   const selectedLocation = useMemo(
     () => locationOptions.find((entry) => entry.slug === selectedLocationSlug),
@@ -377,6 +563,7 @@ export function WebsiteImportPanel({
     setError(null);
     setSuccess(null);
     setIsLoading(true);
+    setColorSchemeAccepted(null);
 
     try {
       const response = await fetch("/api/website-import/start", {
@@ -582,12 +769,25 @@ export function WebsiteImportPanel({
     setSuccess(null);
 
     try {
+      // Build an effective draft that incorporates any user-edited color overrides
+      const applyColors = colorSchemeAccepted === true;
+      const effectiveDraft: WebsiteImportDraft = applyColors && Object.keys(colorOverrides).length > 0 ? {
+        ...draft,
+        brand: {
+          ...draft.brand,
+          primaryColor: { ...draft.brand.primaryColor, value: colorOverrides["Primary"] ?? draft.brand.primaryColor.value },
+          accentColor: { ...draft.brand.accentColor, value: colorOverrides["Accent"] ?? draft.brand.accentColor.value },
+          backgroundColor: { ...draft.brand.backgroundColor, value: colorOverrides["Surface"] ?? draft.brand.backgroundColor.value },
+          textColor: { ...draft.brand.textColor, value: colorOverrides["Text"] ?? draft.brand.textColor.value },
+        },
+      } : draft;
+
       const response = await fetch(`/api/website-import/${encodeURIComponent(run.id)}/apply`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ draft }),
+        body: JSON.stringify({ draft: effectiveDraft, applyColorScheme: applyColors }),
       });
 
       const payload = (await response.json().catch(() => ({}))) as ApplyResponse;
@@ -595,9 +795,9 @@ export function WebsiteImportPanel({
         throw new Error(getFriendlyImportError(payload.error, payload.code));
       }
 
-      const importedFaqs = toFaqItems(draft);
-      const importedPolicies = toPolicyItems(draft);
-      const nextTheme = mergeThemeFromDraft(business.theme, draft);
+      const importedFaqs = toFaqItems(effectiveDraft);
+      const importedPolicies = toPolicyItems(effectiveDraft);
+      const nextTheme = applyColors ? mergeThemeFromDraft(business.theme, effectiveDraft) : business.theme;
 
       updateBusiness(business.id, (record) => {
         if (draft.businessProfile.name.value) {
@@ -612,7 +812,9 @@ export function WebsiteImportPanel({
           record.location = draft.businessProfile.address.value;
         }
 
-        record.theme = nextTheme;
+        if (applyColors) {
+          record.theme = nextTheme;
+        }
 
         if (importedFaqs.length > 0) {
           record.faqs = importedFaqs;
@@ -868,6 +1070,89 @@ export function WebsiteImportPanel({
           onDelete={removeFaq}
         />
       </div>
+
+      {/* Suggested Color Scheme */}
+      {(() => {
+        const primary = draft?.brand?.primaryColor?.value;
+        const accent = draft?.brand?.accentColor?.value;
+        const surface = draft?.brand?.backgroundColor?.value;
+        const text = draft?.brand?.textColor?.value;
+        if (!primary && !accent) return null;
+        return (
+          <div className={`rounded-2xl border p-5 shadow-sm shadow-slate-900/5 ${
+            colorSchemeAccepted === true ? "border-emerald-300 bg-emerald-50" :
+            colorSchemeAccepted === false ? "border-slate-200 bg-slate-50 opacity-60" :
+            "border-amber-200 bg-amber-50"
+          }`}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Suggested Color Scheme</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  These colors were detected from your website. You can adjust them below, accept them to apply to your chatbot, or leave them unchanged to keep your current appearance.
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setColorSchemeAccepted(false)}
+                  className={`rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    colorSchemeAccepted === false
+                      ? "border-slate-400 bg-slate-200 text-slate-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  Deny
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setColorSchemeAccepted(true)}
+                  className={`rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    colorSchemeAccepted === true
+                      ? "border-emerald-400 bg-emerald-600 text-white"
+                      : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
+                  }`}
+                >
+                  Accept
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Primary", current: business.theme.primaryColor, suggested: primary },
+                { label: "Accent", current: business.theme.accentColor, suggested: accent },
+                { label: "Surface", current: business.theme.surfaceColor, suggested: surface },
+                { label: "Text", current: business.theme.textPrimaryColor, suggested: text },
+              ].filter((swatch) => swatch.suggested).map((swatch) => {
+                const activeColor = colorOverrides[swatch.label] ?? swatch.suggested ?? "";
+                return (
+                <div key={swatch.label} className="space-y-1.5">
+                  <p className="text-xs font-medium text-slate-500">{swatch.label}</p>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-10 w-10 shrink-0 rounded-full border-2 border-white shadow-md ring-1 ring-slate-200"
+                      style={{ background: swatch.current ?? undefined }}
+                      title={`Current: ${swatch.current ?? "unset"}`}
+                    />
+                    <svg className="h-3 w-3 shrink-0 text-slate-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6h8m-2.5-2.5L10 6l-2.5 2.5" /></svg>
+                    <ColorPickerSwatch
+                      value={activeColor}
+                      label={swatch.label}
+                      onChange={(hex) => setColorOverrides((prev) => ({ ...prev, [swatch.label]: hex }))}
+                    />
+                  </div>
+                  <p className="font-mono text-[10px] text-slate-400">{activeColor}</p>
+                </div>
+                );
+              })}
+            </div>
+
+            {colorSchemeAccepted === null && (
+              <p className="mt-3 text-xs text-amber-700">Accept or deny this color scheme before applying knowledge.</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Review & Apply */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">

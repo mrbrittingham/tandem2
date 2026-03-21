@@ -228,8 +228,8 @@ export function hydrateKnowledgeProgram(value: unknown, fallback: KnowledgeProgr
         };
       })
       .filter((entry): entry is KnowledgeProgram["uploadedSources"][number] => Boolean(entry)),
-    faqs: Array.isArray(root.faqs) ? (root.faqs as FAQItem[]) : fallback.faqs,
-    policies: Array.isArray(root.policies) ? (root.policies as PolicyItem[]) : fallback.policies,
+    faqs: deduplicateById(Array.isArray(root.faqs) ? (root.faqs as FAQItem[]) : fallback.faqs),
+    policies: deduplicateById(Array.isArray(root.policies) ? (root.policies as PolicyItem[]) : fallback.policies),
     importedInsights: {
       eventHighlights: asString(importedInsights.eventHighlights) || undefined,
       reservationGuidance: asString(importedInsights.reservationGuidance) || undefined,
@@ -273,6 +273,15 @@ export function toKnowledgeConfig(program: KnowledgeProgram) {
     importedInsights: program.importedInsights,
     structuredWebsiteKnowledge: program.structuredWebsiteKnowledge,
   };
+}
+
+function deduplicateById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 function sentenceChunks(input: string): string[] {

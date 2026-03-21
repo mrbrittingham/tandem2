@@ -6,7 +6,9 @@ const SESSION_COOKIE = "tandem_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const MESSAGE_CONTEXT_LIMIT = 50;
 const MAX_USER_MESSAGE_LENGTH = 2000;
-const DEFAULT_MAX_TOKENS = 400;
+// 700 tokens allows multi-event listings (10–15 events with dates/URLs) to
+// complete without truncation, while still being economical for short replies.
+const DEFAULT_MAX_TOKENS = 700;
 type ChatRequestBody = {
   businessId?: string;
   locationSlug?: string;

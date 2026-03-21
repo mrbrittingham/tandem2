@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FAQItem, PolicyItem } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoader } from "@/components/PageLoader";
@@ -12,7 +12,7 @@ import type { ImportedKnowledgePayload } from "@/components/WebsiteImportPanel";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { buildKnowledgeProgramFromBusiness, hydrateKnowledgeProgram, toKnowledgeConfig, type KnowledgeProgram } from "@/lib/knowledge-program";
 import { saveLocationConfig } from "@/lib/location-config-client";
-import { updateBusiness, useActiveBusiness, useIsLocationsServerFetched, useIsStoreHydrated } from "@/lib/store-hooks";
+import { updateBusiness, useActiveBusiness, useConfigStoreVersion, useIsLocationsServerFetched, useIsStoreHydrated } from "@/lib/store-hooks";
 
 export default function KnowledgePage({ hideHeader }: { hideHeader?: boolean }) {
   const hydrated = useIsStoreHydrated();
@@ -38,6 +38,7 @@ export default function KnowledgePage({ hideHeader }: { hideHeader?: boolean }) 
 
 function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
   const business = useActiveBusiness()!;
+  const configVersion = useConfigStoreVersion();
   const [program, setProgram] = useState<KnowledgeProgram | null>(null);
   const [snapshot, setSnapshot] = useState("");
   const [saving, setSaving] = useState(false);
@@ -65,7 +66,10 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
       setSnapshot(JSON.stringify(hydrated));
     };
     void hydrate();
-  }, [business.id]);
+    // Re-fetch from server whenever an AI sidebar confirm bumps configVersion.
+    // business.id gates location switches; configVersion gates AI confirms.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business.id, configVersion]);
 
   if (!program) return <PageLoader />;
 
@@ -89,11 +93,13 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
   const handleImport = (payload: ImportedKnowledgePayload) => {
     setProgram((prev) => {
       if (!prev) return prev;
+      const existingFaqIds = new Set(prev.faqs.map((f) => f.id));
+      const existingPolicyIds = new Set(prev.policies.map((p) => p.id));
       const merged: KnowledgeProgram = {
         ...prev,
         faqs: [
           ...prev.faqs,
-          ...(payload.faqs ?? []).map((q) => ({
+          ...(payload.faqs ?? []).filter((q) => !existingFaqIds.has(q.id ?? "")).map((q) => ({
             id: q.id ?? crypto.randomUUID(),
             question: q.question,
             answer: q.answer,
@@ -104,7 +110,7 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
         ],
         policies: [
           ...prev.policies,
-          ...(payload.policies ?? []).map((p) => ({
+          ...(payload.policies ?? []).filter((p) => !existingPolicyIds.has(p.id ?? "")).map((p) => ({
             id: p.id ?? crypto.randomUUID(),
             title: p.title,
             description: p.description ?? "",
@@ -113,6 +119,24 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
             updatedAt: new Date().toISOString(),
           })),
         ],
+        // Sync structured website knowledge so Save preserves imported events/menus/etc.
+        structuredWebsiteKnowledge: payload.structured
+          ? {
+              pageClassification: payload.structured.pageClassification,
+              events: payload.structured.events,
+              menuSections: payload.structured.menuSections,
+              reservations: payload.structured.reservations,
+              memberships: payload.structured.memberships,
+            }
+          : prev.structuredWebsiteKnowledge,
+        importedInsights: payload.insights
+          ? {
+              eventHighlights: payload.insights.eventHighlights,
+              reservationGuidance: payload.insights.reservationGuidance,
+              membershipNotes: payload.insights.membershipNotes,
+              menuSummary: payload.insights.menuSummary,
+            }
+          : prev.importedInsights,
       };
       return merged;
     });

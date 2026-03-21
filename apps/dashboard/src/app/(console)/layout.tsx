@@ -64,7 +64,7 @@ function ConsoleLayoutInner({ children }: { children: React.ReactNode }) {
           <ConsoleSidebar />
 
           {/* Right: topnav + content */}
-          <div className="flex min-h-screen flex-col overflow-hidden">
+          <div className="flex h-full flex-col overflow-hidden">
             <ConsoleTopbar
               leading={<LocationSwitcher onAddLocation={() => setCreateLocationOpen(true)} />}
             />

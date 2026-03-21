@@ -140,9 +140,14 @@ export function buildApplyPayload(args: {
   existingWidgetConfig: unknown;
   existingKnowledgeConfig: unknown;
   nowIso: string;
+  applyColorScheme?: boolean;
 }) {
   const existingTheme = normalizeExistingTheme(args.existingWidgetConfig);
-  const theme = buildThemeFromDraft(args.draft, existingTheme);
+  const theme = args.applyColorScheme !== false
+    ? buildThemeFromDraft(args.draft, existingTheme)
+    : (isObject(existingTheme) && Object.keys(existingTheme).length
+        ? normalizeWidgetTheme(existingTheme as WidgetThemeSettings)
+        : buildThemeFromDraft(args.draft, existingTheme));
 
   const existingWidget = isObject(args.existingWidgetConfig) ? args.existingWidgetConfig : {};
   const existingKnowledge = isObject(args.existingKnowledgeConfig) ? args.existingKnowledgeConfig : {};

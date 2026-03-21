@@ -165,8 +165,12 @@ function sanitizeLegacySeededLocation(location: BusinessProfile): BusinessProfil
     "hello@cedarandsage.com",
   ]);
 
-  next.contacts = next.contacts.filter((entry) => !seedContacts.has(entry.value.trim()));
-  next.handoff.contactMethods = next.handoff.contactMethods.filter((entry) => !seedContacts.has(entry.value.trim()));
+  next.contacts = next.contacts
+    .filter((entry) => !seedContacts.has(entry.value.trim()))
+    .map((entry) => (entry.id ? entry : { ...entry, id: createId() }));
+  next.handoff.contactMethods = next.handoff.contactMethods
+    .filter((entry) => !seedContacts.has(entry.value.trim()))
+    .map((entry) => (entry.id ? entry : { ...entry, id: createId() }));
 
   return next;
 }

@@ -1,5 +1,4 @@
-import { getChatStore, handleChatGet, handleChatPost, isDevSmokeBypass } from "@tandem/shared/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getChatStore, getServerSupabaseClient, handleChatGet, handleChatPost, isDevSmokeBypass } from "@tandem/shared/server";
 import { BusinessResolutionError, resolveBusinessId } from "@/lib/website-import/business-resolver";
 
 export const runtime = "nodejs";
@@ -52,21 +51,73 @@ function asString(value: unknown): string {
 // Format helpers for knowledge data
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Event data sanitisation
+// Some events (especially those imported from Eventbrite-style pages) end up
+// with category and description fields that contain raw scraped metadata:
+//   category: "Live Music Windmill Creek Phone: (410) 251-6122 Website: ..."
+//   description: "Categories: Live Music Windmill Creek Phone: ..."
+// These sanitisers strip the garbage before formatting so the LLM sees clean
+// data and eventTypeHint gets a chance to add the semantic type annotation.
+// ---------------------------------------------------------------------------
+
+/** Strip phone/website/email contamination from scraped event category strings. */
+function sanitizeCategory(cat: string): string {
+  if (!cat) return cat;
+  return cat
+    .replace(/\s+(?:Phone:|Website:|Email:|View\s+Organizer|\(\d{3}\)).*$/i, "")
+    .replace(/\s+\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\s*$/g, (m) =>
+      // Only strip trailing business-name-like suffix after real category text
+      // e.g. "Live Music Windmill Creek" → "Live Music"
+      m.trim().split(/\s+/).length <= 3 ? "" : m
+    )
+    .trim();
+}
+
+/**
+ * Strip descriptions that are just scraped category metadata rather than real
+ * event copy. Pattern: descriptions that start with "Categories:" or contain
+ * only phone/website/email data are not useful to the LLM.
+ */
+function sanitizeDescription(desc: string): string {
+  if (!desc) return desc;
+  if (/^\s*Categories:/i.test(desc)) return "";
+  // If over 60% of the content is phone/url/email tokens and no sentence structure, drop it
+  if (desc.length > 40 && /(?:Phone:|Website:|Email:|View\s+Organizer)/i.test(desc) && !/[.!?]/.test(desc)) return "";
+  return desc;
+}
+
+// Normalized category label used for semantic type hints on sparse events.
+// When an event has no description the formatted line is the only signal the
+// LLM sees, so we annotate it explicitly so it can satisfy synonym queries
+// like "bands", "performers", "concerts", etc.
+function eventTypeHint(category: string, description: string): string {
+  if (description.length > 20) return ""; // description already provides context
+  if (/live\s*music/i.test(category)) return " — live music performer / band";
+  if (/workshop|paint\s*and\s*sip|class/i.test(category)) return " — workshop / class";
+  if (/dining|prix\s*fixe|tasting/i.test(category)) return " — special dining event";
+  if (/comedy/i.test(category)) return " — comedy show";
+  if (/trivia|game\s*night/i.test(category)) return " — trivia / game night";
+  return "";
+}
+
 function formatEventLines(events: unknown[]): string {
   return events
-    .slice(0, 12)
+    .slice(0, 20) // raised from 12; storage allows up to 20 events
     .map((entry) => {
       const object = asObject(entry);
       const title = asString(object.title);
       if (!title) return "";
       const date = asString(object.date);
       const time = asString(object.time);
-      const description = asString(object.description).slice(0, 180);
+      const rawDescription = sanitizeDescription(asString(object.description));
+      const description = rawDescription.slice(0, 180);
       const sourceUrl = asString(object.sourceUrl);
       const bookingInfo = asString(object.bookingInfo);
-      const category = asString(object.category);
+      const category = sanitizeCategory(asString(object.category));
+      const typeHint = eventTypeHint(category, description);
       return [
-        `- ${title}${date ? ` | ${date}` : ""}${time ? ` ${time}` : ""}`,
+        `- ${title}${date ? ` | ${date}` : ""}${time ? ` ${time}` : ""}${typeHint}`,
         category ? `  category: ${category}` : "",
         description ? `  summary: ${description}` : "",
         bookingInfo ? `  booking: ${bookingInfo}` : "",
@@ -92,6 +143,20 @@ function formatMenuLines(menuSections: unknown[]): string {
     .join("\n");
 }
 
+function formatFaqLines(faqs: unknown[]): string {
+  return faqs
+    .slice(0, 20)
+    .map((entry) => {
+      const object = asObject(entry);
+      const question = asString(object.question);
+      const answer = asString(object.answer);
+      if (!question || !answer) return "";
+      return `Q: ${question}\nA: ${answer.slice(0, 300)}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 function formatPolicyLines(policies: unknown[]): string {
   return policies
     .slice(0, 6)
@@ -104,6 +169,37 @@ function formatPolicyLines(policies: unknown[]): string {
     })
     .filter(Boolean)
     .join("\n");
+}
+
+// Builds a small category→topic bridge block so the LLM can join user
+// vocabulary ("bands", "concerts") with stored category labels ("Live Music").
+function buildEventCategoryHints(events: unknown[]): string {
+  const categories = new Set<string>();
+  for (const entry of events) {
+    const cat = sanitizeCategory(asString(asObject(entry).category));
+    if (cat) categories.add(cat.toLowerCase());
+  }
+  if (categories.size === 0) return "";
+
+  const lines: string[] = [
+    "Event category reference — use this mapping when matching user questions to events:",
+  ];
+  if ([...categories].some((c) => /live\s*music/i.test(c))) {
+    lines.push('- "Live Music" events: answer questions about bands, performers, musicians, acts, concerts, shows, who is playing, live entertainment, music nights');
+  }
+  if ([...categories].some((c) => /workshop|paint|class/i.test(c))) {
+    lines.push('- "Workshop" events: answer questions about classes, craft nights, painting events, workshops, sip and paint');
+  }
+  if ([...categories].some((c) => /dining|prix|tasting/i.test(c))) {
+    lines.push('- "Dining event" events: answer questions about special dinners, tasting menus, prix fixe nights, culinary events');
+  }
+  if ([...categories].some((c) => /comedy/i.test(c))) {
+    lines.push('- "Comedy" events: answer questions about comedy nights, stand-up shows, open mic');
+  }
+  if ([...categories].some((c) => /trivia|game/i.test(c))) {
+    lines.push('- "Trivia" events: answer questions about trivia nights, game nights, pub quiz');
+  }
+  return lines.join("\n");
 }
 
 function formatHandoffSection(handoffConfig: Record<string, unknown>): string {
@@ -129,6 +225,146 @@ function formatHandoffSection(handoffConfig: Record<string, unknown>): string {
 }
 
 // ---------------------------------------------------------------------------
+// Deterministic named-event lookup
+// Used to pre-resolve specific act/performer queries before the LLM call so
+// the model doesn't miss matches due to vocabulary mismatch.
+// ---------------------------------------------------------------------------
+
+// Words that carry no identity signal in a named-act query.
+const EVENT_LOOKUP_STOP_WORDS = new Set([
+  "the","a","an","is","are","was","were","be","been","being",
+  "do","does","did","have","has","had","will","would","could","should",
+  "may","might","shall","can","cant","wont","dont","whats",
+  "any","some","all","both","few","more","most","other","such",
+  "this","that","these","those","what","which","who","whom","whose",
+  "when","where","why","how",
+  "in","on","at","by","for","with","about","of","to","from","or","and","not","no","yes",
+  "up","still","just","also","very","real","really","ever","you","your",'"you\' re"',
+  // query verbs / time words
+  "playing","coming","performing","scheduled","happening","going","doing",
+  "back","return","returns","again","right","now","next","last","soon",
+  "tonight","today","tomorrow","year","month","week","weekend","time",
+  // generic event-category nouns (not specific names)
+  "event","events","show","shows","concert","concerts",
+  "band","bands","performer","performers","musician","musicians",
+  "music","entertainment","act","acts","live","night","nights",
+]);
+
+function normalizeTermForMatch(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\u2018\u2019']/g, "'")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Extract meaningful identity words from a user message for event-title matching. */
+function extractQueryTerms(userMessage: string): string[] {
+  return normalizeTermForMatch(userMessage)
+    .split(" ")
+    .filter((w) => w.length >= 3 && !EVENT_LOOKUP_STOP_WORDS.has(w));
+}
+
+/** Returns 0–100 score for how well an event title matches the query terms. */
+function scoreEventTitleMatch(eventTitle: string, queryTerms: string[]): number {
+  if (!queryTerms.length) return 0;
+  const normalizedTitle = normalizeTermForMatch(eventTitle);
+  const titleWords = normalizedTitle.split(" ").filter((w) => w.length >= 2);
+
+  // Full phrase match (e.g. "outliers" inside "the outliers")
+  const queryPhrase = queryTerms.join(" ");
+  if (normalizedTitle.includes(queryPhrase)) return 100;
+
+  // Per-term word overlap
+  let matched = 0;
+  for (const term of queryTerms) {
+    if (titleWords.some((tw) => tw === term || tw.startsWith(term) || term.startsWith(tw))) {
+      matched++;
+    }
+  }
+  if (matched === 0) return 0;
+  return Math.round((matched / queryTerms.length) * 80);
+}
+
+/**
+ * Returns true if the user message is likely asking about a specific named
+ * performer, act, or event — as opposed to a category query ("any bands?").
+ * Triggers on: multi-word title-case names, quoted strings, or "are/is X"
+ * patterns that leave a non-empty significant-word residual.
+ */
+function looksLikeNamedEntityQuery(userMessage: string, queryTerms: string[]): boolean {
+  if (!queryTerms.length) return false;
+  // Proper noun pattern: "The Outliers", "Neil Helgeson", "Hot Sauce"
+  if (/\b[A-Z][a-z]{1,20}(\s+[A-Z][a-z]{0,20}){1,4}\b/.test(userMessage)) return true;
+  // Quoted name
+  if (/["']([^"']{2,40})["']/.test(userMessage)) return true;
+  // "what about X" / "what happened to X"
+  if (/\bwhat\s+(about|happened\s+to)\b/i.test(userMessage)) return true;
+  // "is/are X playing/performing/coming/returning?" — catches lowercase performer queries
+  // e.g. "are the outliers playing?" / "is neil helgeson coming back?"
+  if (/\b(is|are)\b.+\b(playing|performing|coming\s+up|coming\s+back|returning|return)\b/i.test(userMessage)) return true;
+  // "is X scheduled" / "is X on the schedule"
+  if (/\b(is|are)\b.+\b(scheduled|on\s+the\s+schedule|on\s+the\s+lineup|on\s+the\s+calendar)\b/i.test(userMessage)) return true;
+  return false;
+}
+
+/**
+ * Pre-resolves named act/event queries before the LLM call.
+ * Searches ALL saved events (not just the first 12 in the formatted prompt block),
+ * scores by title match, and returns a high-priority hint block.
+ * Returns empty string if the query is not a named-entity query or no match found.
+ */
+export function buildNamedEventHint(knowledgeConfig: unknown, userMessage: string): string {
+  const queryTerms = extractQueryTerms(userMessage);
+  if (!looksLikeNamedEntityQuery(userMessage, queryTerms)) return "";
+
+  const root = asObject(knowledgeConfig);
+  const imported = asObject(root.structuredWebsiteKnowledge);
+  const events = Array.isArray(imported.events) ? imported.events : [];
+  if (!events.length) return "";
+
+  const scored: Array<{ event: Record<string, unknown>; score: number }> = [];
+  for (const entry of events) {
+    const ev = asObject(entry);
+    const title = asString(ev.title);
+    if (!title) continue;
+    const score = scoreEventTitleMatch(title, queryTerms);
+    if (score >= 25) scored.push({ event: ev, score });
+  }
+
+  if (!scored.length) return "";
+  scored.sort((a, b) => b.score - a.score);
+
+  const resultLines = scored.slice(0, 4).map(({ event: ev }) => {
+    const title = asString(ev.title);
+    const date = asString(ev.date);
+    const time = asString(ev.time);
+    const category = asString(ev.category);
+    const description = asString(ev.description);
+    const bookingInfo = asString(ev.bookingInfo);
+    const sourceUrl = asString(ev.sourceUrl);
+    return [
+      `  • "${title}"`,
+      date ? `date: ${date}` : "(no date saved)",
+      time ? `time: ${time}` : "",
+      category ? `category: ${category}` : "",
+      description ? `details: ${description.slice(0, 160)}` : "",
+      bookingInfo ? `booking: ${bookingInfo}` : "",
+      sourceUrl ? `url: ${sourceUrl}` : "",
+    ].filter(Boolean).join(" | ");
+  }).join("\n");
+
+  return [
+    `NAMED EVENT LOOKUP — pre-resolved by server code (high confidence, do not ignore):`,
+    `The user asked about: "${userMessage.slice(0, 120)}"`,
+    `Matched event record(s) from saved knowledge:`,
+    resultLines,
+    `INSTRUCTION: Answer directly using these confirmed records. Do NOT say you have no information. If the date is in the past, say the event has already happened and suggest calling or checking the website for future dates. Use the LLM only for phrasing, not for lookup.`,
+  ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // System prompt construction
 // ---------------------------------------------------------------------------
 
@@ -141,19 +377,22 @@ export function buildKnowledgeSystemPrompt(
   const fields = asObject(structured.fields);
   const imported = asObject(root.structuredWebsiteKnowledge);
   const contact = asObject(root.contact);
-  const importedPolicies = Array.isArray(root.importedPolicies) ? root.importedPolicies : [];
+  const importedPolicies = Array.isArray(root.importedPolicies) ? root.importedPolicies : Array.isArray(root.policies) ? root.policies : [];
+  const importedFaqs = Array.isArray(root.faqs) ? root.faqs : Array.isArray(root.importedFaqs) ? root.importedFaqs : [];
   const reservations = asObject(imported.reservations);
   const memberships = asObject(imported.memberships);
   const events = Array.isArray(imported.events) ? imported.events : [];
   const menuSections = Array.isArray(imported.menuSections) ? imported.menuSections : [];
 
   const eventLines = formatEventLines(events);
+  const eventCategoryHints = buildEventCategoryHints(events);
   const menuLines = formatMenuLines(menuSections);
   const menuSectionTitles = menuSections
     .map((s) => asString(asObject(s).title))
     .filter(Boolean)
     .join(", ");
   const policyLines = formatPolicyLines(importedPolicies);
+  const faqLines = formatFaqLines(importedFaqs);
   const handoffLines = handoffConfig ? formatHandoffSection(handoffConfig) : "";
   const reservationBookingUrl = asString(reservations.bookingUrl);
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -231,10 +470,31 @@ export function buildKnowledgeSystemPrompt(
     // ── Events guidance ──
     [
       "Events: Use only the event records in the knowledge below — never invent events.",
-      "List upcoming events as bullets with **Name** — date, time, brief description.",
-      "Prioritize events happening soonest. Skip past events unless the guest asks.",
-      "For 'this weekend', interpret as Friday–Sunday relative to the current date.",
-      "If no events are listed, say you don't have upcoming events in the system and suggest checking the website or calling.",
+
+      "SYNONYM MATCHING — treat these user phrases as equivalent when searching events:",
+      "'bands', 'performers', 'acts', 'musicians', 'who is playing', 'live music', 'concerts', 'shows', 'entertainment', 'music tonight' → match against events in the 'Live Music' category.",
+      "Any event annotated as 'live music performer / band' IS a band/music act.",
+
+      "NAMED ACT QUERIES (e.g. 'are The Outliers playing?', 'is Neil Helgeson coming back?'):",
+      "Search event titles using case-insensitive partial matching.",
+      "'The Outliers' matches a title 'The Outliers'. 'Outliers' alone also matches. 'Neil Helgeson' matches 'Neil Helgeson Live'.",
+      "If a match is found, confirm the date/time. If no exact match, check for partial matches before saying it is not scheduled.",
+
+      "CATEGORY QUERIES (e.g. 'any bands playing?', 'what live music do you have?'):",
+      "Return ALL upcoming events from the matching category as a bulleted list.",
+      "Use the Event category reference block below to map user terms to categories.",
+
+      "DATE/TIMEFRAME QUERIES (e.g. 'what's happening in April?', 'any events this weekend?', 'what's coming up?'):",
+      "Filter events by their date field and list all that fall in the requested period.",
+      "For 'this weekend', use Friday–Sunday relative to the current date.",
+
+      "FORMAT: List events as bullets — **Title** | date, time (category if relevant).",
+      "Prioritize soonest events first. Omit past events unless the guest explicitly asks about them.",
+
+      "FALLBACK RULES:",
+      "Only say 'we have no upcoming events' if the events list in the knowledge is completely empty.",
+      "If the events list is non-empty but no events match the specific query (e.g., no comedy events when asked about comedy), say: 'I checked our schedule and didn't find any [X] events. Here's what we do have coming up:' and list the upcoming events.",
+      "Never redirect to 'check the website or call us' for an event question if you have already examined the events list — only use that redirect when the list is truly empty.",
     ].join(" "),
 
     // ── Dietary & allergy guidance ──
@@ -255,6 +515,8 @@ export function buildKnowledgeSystemPrompt(
     [
       "CRITICAL: Never fabricate hours, menu items, prices, events, policies, staff names, or contact info.",
       "Only state facts from the knowledge sections below.",
+      "PERMITTED INFERENCE: You may infer that a 'Live Music' category event is a band/performer/music act — that is reading the data, not inventing it.",
+      "You may also infer that 'The Outliers' (an event title) is a performing band/act if the category is 'Live Music'.",
       "If info is missing, say so and suggest the guest call or check the website.",
       "Never say 'typically' or 'usually' about specific business facts you can't confirm.",
     ].join(" "),
@@ -303,9 +565,11 @@ export function buildKnowledgeSystemPrompt(
       ? `Membership info: ${asString(fields.memberships) || asString(memberships.benefits)}`
       : "",
     asString(fields.menuHighlights) ? `Menu highlights: ${asString(fields.menuHighlights)}` : "",
+    eventCategoryHints ? `${eventCategoryHints}` : "",
     eventLines ? `Upcoming events:\n${eventLines}` : "",
     menuSectionTitles ? `Available menu sections (use these names when asking clarifying questions): ${menuSectionTitles}` : "",
     menuLines ? `Menu sections (full detail — only share a specific section when the customer asks for it):\n${menuLines}` : "",
+    faqLines ? `Q&A knowledge (use these to answer common questions directly):\n${faqLines}` : "",
     policyLines ? `Policies:\n${policyLines}` : "",
     handoffLines,
   ].filter((entry) => entry.trim().length > 0);
@@ -320,7 +584,7 @@ type LocationConfigForChat = {
 
 async function loadLocationChatConfig(locationId: string): Promise<LocationConfigForChat> {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = getServerSupabaseClient();
     const { data } = await supabase
       .from("business_location_configs")
       .select("knowledge_config,handoff_config")
@@ -369,7 +633,7 @@ function logScopeResolved(method: "GET" | "POST", scope: ScopeResolutionSuccess)
 }
 
 async function resolveLocationScope(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: ReturnType<typeof getServerSupabaseClient>,
   input: {
     businessId: string;
     locationId?: string;
@@ -428,7 +692,7 @@ async function resolveChatScope(input: ChatScopeInput): Promise<ScopeResolution>
     return createScopeFailure(400, "locationId or locationSlug required", "missing_location_identifier");
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = getServerSupabaseClient();
 
   let resolvedBusinessId = businessIdInput;
   let resolvedBusinessSlug: string | undefined;
@@ -555,13 +819,49 @@ export async function POST(request: Request) {
       ? buildKnowledgeSystemPrompt(locationConfig.knowledgeConfig, locationConfig.handoffConfig)
       : "";
 
+    // Debug: log every event title stored for this location so we can diagnose
+    // missing-event issues without needing a DB query.
+    if (locationConfig.knowledgeConfig) {
+      const _dbgRoot = asObject(locationConfig.knowledgeConfig);
+      const _dbgEvents = Array.isArray(asObject(_dbgRoot.structuredWebsiteKnowledge).events)
+        ? (asObject(_dbgRoot.structuredWebsiteKnowledge).events as unknown[])
+        : [];
+      console.log(
+        `[api/chat] events_inventory businessId=${resolvedScope.businessId} locationSlug=${resolvedScope.locationSlug} ` +
+          `count=${_dbgEvents.length} titles=${JSON.stringify(_dbgEvents.map((e) => asString(asObject(e).title)))}`,
+      );
+    }
+
+    // Deterministic named-event lookup — runs in TypeScript before the LLM call.
+    // Searches ALL saved events (not limited to the formatted prompt slice) for a
+    // partial title match and injects a high-priority confirmed-result block so
+    // the model cannot miss it due to wording mismatch.
+    const lastUserMsg = [...(body.messages ?? [])].reverse().find(
+      (m) => m?.role === "user" && typeof m?.content === "string",
+    );
+    const namedEventHint =
+      lastUserMsg && typeof lastUserMsg.content === "string" && locationConfig.knowledgeConfig
+        ? buildNamedEventHint(locationConfig.knowledgeConfig, lastUserMsg.content)
+        : "";
+    if (namedEventHint) {
+      console.log(
+        `[api/chat] named_event_hint_injected for: "${
+          typeof lastUserMsg?.content === "string" ? lastUserMsg.content.slice(0, 100) : ""
+        }"`,
+      );
+    }
+
     const nextBody = {
       ...body,
       businessId: resolvedScope.businessId,
       businessSlug: resolvedScope.businessSlug,
       locationId: resolvedScope.locationId,
       locationSlug: resolvedScope.locationSlug,
-      system: [knowledgeSystem, body.system].filter((entry) => typeof entry === "string" && entry.trim().length > 0).join("\n\n"),
+      // namedEventHint is prepended so it appears before the main knowledge block
+      // and takes priority as the highest-confidence signal for the model.
+      system: [namedEventHint, knowledgeSystem, body.system]
+        .filter((entry) => typeof entry === "string" && entry.trim().length > 0)
+        .join("\n\n"),
     };
 
     const nextRequest = new Request(request.url, {

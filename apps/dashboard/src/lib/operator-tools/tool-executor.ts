@@ -217,11 +217,12 @@ async function executeSetBusinessHours(
   if (!hoursNarrative) throw new Error("hoursNarrative is required and must be a string.");
 
   const knowledgeConfig = { ...existing.knowledge };
-  const knowledgeProgram = asObject(knowledgeConfig.knowledgeProgram);
-  const fields = asObject(knowledgeProgram.fields);
+  // Write narrative into the `structured` key — this is the path hydrateKnowledgeProgram reads.
+  const structured = asObject(knowledgeConfig.structured);
+  const fields = asObject(structured.fields);
 
-  const updatedKnowledgeProgram = {
-    ...knowledgeProgram,
+  const updatedStructured = {
+    ...structured,
     fields: {
       ...fields,
       hours: hoursNarrative,
@@ -232,10 +233,10 @@ async function executeSetBusinessHours(
   const rawBlocks = asArray<Record<string, unknown>>(args.hoursBlocks);
   let updatedKnowledgeConfig: Record<string, unknown> = {
     ...knowledgeConfig,
-    knowledgeProgram: updatedKnowledgeProgram,
+    structured: updatedStructured,
   };
 
-  const changedFields = ["knowledgeProgram.fields.hours"];
+  const changedFields = ["structured.fields.hours"];
 
   if (rawBlocks.length > 0) {
     const hoursBlocks: OperatingHoursBlock[] = rawBlocks
@@ -288,8 +289,11 @@ async function executeAddFaq(
   const category = asString(args.category || "general", 100) || "general";
 
   const knowledgeConfig = { ...existing.knowledge };
-  const knowledgeProgram = asObject(knowledgeConfig.knowledgeProgram);
-  const existingFaqs: FAQItem[] = asArray<FAQItem>(knowledgeProgram.faqs);
+  // Read from top-level faqs (the path hydrateKnowledgeProgram reads). Fall back to
+  // knowledgeProgram.faqs for backward compat with entries written before this fix.
+  const topFaqs: FAQItem[] = asArray<FAQItem>(knowledgeConfig.faqs);
+  const legacyFaqs: FAQItem[] = asArray<FAQItem>(asObject(knowledgeConfig.knowledgeProgram).faqs);
+  const existingFaqs = topFaqs.length > 0 ? topFaqs : legacyFaqs;
 
   const newFaq: FAQItem = {
     id: generateId(),
@@ -303,17 +307,15 @@ async function executeAddFaq(
   const updatedFaqs: FAQItem[] = [...existingFaqs, newFaq];
   const updatedKnowledgeConfig: Record<string, unknown> = {
     ...knowledgeConfig,
-    knowledgeProgram: {
-      ...knowledgeProgram,
-      faqs: updatedFaqs,
-    },
+    faqs: updatedFaqs,
+    importedFaqs: updatedFaqs,
   };
 
   await writeKnowledgeConfig(supabase, locationId, existing.handoff, updatedKnowledgeConfig);
 
   return {
     updatedConfig: { knowledgeConfig: updatedKnowledgeConfig },
-    changedFields: ["knowledgeProgram.faqs"],
+    changedFields: ["faqs"],
   };
 }
 
@@ -327,8 +329,9 @@ async function executeUpdateFaq(
   if (!id) throw new Error("id is required and must be a string.");
 
   const knowledgeConfig = { ...existing.knowledge };
-  const knowledgeProgram = asObject(knowledgeConfig.knowledgeProgram);
-  const existingFaqs: FAQItem[] = asArray<FAQItem>(knowledgeProgram.faqs);
+  const topFaqs: FAQItem[] = asArray<FAQItem>(knowledgeConfig.faqs);
+  const legacyFaqs: FAQItem[] = asArray<FAQItem>(asObject(knowledgeConfig.knowledgeProgram).faqs);
+  const existingFaqs = topFaqs.length > 0 ? topFaqs : legacyFaqs;
 
   const targetIdx = existingFaqs.findIndex((f) => f.id === id);
   if (targetIdx === -1) {
@@ -351,17 +354,15 @@ async function executeUpdateFaq(
   const updatedFaqs: FAQItem[] = existingFaqs.map((f, i) => (i === targetIdx ? updatedFaq : f));
   const updatedKnowledgeConfig: Record<string, unknown> = {
     ...knowledgeConfig,
-    knowledgeProgram: {
-      ...knowledgeProgram,
-      faqs: updatedFaqs,
-    },
+    faqs: updatedFaqs,
+    importedFaqs: updatedFaqs,
   };
 
   await writeKnowledgeConfig(supabase, locationId, existing.handoff, updatedKnowledgeConfig);
 
   return {
     updatedConfig: { knowledgeConfig: updatedKnowledgeConfig },
-    changedFields: changedFields.map((f) => `knowledgeProgram.faqs[id=${id}].${f}`),
+    changedFields: changedFields.map((f) => `faqs[id=${id}].${f}`),
   };
 }
 
@@ -375,23 +376,22 @@ async function executeRemoveFaq(
   if (!id) throw new Error("id is required and must be a string.");
 
   const knowledgeConfig = { ...existing.knowledge };
-  const knowledgeProgram = asObject(knowledgeConfig.knowledgeProgram);
-  const existingFaqs: FAQItem[] = asArray<FAQItem>(knowledgeProgram.faqs);
+  const topFaqs: FAQItem[] = asArray<FAQItem>(knowledgeConfig.faqs);
+  const legacyFaqs: FAQItem[] = asArray<FAQItem>(asObject(knowledgeConfig.knowledgeProgram).faqs);
+  const existingFaqs = topFaqs.length > 0 ? topFaqs : legacyFaqs;
 
   const updatedFaqs = existingFaqs.filter((f) => f.id !== id);
   const updatedKnowledgeConfig: Record<string, unknown> = {
     ...knowledgeConfig,
-    knowledgeProgram: {
-      ...knowledgeProgram,
-      faqs: updatedFaqs,
-    },
+    faqs: updatedFaqs,
+    importedFaqs: updatedFaqs,
   };
 
   await writeKnowledgeConfig(supabase, locationId, existing.handoff, updatedKnowledgeConfig);
 
   return {
     updatedConfig: { knowledgeConfig: updatedKnowledgeConfig },
-    changedFields: [`knowledgeProgram.faqs (removed id=${id})`],
+    changedFields: [`faqs (removed id=${id})`],
   };
 }
 
@@ -529,8 +529,9 @@ async function executeSetBehaviorRules(
   supabase: SupabaseClient,
 ): Promise<ToolExecutorResult> {
   const knowledgeConfig = { ...existing.knowledge };
-  const knowledgeProgram = asObject(knowledgeConfig.knowledgeProgram);
-  const existingTraining = asObject(knowledgeProgram.training);
+  // Write into the `structured` key — the path hydrateKnowledgeProgram reads for training.
+  const structured = asObject(knowledgeConfig.structured);
+  const existingTraining = asObject(structured.training);
 
   const toneVoice = asStringOrUndefined(args.toneVoice, 500);
   const shouldAnswer = asStringOrUndefined(args.shouldAnswer, 500);
@@ -558,8 +559,8 @@ async function executeSetBehaviorRules(
 
   const updatedKnowledgeConfig: Record<string, unknown> = {
     ...knowledgeConfig,
-    knowledgeProgram: {
-      ...knowledgeProgram,
+    structured: {
+      ...structured,
       training: updatedTraining,
     },
   };
@@ -568,7 +569,7 @@ async function executeSetBehaviorRules(
 
   return {
     updatedConfig: { knowledgeConfig: updatedKnowledgeConfig },
-    changedFields: changedFields.map((f) => `knowledgeProgram.training.${f}`),
+    changedFields: changedFields.map((f) => `structured.training.${f}`),
   };
 }
 

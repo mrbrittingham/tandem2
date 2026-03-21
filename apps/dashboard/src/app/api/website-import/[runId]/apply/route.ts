@@ -10,6 +10,7 @@ type JsonObject = Record<string, unknown>;
 
 type ApplyBody = {
   draft?: WebsiteImportDraft;
+  applyColorScheme?: boolean;
 };
 
 function asObject(value: unknown): JsonObject {
@@ -83,6 +84,7 @@ export async function POST(
       existingWidgetConfig: existingConfig?.widget_config,
       existingKnowledgeConfig: existingConfig?.knowledge_config,
       nowIso,
+      applyColorScheme: body.applyColorScheme !== false,
     });
 
     const { error: upsertError } = await supabase

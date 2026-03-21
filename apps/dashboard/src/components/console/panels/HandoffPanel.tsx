@@ -73,14 +73,14 @@ export function HandoffPanel({ location, onPromptChip }: Props) {
       ) : (
         <ul className="space-y-1.5">
           {enabledMethods.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 text-sm">
+            <li key={c.id || `enabled-${c.type}-${c.value}`} className="flex items-center gap-2 text-sm">
               <span aria-hidden>{typeIcon(c.type)}</span>
               <span className="font-medium text-[var(--color-text)]">{c.label}</span>
               <span className="ml-auto truncate text-[var(--color-text-secondary)]">{c.value}</span>
             </li>
           ))}
           {disabledMethods.map((c) => (
-            <li key={c.id} className="flex items-center gap-2 text-sm opacity-40">
+            <li key={c.id || `disabled-${c.type}-${c.value}`} className="flex items-center gap-2 text-sm opacity-40">
               <span aria-hidden>{typeIcon(c.type)}</span>
               <span className="text-[var(--color-text)]">{c.label}</span>
               <span className="ml-auto text-[var(--color-text-secondary)]">Disabled</span>

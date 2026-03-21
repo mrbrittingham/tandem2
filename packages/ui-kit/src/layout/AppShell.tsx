@@ -12,7 +12,7 @@ export function AppShell({ children, className }: AppShellProps) {
   return (
     <div
       className={cn(
-        "grid min-h-screen grid-cols-1 lg:grid-cols-[var(--sidebar-width)_1fr]",
+        "grid h-screen overflow-hidden grid-cols-1 lg:grid-cols-[var(--sidebar-width)_1fr]",
         className,
       )}
     >
