@@ -229,11 +229,14 @@ function warmHueScore(hue: number, saturation: number, lightness: number): numbe
   if (hue <= 20 || hue >= 345) return 16;   // true reds, crimsons, scarlets
   if (hue > 20 && hue <= 55) return 14;     // oranges, golds, ambers, warm earth
   if (hue > 270 && hue < 345) return 12;    // wines, magentas, rose, deep purples
-  if (hue > 55 && hue <= 100) return 2;     // yellow-greens (low hospitality signal)
-  if (hue > 175 && hue <= 265) {            // blues: common nav/web default
-    // Dark or desaturated blues are almost always layout chrome, not brand colors
-    if (lightness < 40 || saturation < 40) return -12;
-    return -4;
+  if (hue > 55 && hue <= 100) return 2;     // amber/yellow edge (low hospitality signal)
+  if (hue > 100 && hue <= 160) return -4;   // greens/limes/teals: uncommon in food branding
+  if (hue > 160 && hue <= 265) {            // cyans, teals, blues: extremely common web/UI defaults
+    // Most Elementor/Squarespace/Wix defaults live in this range (teal blues, sky blues).
+    // Dark or desaturated values are always layout chrome; bright cyans/teals are usually
+    // framework defaults or decorative accents — not physical brand colors.
+    if (lightness < 40 || saturation < 40) return -16;
+    return -10;
   }
   return 0;
 }
@@ -382,7 +385,13 @@ export function rankBrandColorCandidates(
     const effectiveCount = Math.max(1, count - navPenaltyCount);
     let score = Math.min(Math.round(Math.log2(effectiveCount + 1) * 10), 38);
 
-    score += Math.round(s * 0.45);          // saturation bonus
+    // Saturation bonus capped at S=70 equivalent to prevent hyper-saturated web/UI
+    // defaults (Elementor factory colors, social icons) from outscoring real brand colors.
+    // Physical brand pigments rarely exceed S=75 in CSS HSL; S>80 is almost always
+    // a synthetic/default color.
+    const cappedS = Math.min(s, 72);
+    score += Math.round(cappedS * 0.45);    // saturation bonus (capped)
+    if (s > 80) score -= Math.round((s - 80) * 0.4); // vivid-color penalty
     if (l >= 25 && l <= 70) score += 14;    // visible-brand lightness sweet spot
     else if (l > 70 && l <= 82) score += 5; // lighter but still usable
     score += warmHueScore(h, s, l);          // hospitality hue bias

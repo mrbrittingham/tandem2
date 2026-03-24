@@ -1332,7 +1332,9 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
   // Rank color candidates by brand signal. Near-duplicate hex variants are clustered
   // before scoring so rendering variance doesn't dilute brand signal.
   const rankedColors = rankBrandColorCandidates(signals.colorCandidates);
-  const primaryColor = rankedColors[0];
+  // Skip cssvar-accent zone colors for primary: a variable named --accent/--cta
+  // should be the accent, not the brand primary. Let it fall through to accent selection.
+  const primaryColor = rankedColors.find((c) => c.zone !== "cssvar-accent") ?? rankedColors[0];
   const accentColor = pickDistinctAccentColor(rankedColors, primaryColor?.value) ?? primaryColor;
 
   // Confidence correlates with which zone produced the winning color.
