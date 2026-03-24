@@ -372,7 +372,7 @@ const themeToCSSVariables = (tokens: ThemeTokens): CSSVarStyles => ({
   "--tandem-radius-button": tokens.buttonRadius,
   "--tandem-radius-input": tokens.inputRadius,
   "--tandem-radius-launcher": tokens.launcherRadius,
-  "--tandem-user-bg": tokens.sendButtonColor,
+  "--tandem-user-bg": tokens.userBubbleBg,
   "--tandem-user-text": tokens.userBubbleText,
   "--tandem-assistant-bg": tokens.assistantBubbleBg,
   "--tandem-assistant-text": tokens.assistantBubbleText,

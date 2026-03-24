@@ -35,13 +35,5 @@ outputType = "webview"
 localPort = 3100
 externalPort = 80
 
-[userenv]
-
-[userenv.shared]
-NEXT_PUBLIC_SUPABASE_URL = "https://hewevejtnvagwtplbuwu.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_dRRaMZYKd66J8JF_Bg227A_ZhhaoSFy"
-OPENAI_API_KEY = "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"
-TANDEM_API_KEY = "pijh345938u4g_jndasd87das"
-
 [deployment]
 deploymentTarget = "cloudrun"

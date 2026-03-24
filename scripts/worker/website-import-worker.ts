@@ -206,6 +206,11 @@ async function reaperStalledRuns(client: WorkerSupabaseClient) {
 }
 
 async function processRun(client: WorkerSupabaseClient, run: ClaimedRun) {
+  console.info("[import-worker] ── SCAN START ─────────────────────────────────────────────");
+  console.info("[import-worker] run         :", run.id);
+  console.info("[import-worker] location    :", run.location_id);
+  console.info("[import-worker] url         :", run.url);
+  console.info("[import-worker] ─────────────────────────────────────────────────────────────");
   try {
     const result = await runWebsiteImport(run.url, {
       onPagesCrawled: async (pages) => {
@@ -228,10 +233,12 @@ async function processRun(client: WorkerSupabaseClient, run: ClaimedRun) {
       return accumulator;
     }, {});
 
+    const brand = result.draft.brand;
     console.info("[import-worker] run succeeded", {
       workerId: WORKER_ID,
       runId: run.id,
       locationId: run.location_id,
+      url: run.url,
       pages: result.pages.length,
       pageTypeCounts,
       events: result.draft.restaurantKnowledge.events.length,
@@ -239,6 +246,18 @@ async function processRun(client: WorkerSupabaseClient, run: ClaimedRun) {
       bookingDetected: Boolean(result.draft.restaurantKnowledge.reservations.bookingUrl || result.draft.restaurantKnowledge.reservations.instructions),
       faqs: result.draft.faqs.length,
       policies: result.draft.policies.length,
+    });
+    console.info("[import-worker] brand colors extracted", {
+      runId: run.id,
+      locationId: run.location_id,
+      primary: brand.primaryColor.value ?? "none",
+      primaryConfidence: brand.primaryColor.confidence,
+      accent: brand.accentColor.value ?? "none",
+      accentConfidence: brand.accentColor.confidence,
+      background: brand.backgroundColor.value ?? "none",
+      text: brand.textColor.value ?? "none",
+      mutedText: brand.mutedTextColor?.value ?? "none",
+      font: brand.fontFamily.value ?? "none",
     });
   } catch (error) {
     const classified = classifyImportError(error);

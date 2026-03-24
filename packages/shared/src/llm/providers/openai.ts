@@ -13,7 +13,8 @@ function getOpenAIClient() {
   return createOpenAI({ apiKey });
 }
 
-const getModel = () => process.env.LLM_MODEL || "gpt-4o";
+const resolveModel = (request: LLMRequest) =>
+  request.model ?? process.env.LLM_MODEL ?? "gpt-4o";
 
 const baseOptions = (request: LLMRequest) => ({
   system: request.system,
@@ -24,7 +25,7 @@ const baseOptions = (request: LLMRequest) => ({
 
 export async function generateWithOpenAI(request: LLMRequest): Promise<LLMResponse> {
   const client = getOpenAIClient();
-  const model = getModel();
+  const model = resolveModel(request);
 
   const { text } = await generateText({
     model: client(model),
@@ -36,7 +37,7 @@ export async function generateWithOpenAI(request: LLMRequest): Promise<LLMRespon
 
 export async function streamWithOpenAI(request: LLMRequest): Promise<LLMStreamResponse> {
   const client = getOpenAIClient();
-  const model = getModel();
+  const model = resolveModel(request);
 
   const result = await streamText({
     model: client(model),

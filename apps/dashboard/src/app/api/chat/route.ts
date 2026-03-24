@@ -48,11 +48,7 @@ function asString(value: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Format helpers for knowledge data
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Event data sanitisation
+// Format helpers and event data sanitisation
 // Some events (especially those imported from Eventbrite-style pages) end up
 // with category and description fields that contain raw scraped metadata:
 //   category: "Live Music Windmill Creek Phone: (410) 251-6122 Website: ..."
@@ -340,8 +336,10 @@ export function buildNamedEventHint(knowledgeConfig: unknown, userMessage: strin
     const title = asString(ev.title);
     const date = asString(ev.date);
     const time = asString(ev.time);
-    const category = asString(ev.category);
-    const description = asString(ev.description);
+    // Apply the same sanitisers used in formatEventLines so the named-event
+    // hint block stays consistent with the main events listing.
+    const category = sanitizeCategory(asString(ev.category));
+    const description = sanitizeDescription(asString(ev.description));
     const bookingInfo = asString(ev.bookingInfo);
     const sourceUrl = asString(ev.sourceUrl);
     return [
@@ -435,6 +433,15 @@ export function buildKnowledgeSystemPrompt(
       "If the menu has 5 or fewer items total, list them all directly.",
     ].join(" "),
 
+    // ── Partial knowledge guidance ──
+    [
+      "Partial knowledge: When you have SOME relevant information but not all, share what you know rather than defaulting to 'I don't have that information'.",
+      "Example — you have a phone number but no email: share the phone, then say 'For email, your best bet is our website or giving us a ring.'",
+      "Example — you have general hours but not holiday hours: share the regular hours and note 'for holiday schedules it's worth giving us a call to confirm.'",
+      "Only redirect to call/website when you truly have NO relevant information for a category.",
+      "Never respond with a bare 'I don't have that information' — always pair it with what you do know or a clear path forward.",
+    ].join(" "),
+
     // ── Hours guidance ──
     [
       "Hours questions: When asked about hours, list every day as a bullet using **Day**: hours format.",
@@ -517,8 +524,9 @@ export function buildKnowledgeSystemPrompt(
       "Only state facts from the knowledge sections below.",
       "PERMITTED INFERENCE: You may infer that a 'Live Music' category event is a band/performer/music act — that is reading the data, not inventing it.",
       "You may also infer that 'The Outliers' (an event title) is a performing band/act if the category is 'Live Music'.",
-      "If info is missing, say so and suggest the guest call or check the website.",
+      "MISSING INFO: If a specific detail is not in the knowledge, say so naturally ('I don't have the exact pricing for that, but...') and offer the next-best thing (call us, check the website, here's what I do know).",
       "Never say 'typically' or 'usually' about specific business facts you can't confirm.",
+      "Never apologize excessively for not knowing something — one brief acknowledgement, then be helpful.",
     ].join(" "),
 
     // ── Recommendation rules ──
@@ -530,8 +538,10 @@ export function buildKnowledgeSystemPrompt(
 
     // ── Handoff / escalation ──
     [
-      "Escalation: Send the guest to staff for: private event bookings, complaints, billing, lost & found, accessibility needs, or after two failed answer attempts.",
-      "When escalating, share any phone/email from the knowledge and say why a human can help better.",
+      "Escalation: Route the guest to staff ONLY for: private event bookings, complaints, billing disputes, lost & found, accessibility needs, or after two clearly failed answer attempts.",
+      "For common questions (hours, menu, events, reservations), ALWAYS try to answer from knowledge before suggesting a call.",
+      "When you do escalate, share any phone/email from the knowledge and explain briefly why a person can help better.",
+      "Avoid the lazy redirect ('just give us a call!') for things you already have information about.",
     ].join(" "),
 
     // ── Scope boundaries ──

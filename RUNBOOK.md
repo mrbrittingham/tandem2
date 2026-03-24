@@ -26,9 +26,11 @@ Deploy sequence (copy/paste checklist):
 
 1. Install dependencies:
    - `npm install`
-2. Create env file from template:
-   - `cp .env.example .env.local`
-3. Fill required env values (see below).
+2. Create env file from the app's template:
+   - `cp apps/dashboard/.env.example apps/dashboard/.env.local`
+   - Fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `OPENAI_API_KEY`.
+   - The canonical env file for the dashboard app is `apps/dashboard/.env.local`.
+   - The root `.env.example` is a pointer only — all variable definitions are in `apps/dashboard/.env.example`.
 
 ## Required environment variables
 
@@ -41,7 +43,9 @@ Deploy sequence (copy/paste checklist):
 
 ### Optional
 - `LLM_PROVIDER` (default: `openai`)
-- `LLM_MODEL` (default: `gpt-5.2`)
+- `LLM_MODEL` (default: `gpt-4o`; global model fallback for all AI surfaces)
+- `LLM_MODEL_WIDGET` (override model for customer-facing chat widget)
+- `LLM_MODEL_OPERATOR` (override model for operator dashboard AI assistant)
 - `CHAT_STORE_DIR` (preferred file-store override path)
 - `TANDEM_DATA_DIR` (file-store override)
 - `TANDEM_API_KEY`

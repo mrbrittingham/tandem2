@@ -212,7 +212,7 @@ export async function POST(request: Request) {
     }
 
     const openai = createOpenAI({ apiKey });
-    const model = process.env.LLM_MODEL || "gpt-4o";
+    const model = process.env.LLM_MODEL_OPERATOR || process.env.LLM_MODEL || "gpt-4o";
 
     console.info("[operator-chat] llm-request", {
       userId: user.id,

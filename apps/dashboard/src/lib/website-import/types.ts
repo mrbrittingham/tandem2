@@ -41,7 +41,7 @@ export type ImportSignals = {
   socialLinks: SocialLink[];
   logoCandidates: Array<{ url: string; sourceUrl: string }>;
   faviconCandidates: Array<{ url: string; sourceUrl: string }>;
-  colorCandidates: Array<{ value: string; sourceUrl: string }>;
+  colorCandidates: Array<{ value: string; sourceUrl: string; context?: string }>;
   fontCandidates: Array<{ value: string; sourceUrl: string }>;
 };
 
@@ -148,6 +148,7 @@ export type WebsiteImportDraft = {
     accentColor: ImportClaim<string>;
     backgroundColor: ImportClaim<string>;
     textColor: ImportClaim<string>;
+    mutedTextColor?: ImportClaim<string>;
     fontFamily: ImportClaim<string>;
     logoUrl: ImportClaim<string>;
   };

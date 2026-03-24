@@ -256,21 +256,40 @@ function warmHueScore(hue: number, saturation: number, lightness: number): numbe
  * counts aggregated — preventing rendering variants from splitting brand-signal votes.
  *
  * Scores remaining candidates by:
- *  - effective frequency (non-nav occurrences weighted, log scale)
+ *  - effective frequency (brand-zone full weight, nav 40% weight, log scale)
  *  - saturation (intentional brand colors tend to be more saturated)
  *  - lightness in the "visible brand" range (25–70%)
  *  - warm hue bonus (reds, golds, wines typical of restaurant/hospitality)
- *  - context bonus: SVG fills/strokes (+42), button/CTA backgrounds (+28),
- *                   footer zone (+16), explicit background-color CSS (+18)
- *  - context penalty: colors appearing predominantly in nav/header (-8 to -22)
+ *  - context bonus: logo container/brand-mark (+60), SVG fills/strokes (+42),
+ *                   button/CTA backgrounds (+28), footer zone (+16),
+ *                   explicit background-color CSS (+18)
+ *  - CSS custom property bonus: primary (+65), accent (+55), secondary (+40), generic (+25)
+ *  - builder default penalty (-18) if cssvar is used but never in logo/svg/button/footer zones
+ *  - nav penalty: colors appearing predominantly in nav/header (-8 to -22),
+ *      UNLESS the color also has logo/svg presence (those ARE brand colors)
  *
  * Returns candidates sorted high-to-low by brand-signal score, each tagged
- * with their dominant zone ("svg" | "button" | "footer" | "bg" | "nav" | "style").
+ * with their dominant zone ("logo" | "svg" | "button" | "footer" | "bg" | "nav" | "style").
  */
 export function rankBrandColorCandidates(
   candidates: Array<{ value: string; sourceUrl: string; context?: string }>,
 ): Array<{ value: string; sourceUrl: string; zone: string }> {
-  type ColorData = { count: number; svgCount: number; navCount: number; buttonCount: number; footerCount: number; bgCount: number; cssvarPrimaryCount: number; cssvarAccentCount: number; cssvarSecondaryCount: number; cssvarCount: number; sourceUrl: string };
+  console.log(`[color-rank] ★ NEW COLOR ENGINE ACTIVE ★  (${candidates.length} input candidates)`);
+  // logoCount: colors from explicit logo/brand containers or nav/header CSS text properties
+  type ColorData = {
+    count: number;
+    logoCount: number;
+    svgCount: number;
+    navCount: number;
+    buttonCount: number;
+    footerCount: number;
+    bgCount: number;
+    cssvarPrimaryCount: number;
+    cssvarAccentCount: number;
+    cssvarSecondaryCount: number;
+    cssvarCount: number;
+    sourceUrl: string;
+  };
   const freq = new Map<string, ColorData>();
 
   for (const c of candidates) {
@@ -279,6 +298,7 @@ export function rankBrandColorCandidates(
     const existing = freq.get(key);
     if (existing) {
       existing.count += 1;
+      if (ctx === "logo") existing.logoCount += 1;
       if (ctx === "svg") existing.svgCount += 1;
       if (ctx === "nav") existing.navCount += 1;
       if (ctx === "button") existing.buttonCount += 1;
@@ -291,6 +311,7 @@ export function rankBrandColorCandidates(
     } else {
       freq.set(key, {
         count: 1,
+        logoCount: ctx === "logo" ? 1 : 0,
         svgCount: ctx === "svg" ? 1 : 0,
         navCount: ctx === "nav" ? 1 : 0,
         buttonCount: ctx === "button" ? 1 : 0,
@@ -329,6 +350,7 @@ export function rankBrandColorCandidates(
         const dl = Math.abs(center.hsl[2] - candidate.hsl[2]);
         if (dh <= 15 && dl <= 18) {
           cluster.count += candidate.data.count;
+          cluster.logoCount += candidate.data.logoCount;
           cluster.svgCount += candidate.data.svgCount;
           cluster.navCount += candidate.data.navCount;
           cluster.buttonCount += candidate.data.buttonCount;
@@ -357,6 +379,7 @@ export function rankBrandColorCandidates(
     if (d.cssvarAccentCount > 0) return "cssvar-accent";
     if (d.cssvarSecondaryCount > 0) return "cssvar-secondary";
     if (d.cssvarCount > 0) return "cssvar";
+    if (d.logoCount > 0) return "logo";
     if (d.svgCount > 0) return "svg";
     if (d.buttonCount > 0) return "button";
     if (d.footerCount > 0) return "footer";
@@ -365,7 +388,21 @@ export function rankBrandColorCandidates(
     return "style";
   }
 
-  const scored: Array<{ value: string; sourceUrl: string; score: number; zone: string }> = [];
+  type ScoredEntry = {
+    value: string;
+    sourceUrl: string;
+    score: number;
+    zone: string;
+    // Debug breakdown
+    freqScore: number;
+    satBonus: number;
+    lightBonus: number;
+    hueBonus: number;
+    zoneBonus: number;
+    navPenalty: number;
+    builderPenalty: number;
+  };
+  const scored: ScoredEntry[] = [];
 
   for (const [value, data] of clustered) {
     if (GENERIC_HEX_COLORS.has(value)) continue;
@@ -378,56 +415,105 @@ export function rankBrandColorCandidates(
     if (l > 91) continue;   // near-white: background noise
     if (s < 10) continue;   // achromatic: UI chrome, not brand
 
-    const { count, svgCount, navCount, buttonCount, footerCount, bgCount, cssvarPrimaryCount, cssvarAccentCount, cssvarSecondaryCount, cssvarCount, sourceUrl } = data;
+    const {
+      count, logoCount, svgCount, navCount, buttonCount, footerCount,
+      bgCount, cssvarPrimaryCount, cssvarAccentCount, cssvarSecondaryCount, cssvarCount, sourceUrl,
+    } = data;
 
-    // Frequency score using effective (non-nav-dominant) count
-    const navPenaltyCount = Math.floor(navCount * 0.6);
-    const effectiveCount = Math.max(1, count - navPenaltyCount);
-    let score = Math.min(Math.round(Math.log2(effectiveCount + 1) * 10), 38);
+    // --- Frequency score ---
+    // Brand-zone usages count fully; plain nav usages are discounted.
+    // Logo/svg/button/footer are definitive brand zones → full weight.
+    // Nav is ambiguous (could be brand text OR layout chrome) → 40% weight.
+    const brandZoneCount = logoCount + svgCount + buttonCount + footerCount + bgCount;
+    const weightedCount = brandZoneCount + Math.round(navCount * 0.4) + Math.max(0, count - brandZoneCount - navCount);
+    const freqScore = Math.min(Math.round(Math.log2(Math.max(1, weightedCount) + 1) * 10), 38);
 
-    // Saturation bonus capped at S=70 equivalent to prevent hyper-saturated web/UI
-    // defaults (Elementor factory colors, social icons) from outscoring real brand colors.
-    // Physical brand pigments rarely exceed S=75 in CSS HSL; S>80 is almost always
-    // a synthetic/default color.
+    // --- Saturation bonus ---
     const cappedS = Math.min(s, 72);
-    score += Math.round(cappedS * 0.45);    // saturation bonus (capped)
-    if (s > 80) score -= Math.round((s - 80) * 0.4); // vivid-color penalty
-    if (l >= 25 && l <= 70) score += 14;    // visible-brand lightness sweet spot
-    else if (l > 70 && l <= 82) score += 5; // lighter but still usable
-    score += warmHueScore(h, s, l);          // hospitality hue bias
+    const satBonus = Math.round(cappedS * 0.45) - (s > 80 ? Math.round((s - 80) * 0.4) : 0);
 
-    // CSS custom property bonuses — highest confidence because the developer explicitly
-    // named these as brand roles. Override frequency-based signals from generic CSS noise.
-    if (cssvarPrimaryCount > 0) score += 65; // --primary/--brand/--e-global-color-primary
-    if (cssvarAccentCount > 0) score += 55;  // --accent/--cta/--e-global-color-accent
-    if (cssvarSecondaryCount > 0) score += 40; // --secondary/--e-global-color-secondary
-    if (cssvarCount > 0) score += 25;        // generic --*color* CSS variable
+    // --- Lightness bonus ---
+    const lightBonus = l >= 25 && l <= 70 ? 14 : l > 70 && l <= 82 ? 5 : 0;
 
-    // Context bonuses: colors found in brand-defining zones
-    if (svgCount > 0) score += 42;    // inline SVG fill/stroke → logo identity color
-    if (buttonCount > 0) score += 28; // button/CTA background → designer chose this intentionally
-    if (footerCount > 0) score += 16; // footer background/border → brand color confirmation
-    if (bgCount > 0) score += 18;     // explicit CSS background-color → deliberate assignment
+    // --- Hue bonus (hospitality bias) ---
+    const hueBonus = warmHueScore(h, s, l);
 
-    // Context penalty: colors that appear predominantly in nav/header are layout chrome
-    if (navCount > 0) {
-      const navRatio = navCount / count;
-      if (navRatio > 0.55) score -= 22;
-      else if (navRatio > 0.28) score -= 8;
+    // --- Zone bonuses (brand-signal zones) ---
+    let zoneBonus = 0;
+    // Logo containers and brand-mark SVGs — designer explicitly placed brand color here.
+    // A color appearing even once in a logo container is strong evidence.
+    if (logoCount > 0) zoneBonus += 60;    // logo container/brand-mark text: strongest non-cssvar signal
+    if (svgCount > 0) zoneBonus += 42;     // inline SVG fill/stroke → logo identity color
+    if (buttonCount > 0) zoneBonus += 28;  // button/CTA background → designer-intentional accent
+    if (footerCount > 0) zoneBonus += 16;  // footer: brand identity confirmation
+    if (bgCount > 0) zoneBonus += 18;      // explicit CSS background-color → deliberate
+
+    // CSS custom property bonuses — semantically-named variables are strong brand signals.
+    if (cssvarPrimaryCount > 0) zoneBonus += 65;
+    if (cssvarAccentCount > 0) zoneBonus += 55;
+    if (cssvarSecondaryCount > 0) zoneBonus += 40;
+    if (cssvarCount > 0) zoneBonus += 25;
+
+    // Builder default defense: cssvar bonus earned from a CSS variable that is ONLY
+    // present in generic body / non-zone contexts suggests it may be a framework default
+    // color used for body text or generic accents — apply a discount.
+    let builderPenalty = 0;
+    const hasCssvar = cssvarPrimaryCount + cssvarAccentCount + cssvarSecondaryCount + cssvarCount > 0;
+    const hasBrandZone = logoCount + svgCount + buttonCount + footerCount > 0;
+    if (hasCssvar && !hasBrandZone) {
+      // CSS variable is used but never appears in a brand-defining zone.
+      // Could be Elementor factory default or body text variable — discount it.
+      builderPenalty = -18;
     }
 
-    scored.push({ value, sourceUrl, score, zone: dominantZone(data) });
+    // Nav penalty: colors that appear ONLY or predominantly in nav/header are layout chrome.
+    // EXCEPTION: if the color also has logo or SVG presence, it's a brand color (not chrome) —
+    // skip the penalty so we don't hurt gold/maroon logo text colors.
+    let navPenalty = 0;
+    if (navCount > 0 && logoCount === 0 && svgCount === 0) {
+      const navRatio = navCount / count;
+      if (navRatio > 0.55) navPenalty = -22;
+      else if (navRatio > 0.28) navPenalty = -8;
+    }
+
+    const score = freqScore + satBonus + lightBonus + hueBonus + zoneBonus + navPenalty + builderPenalty;
+
+    scored.push({
+      value,
+      sourceUrl,
+      score,
+      zone: dominantZone(data),
+      freqScore,
+      satBonus,
+      lightBonus,
+      hueBonus,
+      zoneBonus,
+      navPenalty,
+      builderPenalty,
+    });
   }
 
   scored.sort((a, b) => b.score - a.score);
 
+  // ── Rich debug output ────────────────────────────────────────────────────────
   if (scored.length > 0) {
-    const top = scored.slice(0, 8).map((c) => {
+    console.log(`[color-rank] ── TOP ${Math.min(15, scored.length)} RANKED CANDIDATES ──────────────────────────`);
+    for (const c of scored.slice(0, 15)) {
       const hsl = hexToHslTriplet(c.value) ?? [0, 0, 0];
-      const data = clustered.get(c.value);
-      return `${c.value}(score=${c.score} zone=${c.zone} n=${data?.count ?? 0} cvP=${data?.cssvarPrimaryCount ?? 0} cvA=${data?.cssvarAccentCount ?? 0} cvS=${data?.cssvarSecondaryCount ?? 0} cv=${data?.cssvarCount ?? 0} svg=${data?.svgCount ?? 0} btn=${data?.buttonCount ?? 0} footer=${data?.footerCount ?? 0} bg=${data?.bgCount ?? 0} nav=${data?.navCount ?? 0} H=${hsl[0]} S=${hsl[1]} L=${hsl[2]})`;
-    }).join(" | ");
-    console.log(`[color-rank] top candidates: ${top}`);
+      const d = clustered.get(c.value)!;
+      console.log(
+        `[color-rank]  ${c.value}` +
+        `  score=${c.score}` +
+        `  zone=${c.zone}` +
+        `  H=${hsl[0]} S=${hsl[1]} L=${hsl[2]}` +
+        `  n=${d.count}` +
+        `  logo=${d.logoCount} svg=${d.svgCount} btn=${d.buttonCount}` +
+        `  footer=${d.footerCount} bg=${d.bgCount} nav=${d.navCount}` +
+        `  cvP=${d.cssvarPrimaryCount} cvA=${d.cssvarAccentCount} cvS=${d.cssvarSecondaryCount} cv=${d.cssvarCount}` +
+        `  [freq=${c.freqScore} sat=${c.satBonus} light=${c.lightBonus} hue=${c.hueBonus} zone=${c.zoneBonus} navPen=${c.navPenalty} builderPen=${c.builderPenalty}]`,
+      );
+    }
+    console.log(`[color-rank] ── ${scored.length} candidates survived filters ──────────────────────────`);
   } else {
     console.log(`[color-rank] no brand-signal candidates survived filters (all values were generic/achromatic/dark)`);
   }

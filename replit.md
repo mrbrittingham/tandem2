@@ -33,17 +33,30 @@ npm with workspaces (package-lock.json present). Run `npm install` from repo roo
 - `npm run typecheck` — Type-check all packages
 
 ## Required Environment Variables
-Set these as secrets in Replit:
+
+All secrets must be set via **Replit Secrets** (Settings → Secrets in the Replit UI).
+Do not store secrets in `.replit` or any committed file.
+
+### Required (app + auth)
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon/public key
 - `OPENAI_API_KEY` — OpenAI API key
-- `LLM_PROVIDER` — LLM provider (e.g., "openai")
-- `LLM_MODEL` — Model name (e.g., "gpt-4o")
-- `TANDEM_API_KEY` — Internal API key for Tandem services
-- `TANDEM_ALLOWED_BUSINESS_IDS` — Comma-separated allowed business IDs
-- `SUPABASE_ACCESS_TOKEN` — Supabase CLI access token (for DB scripts)
-- `SUPABASE_PROJECT_REF` — Supabase project reference ID
-- `SUPABASE_DB_PASSWORD` — Supabase database password
+
+### Required (import worker)
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (server-only; never expose to browser)
+
+### Required (Supabase CLI scripts: db:push, db:pull, db:status)
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_PROJECT_REF`
+- `SUPABASE_DB_PASSWORD`
+
+### Optional
+- `LLM_MODEL` — Global model fallback (default: `gpt-4o`)
+- `LLM_MODEL_WIDGET` — Override model for customer-facing chat widget
+- `LLM_MODEL_OPERATOR` — Override model for operator dashboard AI assistant
+- `TANDEM_API_KEY` — Internal API guard key for smoke-test scripts
+- `TANDEM_ALLOWED_BUSINESS_IDS` — Comma-separated business slugs allowed to call `/api/chat`
+- `TANDEM_DATA_DIR` — Override chat session file-store path (default: `.data/` at repo root)
 
 ## Design System
 

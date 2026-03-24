@@ -12,10 +12,11 @@ import type {
   WebsitePageType,
 } from "@/lib/website-import/types";
 import { SCHEMA_OUT_OF_DATE_CODE } from "@/lib/website-import/api-errors";
-import { normalizeWidgetTheme } from "@/lib/widget-theme";
-import { pickReadableTextColor } from "@/lib/website-import/utils";
+import { buildThemeFromDraft } from "@/lib/website-import/apply";
+import { ColorSwatchPicker } from "./ColorSwatchPicker";
 import { TextInput } from "./TextInput";
 import { updateBusiness } from "@/lib/store-hooks";
+import { usePreviewDock } from "@/components/PreviewDockContext";
 
 // ── Color helpers ────────────────────────────────────────────────────────────
 function hexToHsl(hex: string): [number, number, number] {
@@ -149,54 +150,7 @@ function HueWheelPicker({ value, onChange }: { value: string; onChange: (hex: st
   );
 }
 
-// ── ColorPickerSwatch ────────────────────────────────────────────────────────
-function ColorPickerSwatch({
-  value,
-  onChange,
-  label,
-}: {
-  value: string;
-  onChange: (hex: string) => void;
-  label: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative flex items-center justify-center">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="group relative h-10 w-10 rounded-full border-2 border-white shadow-md ring-2 ring-amber-400 ring-offset-1 transition-transform hover:scale-110 focus:outline-none focus:ring-blue-400"
-        style={{ background: value }}
-        title={`Edit ${label}: ${value}`}
-      >
-        <span className="absolute inset-0 flex items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: "rgba(0,0,0,0.28)" }}>
-          <svg className="h-3.5 w-3.5 drop-shadow" style={{ color: "#fff" }} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-            <path d="M12.854.146a.5.5 0 0 0-.707 0L4.5 7.793 3.354 6.646a.5.5 0 1 0-.708.708l1.5 1.5a.5.5 0 0 0 .708 0l8-8a.5.5 0 0 0 0-.708zM1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
-          </svg>
-        </span>
-      </button>
-      {open && (
-        <div
-          className="absolute z-50 rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/10"
-          style={{ top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" }}
-        >
-          <HueWheelPicker value={value} onChange={onChange} />
-        </div>
-      )}
-    </div>
-  );
-}
+// ColorPickerSwatch is now the shared ColorSwatchPicker component (see ColorSwatchPicker.tsx).
 
 type LatestImportResponse = {
   location?: {
@@ -307,34 +261,6 @@ function toPolicyItems(draft: WebsiteImportDraft): PolicyItem[] {
     }));
 }
 
-function mergeThemeFromDraft(existing: WidgetThemeSettings, draft: WebsiteImportDraft): WidgetThemeSettings {
-  const primary = draft.brand.primaryColor.value ?? existing.primaryColor;
-  const accent = draft.brand.accentColor.value ?? existing.accentColor ?? primary;
-  const surface = draft.brand.backgroundColor.value ?? existing.surfaceColor;
-  const textPrimary = draft.brand.textColor.value ?? existing.textPrimaryColor ?? pickReadableTextColor(surface);
-
-  return normalizeWidgetTheme({
-    ...existing,
-    primaryColor: primary,
-    accentColor: accent,
-    surfaceColor: surface,
-    textPrimaryColor: textPrimary,
-    fontFamily: draft.brand.fontFamily.value ?? existing.fontFamily,
-    logoUrl: draft.brand.logoUrl.value ?? existing.logoUrl,
-    headerBackground: {
-      mode: "solid",
-      solidColor: primary,
-    },
-    quickActions: {
-      color: accent,
-      variant: existing.quickActions?.variant ?? "solid",
-    },
-    sendButton: {
-      color: accent,
-      textColor: pickReadableTextColor(accent),
-    },
-  });
-}
 
 function formatDate(value?: string | null): string {
   if (!value) {
@@ -347,6 +273,18 @@ function formatDate(value?: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatRelativeAge(value?: string | null): string {
+  if (!value) return "";
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 2) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 function labelPageType(pageType: WebsitePageType) {
@@ -427,9 +365,35 @@ export function WebsiteImportPanel({
   const [isMenuImporting, setIsMenuImporting] = useState(false);
   const [colorSchemeAccepted, setColorSchemeAccepted] = useState<boolean | null>(null);
   const [colorOverrides, setColorOverrides] = useState<Record<string, string>>({});
+  const { setDraftTheme } = usePreviewDock();
 
   // Reset color overrides whenever a new scan result arrives
   useEffect(() => { setColorOverrides({}); }, [run?.id]);
+
+  // Push a projected widget theme into the preview dock whenever scan results are available.
+  // The preview stays live as the user tweaks color overrides. Cleared on unmount or Skip.
+  const scanPreviewTheme = useMemo<WidgetThemeSettings | undefined>(() => {
+    if (!draft || colorSchemeAccepted === false) return undefined;
+    const hasBrand = Boolean(draft.brand?.primaryColor?.value || draft.brand?.accentColor?.value);
+    if (!hasBrand) return undefined;
+    const effectiveDraft: WebsiteImportDraft = Object.keys(colorOverrides).length > 0 ? {
+      ...draft,
+      brand: {
+        ...draft.brand,
+        primaryColor: { ...draft.brand.primaryColor, value: colorOverrides["Brand"] ?? draft.brand.primaryColor.value },
+        accentColor: { ...draft.brand.accentColor, value: colorOverrides["Accent"] ?? draft.brand.accentColor.value },
+        backgroundColor: { ...draft.brand.backgroundColor, value: colorOverrides["Chat background"] ?? draft.brand.backgroundColor.value },
+        textColor: { ...draft.brand.textColor, value: colorOverrides["Body text"] ?? draft.brand.textColor.value },
+        mutedTextColor: { ...(draft.brand.mutedTextColor ?? { value: null, sourceUrl: null }), value: colorOverrides["Muted text"] ?? draft.brand.mutedTextColor?.value ?? null },
+      },
+    } : draft;
+    return buildThemeFromDraft(effectiveDraft, business.theme);
+  }, [draft, colorOverrides, colorSchemeAccepted, business.theme]);
+
+  useEffect(() => {
+    setDraftTheme(scanPreviewTheme);
+    return () => { setDraftTheme(undefined); };
+  }, [scanPreviewTheme, setDraftTheme]);
 
   const selectedLocation = useMemo(
     () => locationOptions.find((entry) => entry.slug === selectedLocationSlug),
@@ -562,6 +526,7 @@ export function WebsiteImportPanel({
 
     setError(null);
     setSuccess(null);
+    setDraft(null);
     setIsLoading(true);
     setColorSchemeAccepted(null);
 
@@ -775,10 +740,11 @@ export function WebsiteImportPanel({
         ...draft,
         brand: {
           ...draft.brand,
-          primaryColor: { ...draft.brand.primaryColor, value: colorOverrides["Primary"] ?? draft.brand.primaryColor.value },
+          primaryColor: { ...draft.brand.primaryColor, value: colorOverrides["Brand"] ?? draft.brand.primaryColor.value },
           accentColor: { ...draft.brand.accentColor, value: colorOverrides["Accent"] ?? draft.brand.accentColor.value },
-          backgroundColor: { ...draft.brand.backgroundColor, value: colorOverrides["Surface"] ?? draft.brand.backgroundColor.value },
-          textColor: { ...draft.brand.textColor, value: colorOverrides["Text"] ?? draft.brand.textColor.value },
+          backgroundColor: { ...draft.brand.backgroundColor, value: colorOverrides["Chat background"] ?? draft.brand.backgroundColor.value },
+          textColor: { ...draft.brand.textColor, value: colorOverrides["Body text"] ?? draft.brand.textColor.value },
+          mutedTextColor: { ...(draft.brand.mutedTextColor ?? { value: null, sourceUrl: null }), value: colorOverrides["Muted text"] ?? draft.brand.mutedTextColor?.value ?? null },
         },
       } : draft;
 
@@ -797,7 +763,7 @@ export function WebsiteImportPanel({
 
       const importedFaqs = toFaqItems(effectiveDraft);
       const importedPolicies = toPolicyItems(effectiveDraft);
-      const nextTheme = applyColors ? mergeThemeFromDraft(business.theme, effectiveDraft) : business.theme;
+      const nextTheme = applyColors ? buildThemeFromDraft(effectiveDraft, business.theme) : business.theme;
 
       updateBusiness(business.id, (record) => {
         if (draft.businessProfile.name.value) {
@@ -1071,13 +1037,22 @@ export function WebsiteImportPanel({
         />
       </div>
 
-      {/* Suggested Color Scheme */}
+      {/* Detected Brand Colors */}
       {(() => {
         const primary = draft?.brand?.primaryColor?.value;
         const accent = draft?.brand?.accentColor?.value;
         const surface = draft?.brand?.backgroundColor?.value;
         const text = draft?.brand?.textColor?.value;
         if (!primary && !accent) return null;
+
+        const swatchMeta: Record<string, { role: string; hint: string }> = {
+          Brand: { role: "Header & user bubbles", hint: "Applied to the chat header, user message bubbles, and primary CTA." },
+          Accent: { role: "Quick replies & send", hint: "Applied to quick-reply chips and the send button." },
+          "Chat background": { role: "Chat window surface", hint: "Background of the chat window and message area." },
+          "Body text": { role: "Primary text", hint: "Primary text color inside the chat." },
+          "Muted text": { role: "Timestamps & labels", hint: "Timestamps and secondary labels — auto-derived from body text if not set." },
+        };
+
         return (
           <div className={`rounded-2xl border p-5 shadow-sm shadow-slate-900/5 ${
             colorSchemeAccepted === true ? "border-emerald-300 bg-emerald-50" :
@@ -1086,9 +1061,16 @@ export function WebsiteImportPanel({
           }`}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Suggested Color Scheme</h3>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Detected Brand Colors
+                  {run?.finishedAt ? (
+                    <span className="ml-2 text-xs font-normal text-slate-400" title={formatDate(run.finishedAt)}>
+                      from {formatRelativeAge(run.finishedAt)}
+                    </span>
+                  ) : null}
+                </h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  These colors were detected from your website. You can adjust them below, accept them to apply to your chatbot, or leave them unchanged to keep your current appearance.
+                  Colors extracted from your website. Adjust swatches if needed, then accept to apply. The Appearance tab shows your <em>saved</em> widget theme — changes only take effect there after you click &quot;Apply structured knowledge&quot; below.
                 </p>
               </div>
               <div className="flex shrink-0 gap-2 pt-0.5">
@@ -1101,7 +1083,7 @@ export function WebsiteImportPanel({
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                   }`}
                 >
-                  Deny
+                  Skip
                 </button>
                 <button
                   type="button"
@@ -1112,22 +1094,27 @@ export function WebsiteImportPanel({
                       : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
                   }`}
                 >
-                  Accept
+                  Apply colors
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
-                { label: "Primary", current: business.theme.primaryColor, suggested: primary },
+                { label: "Brand", current: business.theme.primaryColor, suggested: primary },
                 { label: "Accent", current: business.theme.accentColor, suggested: accent },
-                { label: "Surface", current: business.theme.surfaceColor, suggested: surface },
-                { label: "Text", current: business.theme.textPrimaryColor, suggested: text },
+                { label: "Chat background", current: business.theme.surfaceColor, suggested: surface },
+                { label: "Body text", current: business.theme.textPrimaryColor, suggested: text },
+                { label: "Muted text", current: business.theme.textSecondaryColor, suggested: draft?.brand?.mutedTextColor?.value ?? business.theme.textSecondaryColor ?? "#475569" },
               ].filter((swatch) => swatch.suggested).map((swatch) => {
                 const activeColor = colorOverrides[swatch.label] ?? swatch.suggested ?? "";
+                const meta = swatchMeta[swatch.label];
                 return (
                 <div key={swatch.label} className="space-y-1.5">
-                  <p className="text-xs font-medium text-slate-500">{swatch.label}</p>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">{swatch.label}</p>
+                    {meta && <p className="text-[10px] text-slate-400">{meta.role}</p>}
+                  </div>
                   <div className="flex items-center gap-2">
                     <div
                       className="h-10 w-10 shrink-0 rounded-full border-2 border-white shadow-md ring-1 ring-slate-200"
@@ -1135,7 +1122,7 @@ export function WebsiteImportPanel({
                       title={`Current: ${swatch.current ?? "unset"}`}
                     />
                     <svg className="h-3 w-3 shrink-0 text-slate-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6h8m-2.5-2.5L10 6l-2.5 2.5" /></svg>
-                    <ColorPickerSwatch
+                    <ColorSwatchPicker
                       value={activeColor}
                       label={swatch.label}
                       onChange={(hex) => setColorOverrides((prev) => ({ ...prev, [swatch.label]: hex }))}
@@ -1148,7 +1135,10 @@ export function WebsiteImportPanel({
             </div>
 
             {colorSchemeAccepted === null && (
-              <p className="mt-3 text-xs text-amber-700">Accept or deny this color scheme before applying knowledge.</p>
+              <p className="mt-3 text-xs text-amber-700">Accept or skip — the preview panel reflects these colors live. The Appearance tab only updates after you apply.</p>
+            )}
+            {colorSchemeAccepted === true && (
+              <p className="mt-3 text-xs text-emerald-700">Colors will be applied when you click &quot;Apply structured knowledge&quot; below.</p>
             )}
           </div>
         );

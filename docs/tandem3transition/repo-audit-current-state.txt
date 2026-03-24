@@ -1,0 +1,835 @@
+TANDEM REPO — CURRENT STATE AUDIT
+==================================
+Date: 2026-03-20
+Branch: tandem3/pass-7-chatbot-event-followup
+HEAD: bfb7557 (WIP checkpoint)
+Produced by: direct file inspection — no assumptions made without evidence
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. CURRENT ARCHITECTURE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HIGH-LEVEL REPO STRUCTURE
+--------------------------
+This is an npm workspaces monorepo. Root package.json: name="tandem2", version="2.0.0".
+
+Workspaces:
+  apps/dashboard        — Next.js 16 App Router, port 3100
+  packages/shared       — @tandem/shared: types, mock-store, LLM client, storage, server helpers
+  packages/ui-kit       — @tandem/ui-kit: ChatWidget + design system primitives
+
+Async worker (not a workspace):
+  scripts/worker/website-import-worker.ts   — polls Supabase, processes queued import jobs
+
+Supabase config:
+  supabase/            — authoritative CLI config + migration path
+  supabase/migrations/ — active migration path used by `supabase db push`
+
+Other root-level artifacts:
+  main.py / pyproject.toml   — Replit NixOS boilerplate. No runtime function.
+  replit.md                   — Replit-oriented readme; largely duplicates README.md
+  .replit                     — Replit workflow/port config; also embeds live credentials in [userenv.shared]
+  docs/                       — Architecture docs, transition plans, chatbot docs
+  scripts/                    — Dev, deploy, migration, smoke-test, guard CLI scripts
+
+MAIN RUNNABLE APP
+-----------------
+`apps/dashboard` is the sole primary runtime. `npm run dev` starts it on port 3100.
+Package name inside that directory is "dashboard" (not "tandem-dashboard").
+The root `package.json#name` is "tandem2" — a stale artifact from v2.0 naming.
+No second app or server exists. The website-import worker (`scripts/worker/`) is
+the only approved async exception and is launched separately via `npm run worker:imports`.
+
+CURRENT PAGE ROUTES (from direct filesystem inspection)
+--------------------------------------------------------
+  /overview          — AI-oriented read-only dashboard home (Pass 4)
+  /chatbot           — Tabbed unified chatbot config (Pass 5): Knowledge|Handoff|Behavior|Appearance
+  /conversations     — Chat history viewer
+  /account           — Read-only business identity + team/billing stubs
+  /knowledge         — Full knowledge editor (accessible via /chatbot tab redirect)
+  /handoff           — Handoff config page (accessible via /chatbot tab redirect)
+  /intents           — AI persona/behavior page (accessible via /chatbot tab redirect)
+  /widget            — Widget appearance editor (accessible via /chatbot tab redirect)
+  /settings          — Redirects → /account (permanent=false)
+  /integrations      — Redirects → /account (permanent=false)
+  /menus             — Redirects → /chatbot?tab=knowledge (permanent=false)
+  /locations         — Location listing page (minimal)
+
+Topbar nav (4 items, from ConsoleTopbar.tsx):
+  Home → /overview
+  Conversations → /conversations
+  Chatbot → /chatbot
+  Account → /account
+
+CURRENT API ROUTES (from filesystem inspection of apps/dashboard/src/app/api/)
+-------------------------------------------------------------------------------
+  GET/POST  /api/chat
+  GET       /api/conversations
+  GET       /api/conversations/[sessionId]
+  POST      /api/operator-chat              (operator AI w/ tools)
+  POST      /api/operator-chat/confirm      (write AI-confirmed changes to Supabase)
+  GET/PUT   /api/location-config
+  POST      /api/widget-theme
+  POST      /api/bootstrap
+  GET/POST  /api/businesses
+  GET/POST  /api/locations
+  GET       /api/location/[locationId]/website-import
+  POST      /api/website-import/start
+  GET       /api/website-import/latest
+  GET       /api/website-import/[runId]
+  POST      /api/website-import/[runId]/apply
+  GET       /api/website-import/schema-check
+  GET       /api/health
+  GET       /api/llm-test
+  GET       /api/debug/env
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. CURRENT FEATURE STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMPLEMENTED AND WORKING (all passes 1-7 are in current WIP HEAD)
+-----------------------------------------------------------------
+Pass 1 — Website import pipeline stabilization:
+  - Stale-job reaper in worker
+  - Better error codes (ECONNREFUSED → dns_fail, 429 → blocked)
+  - Incremental pages_json writes during crawl
+  - Inline page classification during crawl (pageType on CrawledPage)
+  - Source-tracking on knowledge items
+  - Direct run polling by runId
+
+Pass 2 — Staged onboarding flow:
+  - Full conversational AI onboarding at /onboarding
+  - OnboardingStateMachine (state-machine reducer + stages)
+  - useImportPolling hook
+  - EmbeddedUrlInput, ScanProgressPanel, ScanResultsSummary, HandoffContactInput,
+    ManualSetupForm components
+
+Pass 3 — Operator AI tool calling:
+  - /api/operator-chat: uses generateText() with tool calling (Vercel AI SDK)
+  - 9 operator tools defined: set_business_hours, add_faq, update_faq, remove_faq,
+    set_handoff_contact, remove_handoff_contact, update_handoff_settings,
+    set_behavior_rules, update_business_info
+  - /api/operator-chat/confirm: secure write boundary (auth + membership check + validation)
+  - ConfirmationCard rendered in ConsoleSidebar for pending_change messages
+  - Mock store updaters for immediate UI refresh after confirmed writes
+  - config-store.ts: version-based invalidation signal for page re-fetches
+
+Pass 4 — New overview/home page:
+  - Two-column layout: state panels (left) + sticky widget preview (right)
+  - HealthSummaryBar, HoursPanel, KnowledgePanel, BehaviorPanel, HandoffPanel,
+    RecentConversationsPanel
+  - AISidebarContext for pre-filling sidebar from page prompt chips
+  - configVersion-driven re-fetch of recent conversations after AI writes
+
+Pass 5 — Nav consolidation:
+  - ConsoleTopbar reduced to 4 tabs (Home, Conversations, Chatbot, Account)
+  - /chatbot page with 4-tab UI (Knowledge, Handoff, Behavior, Appearance)
+  - BusinessSubNav removed from layout
+  - 7 redirects added for old routes in next.config.ts
+  - /account page absorbs business identity + integrations
+
+Pass 6 — AI sidebar stabilization (commit 9e7e6de; no implementation log):
+  - ConsoleSidebar streaming/rendering improvements
+  - WidgetPreviewColumn improvements
+  - operator-chat/route.ts refinements
+  - intents/knowledge tab fixes (hideHeader prop, etc.)
+  - pending-change-renderer improvements
+
+Pass 7 — Chatbot event/website import work (commit bfb7557; WIP, incomplete):
+  - chat/route.ts: event data sanitisation (category/description field cleanup
+    for Eventbrite-style scrapes)
+  - structuredWebsiteKnowledge.events now propagated into chat system prompt
+  - website-import apply.ts: events and structuredWebsiteKnowledge mapping
+  - knowledge-program.ts: structuredWebsiteKnowledge type additions
+  - WebsiteImportPanel.tsx: event-related display improvements
+  - HandoffPanel.tsx: updates
+  - knowledge/page.tsx: updates
+  - mock-store.ts: updates
+  - AppShell.tsx: layout update
+  - scripts/test-event-matrix.mjs: new test script for event-answering
+  - use-location-hydration.ts: updates
+  WIP STATUS: committed as checkpoint ("wip" prefix), not finalized.
+
+PARTIALLY IMPLEMENTED
+----------------------
+- Operator AI write path: functional but rate limiting is explicitly deferred
+  (noted in /api/operator-chat/confirm comments: "rate limiting deferred, add
+  before production launch of Tandem 3.0")
+- /account page: business identity display works; team management, billing,
+  security sections are stubs
+- /locations page: route exists, minimal content (not fully built)
+- Integrations: old /integrations redirects to /account; account page shows a
+  stub integrations section
+- Conversation analytics: average response time card is hardcoded TODO in UI
+- LLM model reference: LLM_MODEL defaults in multiple places; `gpt-5.2` referenced
+  in root .env.local and .env.vercel.import, but `gpt-4o` in apps/dashboard/.env.local
+  and as default in openai.ts. Model name "gpt-5.2" is not a real OpenAI model name
+  and will cause runtime failures if used.
+- Anthropic/Google providers: stubs that throw "Provider not yet implemented"
+
+STALE OR MISLEADING IN DOCS
+-----------------------------
+See section 3 (Docs Inventory) for details. Key examples:
+- docs/repo-map.md lists 15 console pages, many of which don't exist
+- RUNBOOK.md says `cp .env.example .env.local` but canonical env is
+  apps/dashboard/.env.local, not root .env.local
+- docs/product-plan.md is a Tandem 2.0 spec document — describes the PRE-TRANSITION
+  architecture as if it is the target
+- docs/tandem3transition/tandem-3-architecture-audit.txt says "The operator AI
+  cannot change anything" under "Misaligned or Overbuilt" — this is factually
+  wrong NOW; the write path (pass 3) was implemented
+- No pass-6 or pass-7 implementation logs exist
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. DOCS INVENTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: README.md
+  Purpose: Primary developer overview
+  Status: PARTIALLY STALE
+  Issues:
+    - LLM_MODEL default listed as "gpt-5.2" — not a valid OpenAI model name;
+      should be gpt-4o or a verified model
+    - mentions CHAT_STORE_DIR as optional override in addition to TANDEM_DATA_DIR;
+      both are valid but the relationship/priority isn't stated clearly
+    - does not mention the 4-tab Chatbot nav (pass 5) or operator AI tools (pass 3)
+    - docs index lists docs/architecture.md which only contains a stub (3 lines)
+
+FILE: RUNBOOK.md
+  Purpose: Operational run guide for first-time setup + deploy workflow
+  Status: PARTIALLY STALE
+  Issues:
+    - Step 2 of First-time setup: "cp .env.example .env.local" implies root-level
+      .env.local; canonical env for the app is apps/dashboard/.env.local
+    - Does not mention apps/dashboard/.env.example as the template to copy
+    - LLM_MODEL shown as optional with default "gpt-5.2" — not a real model name
+    - does not document pass 3 operator AI tools or their rate-limiting caveat
+
+FILE: AGENTS.md
+  Purpose: AI agent orientation for the repo
+  Status: PARTIALLY STALE
+  Issues:
+    - Section 2 layout table still references old 12-form-page model
+    - Dashboard Development Patterns lists old sub-nav pattern (BusinessSubNav);
+      this was removed in pass 5
+    - Adding a new console page instructions reference old sidebar entry pattern
+      that no longer applies
+    - Does not mention operator-chat, config-store, AISidebarContext
+
+FILE: .agent-instructions.md
+  Purpose: Agent constraints file embedded in workspace
+  Status: CURRENT (adequate for guiding AI agents)
+  Issues: Minor — does not mention pass 3-7 tooling, but constraints are correct
+
+FILE: .github/copilot-instructions.md
+  Purpose: Copilot context for VS Code
+  Status: PARTIALLY STALE
+  Issues:
+    - LLM_MODEL default listed as "gpt-5.2" (same README issue)
+    - Does not mention operator AI tool architecture or /api/operator-chat/confirm
+    - businessToWidgetConfig() reference may be stale (was refactored in pass 2-3)
+
+FILE: replit.md
+  Purpose: Replit-specific project README (shown in Replit UI)
+  Status: PARTIALLY STALE
+  Issues:
+    - Layout structure section describes the OLD 9-item BusinessSubNav design
+      (pre-pass-5)
+    - Does not reflect 4-tab nav or chatbot-oriented overview page
+    - Largely duplicates README.md; likely should be a short pointer doc
+
+FILE: docs/architecture.md
+  Purpose: Canonical architecture reference (linked from AGENTS.md and .agent-instructions.md)
+  Status: STALE / STUB
+  Issues:
+    - File contains only 6 lines: a heading, brief description, and 4 cross-reference links
+    - All substantive architecture content lives in docs/system-architecture.md and
+      docs/system-map.md instead; docs/architecture.md is just a shell
+    - AGENTS.md instructs agents to load docs/architecture.md as step 2 — this
+      will load an empty stub, which is misleading
+
+FILE: docs/system-architecture.md
+  Purpose: Full platform architecture overview
+  Status: CURRENT (content appears accurate)
+  Issues: Minor — does not cover operator AI tool calling (pass 3)
+
+FILE: docs/system-map.md
+  Purpose: Current runtime description and scope contract
+  Status: CURRENT (content appears accurate for chat + auth flows)
+  Issues:
+    - Does not document operator-chat API scope/behavior
+    - Does not document config-store.ts invalidation signal
+
+FILE: docs/REPO_INDEX.md
+  Purpose: Quick code navigation index
+  Status: PARTIALLY STALE
+  Issues:
+    - Lists apps/dashboard/src/app/(console)/layout.tsx under "App shell and console pages"
+      but the table of routes lists old sub-pages (knowledge, handoff, widget, appearance)
+      without /chatbot or /account
+    - Missing: operator-chat routes, operator-tools library, AISidebarContext
+
+FILE: docs/repo-map.md
+  Purpose: Machine-readable repo navigation map
+  Status: SIGNIFICANTLY STALE
+  Issues:
+    - Console Pages table lists 15+ routes that do not exist:
+        /appearance, /assistant-settings, /businesses, /channels, /analytics, /llm, /advanced
+    - Existing routes (/chatbot, /account) not listed
+    - API Routes table lists routes that may be stubs or are unnamed
+    - Dashboard Components section describes old ConsoleSidebar/ConsoleTopbar
+      behavior (pre-pass-5/6)
+    - This file was apparently auto-generated at some prior point and has not
+      been regenerated since the nav consolidation in pass 5
+
+FILE: docs/current-status.md
+  Purpose: Known working/broken state of the repo
+  Status: PARTIALLY STALE
+  Issues:
+    - Still references "partial" status for things fully implemented in passes 3-5
+    - Does not reflect pass 3 operator AI tools, pass 4 overview, pass 5 nav changes,
+      or pass 6/7 event/sidebar work
+
+FILE: docs/stabilization-plan.md
+  Purpose: Prioritized list of correctness/stability work
+  Status: PARTIALLY STALE
+  Issues:
+    - Priority 1 (env hardening) is partially addressed — operator should verify
+    - Does not mention anything about Tandem 3 transition status
+
+FILE: docs/product-plan.md
+  Purpose: Describes "Tandem 2.0" product IA
+  Status: STALE (describes pre-transition target)
+  Issues:
+    - Title says "Tandem 2.0 Product Upgrade Plan"
+    - Describes 7-section admin dashboard with manual CRUD forms — pre-Tandem-3.0 design
+    - Kept here as historical reference but could mislead agents about current target
+
+FILE: docs/tandem3transition/tandem-3-architecture-audit.txt
+  Purpose: Pre-transition architecture audit (March 15, 2026)
+  Status: PARTIALLY STALE
+  Issues:
+    - Section 3 "Misaligned or Overbuilt" says "The operator AI cannot change anything"
+      — THIS IS WRONG NOW: pass 3 fully implemented the write path
+    - "12 pages is too many" goal was addressed in pass 5 (now 4 top-level nav items)
+    - Keep as historical record; add header note that pass 3-5 addressed highlighted gaps
+
+FILE: docs/tandem3transition/tandem-3-implementation-roadmap.txt
+  Purpose: 8-phase implementation plan for Tandem 3.0
+  Status: PARTIALLY STALE
+  Issues:
+    - Phase 1-5 are complete (passes 1-5 in git)
+    - Phases 6-8 (AI control, usage limits, docs refresh, launch readiness) not implemented
+    - Pass 6 and pass 7 WIP work is not reflected here
+
+FILE: docs/tandem3transition/operator-ai-tool-architecture.txt
+  Purpose: Design spec for operator AI tools
+  Status: CURRENT AS DESIGN; SUPERSEDED BY IMPLEMENTATION
+  Issues:
+    - "Scope: Design phase only. No code has been written." — incorrect now (pass 3 implemented)
+    - All 9 tools listed have been implemented; the spec otherwise matches well
+
+FILE: docs/tandem3transition/dashboard-redesign-plan.txt
+  Purpose: Full dashboard redesign plan
+  Status: PARTIALLY STALE
+  Issues:
+    - "Scope: Design phase only. No code has been written." — incorrect now (passes 4-5)
+    - Current Dashboard Structure section describes pre-pass-4 state
+    - Nav structure described (BusinessSubNav) no longer exists
+
+FILE: docs/tandem3transition/onboarding-flow-design.txt
+  Purpose: Design for staged onboarding
+  Status: SUPERSEDED BY IMPLEMENTATION (pass 2)
+  Issues: None blocking — serves as design reference
+
+FILE: docs/tandem3transition/chatbot-grounding-architecture.txt
+  Purpose: Design for chatbot knowledge grounding
+  Status: LIKELY CURRENT ENOUGH (not inspected fully)
+
+FILE: docs/tandem3transition/implementation-logs/pass-1-import-pipeline.txt
+FILE: docs/tandem3transition/implementation-logs/pass-2-onboarding-flow.txt
+FILE: docs/tandem3transition/implementation-logs/pass-3-operator-tools.txt
+FILE: docs/tandem3transition/implementation-logs/pass-4-dashboard-overview.txt
+FILE: docs/tandem3transition/implementation-logs/pass-5-chatbot-nav.txt
+  Purpose: Implementation logs for each pass
+  Status: CURRENT for their respective passes
+
+MISSING:
+  - No pass-6 implementation log. Pass 6 committed as single fix commit (9e7e6de).
+  - No pass-7 implementation log. Pass 7 is a WIP checkpoint commit (bfb7557).
+  Both should be written before the branch merges.
+
+FILE: docs/DATABASE_SCHEMA.md
+  Purpose: Verified schema reference
+  Status: CURRENT (appears accurate based on code inspection)
+  Issues: Minor — does not list operator_profiles table which the migration creates
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. ENV INVENTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GIT STATUS
+----------
+Committed (tracked):
+  .env.example                     — template at repo root
+  apps/dashboard/.env.example      — template for dashboard-level env
+
+Gitignored / local only (not committed):
+  .env                             — root-level file, exists locally
+  .env.local                       — root-level file, exists locally
+  .env.vercel.import               — root-level file, exists locally
+  apps/dashboard/.env.local        — app-level file, exists locally
+
+All real credential files are correctly gitignored via root .gitignore lines:
+  .env
+  .env.*
+  .env.local
+  !.env.example
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE: .env (repo root)
+  Status: ACTIVE locally, REDUNDANT / RISKY
+  Runtime: NOT read by Next.js or any npm scripts directly
+  What it contains: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+    OPENAI_API_KEY (without NEXT_PUBLIC_ prefix for Supabase vars)
+  NOTE: Supabase vars use wrong key names (SUPABASE_URL vs NEXT_PUBLIC_SUPABASE_URL).
+    These would NOT be used by the app correctly even if read.
+  Should remain: NO — this file is unused by the app and its DB scripts, uses
+    wrong var names, and creates confusion. Should be deleted.
+
+FILE: .env.local (repo root)
+  Status: ACTIVE locally, REDUNDANT
+  Runtime: NOT read by Next.js (which runs from apps/dashboard/)
+    NOT read by npm scripts (which use --env-file=apps/dashboard/.env.local)
+  What it contains: OPENAI_API_KEY, LLM_PROVIDER, LLM_MODEL=gpt-5.2,
+    NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, DATABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY, TANDEM_API_KEY, plus worker vars
+  CONFLICT: LLM_MODEL=gpt-5.2 here vs LLM_MODEL=gpt-4o in apps/dashboard/.env.local.
+    "gpt-5.2" is not a valid OpenAI model name and would cause runtime errors.
+  Should remain: NO — this file is never loaded by any script in package.json.
+    It provides a false sense of coverage and has a conflicting (invalid) model name.
+
+FILE: .env.example (repo root)
+  Status: COMMITTED TEMPLATE — partially stale
+  Runtime: None; template only
+  What it contains: Comments point to apps/dashboard/.env.local as the copy target.
+    Contains all canonical var names with empty values.
+  Issues:
+    - Instructional comment says to copy to apps/dashboard/.env.local — correct
+    - However, it also implies "In Replit, set these as Secrets" which creates
+      ambiguity (Replit secrets vs .env.local)
+    - LLM_MODEL default shown is "gpt-4o" — this is correct
+    - CHAT_STORE_DIR is present but described vaguely
+  Should remain: YES, but needs minor clarification about root vs app-level placement
+
+FILE: .env.vercel.import (repo root)
+  Status: ACTIVE locally, SPECIAL PURPOSE — not a dev env file
+  Runtime: Intended for Vercel dashboard env var import (manual paste operation)
+  What it contains: Production env var values for Vercel deployment
+  RISK: Contains real credentials (OPENAI_API_KEY with a different key value than
+    the local files, plus SUPABASE credentials). Two different OPENAI_API_KEY
+    values appear across root .env / root .env.local vs .env.vercel.import.
+  Should remain: YES but should be named more clearly (.env.vercel-template or 
+    .env.vercel.import.example) and values should be placeholders with a note to
+    fill in before use. This file containing real keys risks accidental disclosure
+    if gitignore is misconfigured.
+
+FILE: apps/dashboard/.env.local
+  Status: CANONICAL RUNTIME ENV — primary source of truth
+  Runtime:
+    - Next.js reads this automatically when running `npm run dev` from apps/dashboard/
+    - All root scripts using --env-file= point here:
+        db:link, db:pull, db:push, db:status, worker:imports
+  What it contains:
+    - OPENAI_API_KEY (production key)
+    - LLM_PROVIDER=openai, LLM_MODEL=gpt-4o
+    - NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+    - DATABASE_URL
+    - SUPABASE_SERVICE_ROLE_KEY
+    - TANDEM_API_KEY
+    - TANDEM_ALLOWED_BUSINESS_IDS=
+    - WEBSITE_IMPORT_MAX_PAGES=22
+    - SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD
+    - IMPORT_WORKER_POLL_MS=5000, IMPORT_WORKER_BATCH_SIZE=5
+  Should remain: YES — this is the canonical location. Keep it here.
+
+FILE: apps/dashboard/.env.example
+  Status: COMMITTED TEMPLATE — current
+  Runtime: None; template only
+  What it contains: All canonical var names with empty values + accurate comments
+  Issues:
+    - Mentions "In Replit, set each variable as a Replit Secret" which is accurate
+      for Replit deployments
+    - LLM_MODEL default is "gpt-4o" — correct
+    - Does not include WEBSITE_IMPORT_MAX_PAGES, IMPORT_WORKER_POLL_MS,
+      IMPORT_WORKER_BATCH_SIZE (present in .env.local but not in this example)
+  Should remain: YES — this is the correct committed template for the app
+
+FILE: .replit
+  Status: ACTIVE for Replit deployments; contains live credentials in [userenv.shared]
+  Runtime: Replit reads [userenv.shared] as environment secrets
+  What it contains:
+    - Workflow definitions for `npm run dev`
+    - Port mapping: 3100 → 80
+    - [userenv.shared]: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      OPENAI_API_KEY (yet another key value — different from .env and .env.local)
+    - deployment target: cloudrun
+  RISK: Embeds real credentials directly in a committed file. This is normal for
+    Replit's [userenv.shared] format but means the file should NEVER contain
+    staging/production keys that are also used elsewhere without explicit separation.
+    The OPENAI_API_KEY in .replit appears to differ from the one in apps/dashboard/.env.local.
+  Should remain: YES for Replit compatibility. But values in [userenv.shared]
+    should ideally be Replit Secrets (moved to Replit UI) rather than hardcoded
+    in the committed config file.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ENV VARIABLES — COMPLETE REFERENCE
+------------------------------------
+Runtime consumers and where they're read:
+
+Supabase client (browser-safe):
+  NEXT_PUBLIC_SUPABASE_URL           → packages/shared/src/supabase/client.ts
+                                        apps/dashboard/src/lib/supabase/client.ts
+                                        apps/dashboard/src/lib/supabase/middleware.ts
+                                        apps/dashboard/src/lib/supabase/server.ts
+                                        packages/shared/src/storage/index.ts
+                                        scripts/check-chat-store-runtime.ts
+  NEXT_PUBLIC_SUPABASE_ANON_KEY      → same as above
+
+Supabase server (service role):
+  SUPABASE_SERVICE_ROLE_KEY          → packages/shared/src/supabase/server.ts
+                                        packages/shared/src/storage/index.ts
+
+LLM configuration:
+  OPENAI_API_KEY                     → packages/shared/src/llm/providers/openai.ts
+                                        packages/shared/src/server/guardrails.ts
+                                        apps/dashboard/src/app/api/operator-chat/route.ts
+  LLM_PROVIDER                       → packages/shared/src/llm/config.ts
+                                        packages/shared/src/server/guardrails.ts
+  LLM_MODEL                          → packages/shared/src/llm/providers/openai.ts
+                                        apps/dashboard/src/app/api/operator-chat/route.ts
+
+Security/access:
+  TANDEM_API_KEY                     → packages/shared/src/server/auth.ts
+  TANDEM_ALLOWED_BUSINESS_IDS        → packages/shared/src/server/auth.ts
+
+Storage:
+  CHAT_STORE_DIR                     → packages/shared/src/storage/file.ts
+  TANDEM_DATA_DIR                    → packages/shared/src/storage/file.ts
+  DATABASE_URL                       → scripts/supabase-push.mjs, pull.mjs, status.mjs
+
+Import worker:
+  WEBSITE_IMPORT_MAX_PAGES           — read by website-import/start route
+  IMPORT_WORKER_POLL_MS              → scripts/worker/website-import-worker.ts
+  IMPORT_WORKER_BATCH_SIZE           → scripts/worker/website-import-worker.ts
+  IMPORT_WORKER_ID                   → scripts/worker/website-import-worker.ts
+  SUPABASE_SERVICE_ROLE_KEY          → scripts/worker/website-import-worker.ts
+
+Supabase CLI (migrations):
+  SUPABASE_ACCESS_TOKEN              → scripts/guard/supabase-schema-guard.mjs
+  SUPABASE_PROJECT_REF               → scripts/guard/supabase-schema-guard.mjs
+  SUPABASE_DB_PASSWORD               → scripts/guard/supabase-schema-guard.mjs
+
+Demo/test:
+  NEXT_PUBLIC_ENABLE_DEMO_DATA       → packages/shared/src/mock-store.ts
+  DEV_SMOKE                          → packages/shared/src/server/guardrails.ts
+                                        scripts/smoke-chat.mjs
+                                        scripts/smoke-chat-dev.mjs
+  BASE_URL, BUSINESS_ID, LOCATION_SLUG, TANDEM_API_KEY_HEADER → scripts/smoke-*.mjs
+
+Runtime detection:
+  VERCEL, VERCEL_ENV                 → packages/shared/src/storage/file.ts
+  AWS_LAMBDA_FUNCTION_NAME           → packages/shared/src/storage/file.ts
+  NODE_ENV                           → multiple files
+
+CRITICAL DISCREPANCIES ACROSS ENV FILES:
+  LLM_MODEL:
+    root/.env.local                  → gpt-5.2   (INVALID model name — will cause errors)
+    root/.env.vercel.import          → gpt-5.2   (INVALID model name — will cause errors)
+    apps/dashboard/.env.local        → gpt-4o    (valid, correct)
+    .replit [userenv.shared]         → (not set, uses runtime default from openai.ts = gpt-4o)
+    packages/shared/src/llm/providers/openai.ts default → gpt-4o
+
+  OPENAI_API_KEY: Three different key values appear across:
+    root/.env and root/.env.local    → same key (let's call it Key-A)
+    .env.vercel.import               → different key (Key-B — appears to be Vercel key)
+    .replit [userenv.shared]         → same as Key-B (the Vercel/Replit key)
+    apps/dashboard/.env.local        → Key-A (same as root env files)
+  Conclusion: Key-A is the local dev key; Key-B appears to be the production key.
+    Having production keys in .replit (a committed file) is a credential exposure risk.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. ENV RESOLUTION ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHERE ENV SHOULD CANONICALLY LIVE
+-----------------------------------
+There is only one correct runtime env file for this repo:
+
+  → apps/dashboard/.env.local
+
+Reasons:
+  1. Next.js inherently reads .env.local from the app directory when running
+     `next dev`. It does NOT auto-load root-level .env files.
+  2. All npm scripts that need env vars explicitly pass
+     --env-file=apps/dashboard/.env.local (see package.json lines 18-26).
+  3. apps/dashboard/.env.example is the template for this file and is committed.
+  4. The RUNBOOK and .env.example at the root both say to put values in this file.
+
+IS ROOT .env JUSTIFIED?
+------------------------
+No. Root .env contains wrong variable names (SUPABASE_URL vs NEXT_PUBLIC_SUPABASE_URL)
+and is never loaded by any script. It is entirely unused and should be deleted.
+
+IS ROOT .env.local JUSTIFIED?
+-------------------------------
+No. Root .env.local is never loaded by any script in package.json. It duplicates
+apps/dashboard/.env.local with a CONFLICTING and INVALID value of LLM_MODEL=gpt-5.2.
+It should be deleted to prevent confusion.
+
+IS .env.vercel.import JUSTIFIED?
+----------------------------------
+Partially. It serves a real purpose: it's a list of env vars to paste into the
+Vercel dashboard import UI. However:
+  - It contains real credentials (production OPENAI key, Supabase keys) in a format
+    that appears template-like but contains live values.
+  - LLM_MODEL=gpt-5.2 is invalid and would cause production failures if imported.
+  - It should be converted to a true template with placeholder values and a comment
+    block explaining that real values must be substituted before use.
+  - If the file must contain real values for operational convenience, it should
+    at minimum be renamed .env.vercel.import.FILL-ME-IN or documented clearly.
+
+SHOULD .replit REMAIN?
+------------------------
+Yes, for Replit compatibility. However:
+  - [userenv.shared] contains hardcoded production credentials (OPENAI_API_KEY).
+    This means they are committed to source control. This is a risk.
+  - Replit's recommended approach is to use Replit Secrets (dashboard) not
+    hardcoded values in .replit config files.
+  - The [userenv.shared] block should have its values replaced with empty strings
+    and a comment directing operators to set values via Replit Secrets.
+  - The workflow definition (`npm run dev`) and port mapping (3100 → 80) are
+    correct and should remain.
+
+RISKY DUPLICATION SUMMARY
+---------------------------
+1. ROOT .env ←→ apps/dashboard/.env.local:
+   Duplicate values, wrong key names in root. Root file is unused.
+
+2. ROOT .env.local ←→ apps/dashboard/.env.local:
+   Duplicate values + CONFLICTING LLM_MODEL (gpt-5.2 vs gpt-4o).
+   Root file is unused. Risk: developer edits root file assuming it affects runtime.
+
+3. apps/dashboard/.env.local ←→ .replit [userenv.shared]:
+   Both supply OPENAI_API_KEY and NEXT_PUBLIC_SUPABASE_* values.
+   Key values appear to differ (different API key strings). If Replit is running
+   the app, its [userenv.shared] values win over the app .env.local.
+   This could cause the app to work locally but use a different key in Replit.
+
+4. apps/dashboard/.env.local ←→ .env.vercel.import:
+   Both have OPENAI_API_KEY; different key values (Key-A vs Key-B).
+   The .vercel.import has a different and presumably production key — having
+   a committed file with a production key is a risk.
+
+NOTE ON DOTENV USAGE:
+  No dotenv package is imported or used anywhere in the codebase. All env loading
+  is handled by: (a) Node's built-in --env-file flag, (b) Next.js built-in .env.local
+  loading, or (c) Replit's [userenv.shared] injection. This is correct.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. PROPOSED CLEANUP PLAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE A — ENV CLEANUP (priority: high, risk: low)
+---------------------------------------------------
+Target: eliminate redundant root-level env files and fix credential exposure
+
+A1. Delete: root .env
+    Reason: unused, wrong key names, duplicates apps/dashboard/.env.local
+    Risk: zero (never loaded by any script)
+
+A2. Delete: root .env.local
+    Reason: unused, has conflicting/invalid LLM_MODEL=gpt-5.2
+    Risk: zero (never loaded by any script; developers would find that
+    apps/dashboard/.env.local is the canonical file)
+
+A3. Convert: .env.vercel.import → template file with placeholder values
+    Action: replace real credential values with "FILL_IN_BEFORE_USE" placeholders;
+    add comment block at top explaining the fill-in requirement
+    Fix: change LLM_MODEL=gpt-5.2 → LLM_MODEL=gpt-4o in this file
+    Reason: production keys should not be committed even in "import" files
+    Risk: low (purely cosmetic/documentation change; no runtime impact)
+
+A4. Update: .replit [userenv.shared]
+    Action: replace real OPENAI_API_KEY value with a comment directing to
+    Replit Secrets; retain the NEXT_PUBLIC_ Supabase values only if they are
+    the non-sensitive public anon key (anon key is safe to commit)
+    Reason: OPENAI_API_KEY in a committed file is a secret exposure risk
+    Risk: low for local dev; Replit deployments will need key set in Secrets UI
+
+A5. Update: root .env.example
+    Action: clarify comment that this template is for reference only; the
+    canonical copy target is apps/dashboard/.env.local (not root)
+    Add a clear one-line note: "DO NOT copy to repo root — use apps/dashboard/.env.local"
+    Risk: none (template file, not loaded)
+
+A6. Update: apps/dashboard/.env.example
+    Action: add worker env vars that are in .env.local but not in this template:
+      WEBSITE_IMPORT_MAX_PAGES, IMPORT_WORKER_POLL_MS, IMPORT_WORKER_BATCH_SIZE
+    Risk: none (template file)
+
+PHASE B — DOCS REFRESH (priority: medium-high)
+------------------------------------------------
+Target: update stale docs to reflect Tandem 3.0 passes 1-7 state
+
+B1. docs/architecture.md
+    Action: Write real content or promote docs/system-architecture.md content here.
+    This file is the first thing agents are told to load — it must not be a stub.
+    Priority: HIGH (directly affects AI agent effectiveness)
+
+B2. docs/repo-map.md
+    Action: Regenerate or manually update the Console Pages and API Routes tables
+    to match current implementation. Remove any reference to non-existent routes.
+    Add /chatbot, /account; remove /appearance, /assistant-settings, etc.
+    Consider running: npm run docs:generate (if the generator is current)
+    Priority: HIGH (auto-generated file left in significantly stale state)
+
+B3. docs/current-status.md
+    Action: Update to reflect passes 3-7 completion status; document rate-limiting
+    deferral for operator AI tools; note gpt-5.2 model name issue
+    Priority: MEDIUM
+
+B4. docs/tandem3transition/tandem-3-architecture-audit.txt
+    Action: Add a status header noting that section 3 "Misaligned" items have
+    been addressed in passes 3-5. Do not rewrite — add a clearly marked note.
+    Priority: LOW-MEDIUM
+
+B5. docs/tandem3transition/tandem-3-implementation-roadmap.txt
+    Action: Update phase status: mark phases 1-5 as COMPLETE. Note passes 6-7
+    are WIP. Briefly describe phases 6-7 scope.
+    Priority: MEDIUM
+
+B6. RUNBOOK.md
+    Action: Fix first-time setup step 2 to say:
+      "cp apps/dashboard/.env.example apps/dashboard/.env.local"
+      NOT "cp .env.example .env.local"
+    Also update LLM_MODEL default from gpt-5.2 to gpt-4o.
+    Priority: MEDIUM
+
+B7. README.md
+    Action: Fix LLM_MODEL default (gpt-5.2 → gpt-4o). Add brief note about
+    operator AI tools and 4-tab Chatbot nav. Update docs index to note
+    docs/architecture.md is a stub and point to docs/system-architecture.md.
+    Priority: LOW-MEDIUM
+
+B8. replit.md
+    Action: Update Layout Structure section to reflect 4-tab nav (pass 5).
+    Remove BusinessSubNav description. Consider merging into README.md or
+    keeping minimal.
+    Priority: LOW
+
+B9. AGENTS.md
+    Action: Update Dashboard Development Patterns section to reflect pass 5 nav.
+    Add context about operator-chat, AISidebarContext, config-store.ts.
+    Priority: LOW (agents can still work correctly without this update)
+
+B10. Write pass-6 implementation log
+    File: docs/tandem3transition/implementation-logs/pass-6-ai-sidebar-fixes.txt
+    Action: Document what was fixed in commit 9e7e6de:
+      ConsoleSidebar improvements, WidgetPreviewColumn, chatbot tab fixes,
+      pending-change-renderer improvements, operator-chat route refinements
+    Priority: MEDIUM (documentation completeness)
+
+B11. Write pass-7 implementation log
+    File: docs/tandem3transition/implementation-logs/pass-7-chatbot-events.txt
+    Action: Document what pass 7 implemented (event data sanitization, structured
+    knowledge events in chat, apply.ts improvements, etc.)
+    Note: This should be written when pass 7 WIP is finalized
+    Priority: MEDIUM-HIGH
+
+PHASE C — VALIDATION
+---------------------
+After A and B are complete:
+
+C1. Run: npm run typecheck
+    Verify: zero TypeScript errors
+
+C2. Run: npm run lint
+    Verify: zero lint errors
+
+C3. Run: npm run dev
+    Verify: dashboard loads on port 3100 without errors
+
+C4. Run: npm run check:chat-store
+    Verify: chat store runtime check passes
+
+C5. Verify env single-source-of-truth:
+    Confirm apps/dashboard/.env.local is the only active env file
+    Confirm no root .env or root .env.local exist (after A1/A2)
+
+C6. Verify model name:
+    Confirm LLM_MODEL is set to a valid model (gpt-4o or verified name)
+    in apps/dashboard/.env.local
+    Confirm no reference to gpt-5.2 remains in any active env file
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. SAFE NEXT ACTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Recommended implementation order (safe to execute in sequence on this branch):
+
+STEP 1 — Finalize pass 7 WIP work (whatever remains pending)
+  - Complete any in-progress pass 7 code changes
+  - Verify typecheck and lint pass
+  - Convert the WIP commit to a real feat commit
+
+STEP 2 — Write pass 6 implementation log
+  - Create: docs/tandem3transition/implementation-logs/pass-6-ai-sidebar-fixes.txt
+  - Document what commit 9e7e6de changed (from git diff-tree output)
+
+STEP 3 — Write pass 7 implementation log
+  - Create: docs/tandem3transition/implementation-logs/pass-7-chatbot-events.txt
+  - Document what was implemented in this pass
+
+STEP 4 — Fix docs/architecture.md (HIGH PRIORITY)
+  - This is loaded by agents as step 2 in their context chain
+  - Either embed real architecture content or create a canonical redirect to
+    docs/system-architecture.md clearly
+
+STEP 5 — Regenerate docs/repo-map.md
+  - Run `npm run docs:generate` if the generator reflects current routes
+  - Or manually update the Console Pages / API Routes tables
+
+STEP 6 — Fix RUNBOOK.md env instructions
+  - Change: "cp .env.example .env.local" → "cp apps/dashboard/.env.example apps/dashboard/.env.local"
+  - Fix: LLM_MODEL default gpt-5.2 → gpt-4o
+
+STEP 7 — ENV FILE CLEANUP (after confirming all is working)
+  - Delete: root .env  (no runtime impact)
+  - Delete: root .env.local  (no runtime impact; contains invalid LLM_MODEL)
+  - Sanitize: .env.vercel.import  (replace real keys with placeholders; fix LLM_MODEL)
+  - Sanitize: .replit [userenv.shared]  (move OPENAI_API_KEY to Replit Secrets)
+
+STEP 8 — Update docs/current-status.md
+  - Reflect passes 3-7 status
+  - Note rate-limiting deferral
+  - Remove stale items
+
+STEP 9 — Update docs/tandem3transition/tandem-3-implementation-roadmap.txt
+  - Mark phases 1-5 complete
+  - Describe passes 6-7 briefly
+
+STEP 10 — Run full validation (Phase C above)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF AUDIT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

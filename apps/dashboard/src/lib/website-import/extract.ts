@@ -1384,8 +1384,15 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
   })();
   const mutedTextColor = bgLumi > 0.45 ? "#6B7280" : "#94A3B8";
 
+  console.log(`[extract-draft] ── COLOR THEME SELECTION ──────────────────────────────────────`);
+  console.log(`[extract-draft] scan url: ${sourceUrl}`);
   console.log(`[extract-draft] signals: ${signals.colorCandidates.length} colorCandidates → ranked: ${rankedColors.length} passed filters`);
-  console.log(`[extract-draft] primary=${primaryColor?.value ?? "none"}(${primaryZone}) accent=${accentColor?.value ?? "none"}(${accentZone}) surface=${backgroundColor}${scannedSurface ? "(scanned)" : "(derived)"} text=${pickReadableTextColor(backgroundColor)}`);
+  console.log(`[extract-draft] primary  = ${primaryColor?.value ?? "none"} (zone=${primaryZone}, confidence=${primaryConfidence.toFixed(2)})`);
+  console.log(`[extract-draft] accent   = ${accentColor?.value ?? "none"} (zone=${accentZone}, confidence=${accentConfidence.toFixed(2)})`);
+  console.log(`[extract-draft] surface  = ${backgroundColor}${scannedSurface ? " (scanned)" : " (derived from primary)"}`);
+  console.log(`[extract-draft] text     = ${pickReadableTextColor(backgroundColor)} (from surface luminance)`);
+  console.log(`[extract-draft] mutedText= ${mutedTextColor} (bgLumi=${bgLumi.toFixed(2)})`);
+  console.log(`[extract-draft] ────────────────────────────────────────────────────────────────`);
 
   const logo = signals.logoCandidates[0] ?? signals.faviconCandidates[0];
   const font = signals.fontCandidates.find((entry) => !/serif|sans-serif|monospace/i.test(entry.value)) ?? signals.fontCandidates[0];
@@ -1502,8 +1509,10 @@ function parseLlmDraft(input: {
   const allowedSources = new Set(input.pages.map((page) => asUrl(page.url)).filter((url): url is string => Boolean(url)));
   if (!input.llmDraft) {
     console.log(
-      `[extract-draft:final] stored brand (no-LLM path) → primary=${deterministic.brand.primaryColor.value ?? "none"} ` +
-      `accent=${deterministic.brand.accentColor.value ?? "none"} ` +
+      `[extract-draft:final] stored brand (no-LLM path) → primary=${deterministic.brand.primaryColor.value ?? "none"}` +
+      `(${(deterministic.brand.primaryColor.confidence ?? 0).toFixed(2)}) ` +
+      `accent=${deterministic.brand.accentColor.value ?? "none"}` +
+      `(${(deterministic.brand.accentColor.confidence ?? 0).toFixed(2)}) ` +
       `surface=${deterministic.brand.backgroundColor.value} ` +
       `text=${deterministic.brand.textColor.value}`,
     );
@@ -1623,8 +1632,10 @@ function parseLlmDraft(input: {
   // dark text/nav colors (e.g. #1e293b) that the deterministic ranker correctly rejects.
   // LLM font/logo overrides are kept because the ranker has no equivalent heuristics for those.
   console.log(
-    `[extract-draft:final] stored brand → primary=${deterministic.brand.primaryColor.value ?? "none"} ` +
-    `accent=${deterministic.brand.accentColor.value ?? "none"} ` +
+    `[extract-draft:final] stored brand → primary=${deterministic.brand.primaryColor.value ?? "none"}` +
+    `(${(deterministic.brand.primaryColor.confidence ?? 0).toFixed(2)}) ` +
+    `accent=${deterministic.brand.accentColor.value ?? "none"}` +
+    `(${(deterministic.brand.accentColor.confidence ?? 0).toFixed(2)}) ` +
     `surface=${deterministic.brand.backgroundColor.value} ` +
     `text=${deterministic.brand.textColor.value}`,
   );

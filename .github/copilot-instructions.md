@@ -31,7 +31,7 @@
 ## Server integration points
 - LLM selection is env-driven in `packages/shared/src/llm/client.ts`:
   - `LLM_PROVIDER` defaults to `openai`.
-  - `LLM_MODEL` defaults to `gpt-5.2`.
+  - `LLM_MODEL` defaults to `gpt-4o`.
   - `OPENAI_API_KEY` is required for OpenAI provider.
   - Anthropic/Google providers are currently placeholders that throw.
 - Supabase-backed auth/routes require:

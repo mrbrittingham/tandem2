@@ -73,6 +73,12 @@ Canonical scope key is the pair `(businessId, locationSlug)`.
 - Route implementation lives at `apps/dashboard/src/app/api/chat/route.ts`, which delegates to `@tandem/shared/server`.
 - Session continuity is managed via `tandem_session` cookie; context is capped to recent messages.
 
+### Operator AI tool-calling
+- `POST /api/operator-chat`: accepts `{ messages, businessId, locationSlug }`. Runs `generateText()` with tool definitions (Vercel AI SDK). Returns a `pending_change` message when the model selects a tool call.
+- `POST /api/operator-chat/confirm`: secure write boundary. Requires authenticated Supabase session + valid business membership. Validates the proposed change schema, then applies the write to Supabase via `location-config` data path. Triggers `configVersion` bump to signal dashboard page re-fetch.
+- **Do not modify these routes without explicit instruction.**
+- Rate limiting on `/api/operator-chat/confirm` is deferred (noted in route comments) — add before Tandem 3.0 production launch.
+
 ### Conversations
 - `GET /api/conversations`: list + summary by `businessId` and optional `locationSlug`.
 - `GET /api/conversations/[sessionId]`: detail view with scoped lookup.
@@ -108,7 +114,7 @@ Canonical scope key is the pair `(businessId, locationSlug)`.
 
 ### Optional behavior flags
 - `LLM_PROVIDER` (default `openai`)
-- `LLM_MODEL` (default `gpt-5.2`)
+- `LLM_MODEL` (default `gpt-4o`; must be a valid OpenAI model name)
 - `CHAT_STORE_DIR`
 - `TANDEM_DATA_DIR`
 - `TANDEM_API_KEY`

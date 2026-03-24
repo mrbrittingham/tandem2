@@ -82,10 +82,11 @@ function truncateForLLM(text: string): string {
 function buildFallbackReply(userText: string): string {
   const trimmed = userText.trim();
   if (!trimmed) {
-    return "I can help once you share a question.";
+    return "I'm here to help! Ask me about our hours, menu, events, or reservations.";
   }
 
-  return "Thanks — I received your message. Live AI responses are temporarily unavailable for this environment, but your conversation has been saved.";
+  // Produce a natural, non-technical fallback that doesn't alarm the guest.
+  return "I'm having a little trouble connecting right now — apologies for the inconvenience! For immediate help please give us a call or check our website, and I'll be back up shortly.";
 }
 
 const sanitizeBusinessId = (value?: string) => {
@@ -302,6 +303,7 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
     let baseResponse: Response;
     try {
       const streamResult = await llmStream({
+        model: process.env.LLM_MODEL_WIDGET,
         messages: recentHistory,
         system: body.system,
         temperature: body.temperature,

@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { usePreviewDock } from "@/components/PreviewDockContext";
 import { SectionCard } from "@/components/SectionCard";
 import { TextInput } from "@/components/TextInput";
-import { ColorPicker } from "@/components/ColorPicker";
+import { ColorSwatchPicker } from "@/components/ColorSwatchPicker";
 import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { resolveChatScope } from "@/lib/chat-scope";
 import { updateBusiness, useActiveBusiness, useActiveLocation, useIsLocationsServerFetched, useIsStoreHydrated } from "@/lib/store-hooks";
@@ -16,12 +16,17 @@ import { normalizeWidgetTheme } from "@/lib/widget-theme";
 type BaseColorField = {
   key: "surfaceColor" | "textPrimaryColor" | "textSecondaryColor";
   label: string;
+  hint: string;
 };
 
-const colorFields: BaseColorField[] = [
-  { key: "surfaceColor", label: "Surface color" },
-  { key: "textPrimaryColor", label: "Text color" },
-  { key: "textSecondaryColor", label: "Muted text" },
+// Used for the three simple color fields that map 1:1 to theme keys
+const textAndSurfaceFields: BaseColorField[] = [
+  { key: "surfaceColor", label: "Chat background", hint: "Background of the chat window" },
+  { key: "textPrimaryColor", label: "Body text", hint: "Primary message text" },
+  // textSecondaryColor is intentionally not included in website scan suggestions because it
+  // is always auto-derived as a lighter shade of body text in widgetThemeToChatTheme().
+  // It is editable here to allow manual overrides.
+  { key: "textSecondaryColor", label: "Muted text", hint: "Timestamps and secondary labels — auto-derived from body text if not manually set" },
 ];
 
 function mergeTheme(base: WidgetThemeSettings, incoming?: Partial<WidgetThemeSettings>) {
@@ -233,6 +238,31 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
     setSaveSuccess(null);
   };
 
+  const handleBrandColorChange = (value: string) => {
+    setTheme((prev) =>
+      normalizeWidgetTheme({
+        ...prev,
+        primaryColor: value,
+        headerBackground: {
+          ...prev.headerBackground,
+          mode: "solid",
+          solidColor: value,
+        },
+      }),
+    );
+  };
+
+  const handleAccentColorChange = (value: string) => {
+    setTheme((prev) =>
+      normalizeWidgetTheme({
+        ...prev,
+        accentColor: value,
+        quickActions: { ...prev.quickActions, color: value },
+        sendButton: { ...prev.sendButton, color: value },
+      }),
+    );
+  };
+
   const updateBaseColor = (key: BaseColorField["key"], value: string) => {
     setTheme((prev) => normalizeWidgetTheme({ ...prev, [key]: value }));
   };
@@ -247,78 +277,86 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
         headerDivider={false}
         headerClassName="mb-3 pb-0"
       >
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleThemeSubmit}>
-          {colorFields.map((field) => (
-            <ColorPicker
-              key={field.key}
-              label={field.label}
-              value={theme[field.key]}
-              onChange={(value) => updateBaseColor(field.key, value)}
-            />
-          ))}
+        <form className="space-y-6" onSubmit={handleThemeSubmit}>
 
-          <ColorPicker
-            label="Header color"
-            value={theme.headerBackground?.solidColor ?? theme.primaryColor}
-            onChange={(value) =>
-              setTheme((prev) =>
-                normalizeWidgetTheme({
-                  ...prev,
-                  headerBackground: {
-                    ...prev.headerBackground,
-                    mode: "solid",
-                    solidColor: value,
-                  },
-                }),
-              )
-            }
-          />
+          {/* ── Header & brand ── */}
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Header &amp; brand</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">Brand color</p>
+                  <p className="text-[10px] text-slate-400">Chat header, user message bubbles, and primary CTA</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ColorSwatchPicker
+                    label="Brand color"
+                    value={theme.headerBackground?.solidColor ?? theme.primaryColor}
+                    onChange={handleBrandColorChange}
+                  />
+                  <span className="font-mono text-[10px] text-slate-400">{theme.headerBackground?.solidColor ?? theme.primaryColor}</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">Accent color</p>
+                  <p className="text-[10px] text-slate-400">Quick-reply chips and send button</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ColorSwatchPicker
+                    label="Accent color"
+                    value={theme.quickActions?.color ?? theme.accentColor}
+                    onChange={handleAccentColorChange}
+                  />
+                  <span className="font-mono text-[10px] text-slate-400">{theme.quickActions?.color ?? theme.accentColor}</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-          <ColorPicker
-            label="Quick actions color"
-            value={theme.quickActions?.color ?? theme.accentColor}
-            onChange={(value) =>
-              setTheme((prev) =>
-                normalizeWidgetTheme({
-                  ...prev,
-                  quickActions: {
-                    ...prev.quickActions,
-                    color: value,
-                  },
-                }),
-              )
-            }
-          />
+          {/* ── Chat surface & text ── */}
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Chat surface &amp; text</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {textAndSurfaceFields.map((field) => (
+                <div key={field.key} className="space-y-1.5">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">{field.label}</p>
+                    <p className="text-[10px] text-slate-400">{field.hint}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ColorSwatchPicker
+                      label={field.label}
+                      value={theme[field.key]}
+                      onChange={(value) => updateBaseColor(field.key, value)}
+                    />
+                    <span className="font-mono text-[10px] text-slate-400">{theme[field.key]}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-          <ColorPicker
-            label="Send button color"
-            value={theme.sendButton?.color ?? theme.primaryColor}
-            onChange={(value) =>
-              setTheme((prev) =>
-                normalizeWidgetTheme({
-                  ...prev,
-                  sendButton: {
-                    ...prev.sendButton,
-                    color: value,
-                  },
-                }),
-              )
-            }
-          />
+          {/* ── Typography & identity ── */}
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Typography &amp; identity</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextInput
+                label="Font family"
+                value={theme.fontFamily}
+                onChange={(value) => setTheme((prev) => normalizeWidgetTheme({ ...prev, fontFamily: value }))}
+                placeholder="'Inter', sans-serif"
+              />
+              <TextInput
+                label="Logo URL"
+                value={logoUrl}
+                onChange={setLogoUrl}
+                placeholder="https://cdn.tandem.dev/logo.svg"
+              />
+            </div>
+          </div>
 
-          <TextInput
-            label="Font family"
-            value={theme.fontFamily}
-            onChange={(value) => setTheme((prev) => normalizeWidgetTheme({ ...prev, fontFamily: value }))}
-            placeholder="'Inter', sans-serif"
-          />
-          <TextInput
-            label="Logo URL"
-            value={logoUrl}
-            onChange={setLogoUrl}
-            placeholder="https://cdn.tandem.dev/logo.svg"
-          />
-          <div className="md:col-span-2 flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="text-[var(--text-sm)]">
               {saveError ? <p className="text-[var(--color-danger)]">{saveError}</p> : null}
               {saveSuccess ? <p className="text-[var(--color-success)]">{saveSuccess}</p> : null}

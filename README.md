@@ -11,12 +11,26 @@ Tandem is an npm workspaces monorepo for the operator dashboard, embeddable chat
 | `packages/shared` | Shared types, mock store, LLM/provider routing, storage adapters, server helpers |
 | `supabase` | Active Supabase CLI config + migration path used by `supabase db push` |
 
+## Navigation
+
+The dashboard console has four top-level nav items:
+
+| Route | Label | Description |
+| --- | --- | --- |
+| `/overview` | Home | AI-oriented read-only overview with inline prompt chips |
+| `/conversations` | Conversations | Chat history viewer |
+| `/chatbot` | Chatbot | 4-tab unified config: Knowledge \| Handoff \| Behavior \| Appearance |
+| `/account` | Account | Business identity, integrations, team/billing stubs |
+
+The `/chatbot` page routes into the full editors (`/knowledge`, `/handoff`, `/intents`, `/widget`) via tab redirect.
+
 ## Core architecture rules
 
 - Backend logic stays in Next.js route handlers under `apps/dashboard/src/app/api/**`.
 - Use `@tandem/shared` for client-safe imports and `@tandem/shared/server` for server-only code.
 - Keep chat behavior aligned with the shared handlers used by `apps/dashboard/src/app/api/chat/route.ts`.
 - Prefer shared domain logic in `packages/shared` and shared presentation logic in `packages/ui-kit`.
+- The operator AI tool-call path (`/api/operator-chat` and `/api/operator-chat/confirm`) is production-critical — do not modify without explicit instruction.
 
 ## Development commands
 
@@ -50,9 +64,14 @@ Required for authenticated dashboard flows:
 Required for LLM generation:
 - `OPENAI_API_KEY`
 
+Required for import worker:
+- `SUPABASE_SERVICE_ROLE_KEY`
+
 Optional:
 - `LLM_PROVIDER` (default `openai`)
-- `LLM_MODEL` (default `gpt-5.2`)
+- `LLM_MODEL` (default `gpt-4o`)
+- `LLM_MODEL_WIDGET` (widget chat surface override)
+- `LLM_MODEL_OPERATOR` (operator chat surface override)
 - `CHAT_STORE_DIR` (preferred file-store override path)
 - `TANDEM_DATA_DIR`
 - `TANDEM_API_KEY`
@@ -64,7 +83,7 @@ Serverless note:
 ## Documentation index
 
 - Agent orientation: `AGENTS.md`
-- Canonical architecture: `docs/architecture.md`
+- Canonical architecture: `docs/architecture.md` (full reference; also see `docs/system-architecture.md`)
 - Repo navigation index: `docs/REPO_INDEX.md`
 - Verified DB schema reference: `docs/DATABASE_SCHEMA.md`
 - System map: `docs/system-map.md`

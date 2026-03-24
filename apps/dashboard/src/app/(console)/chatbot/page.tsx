@@ -9,11 +9,11 @@ import WidgetPage from "@/app/(console)/widget/page";
 
 type Tab = "knowledge" | "handoff" | "behavior" | "appearance";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "knowledge", label: "Knowledge" },
-  { key: "handoff", label: "Handoff" },
-  { key: "behavior", label: "Behavior" },
-  { key: "appearance", label: "Appearance" },
+const TABS: { key: Tab; label: string; description: string }[] = [
+  { key: "knowledge", label: "Knowledge", description: "Menu, hours, events, FAQs, and contact info your chatbot draws from." },
+  { key: "handoff", label: "Handoff", description: "When and how to escalate to a real person." },
+  { key: "behavior", label: "Behavior", description: "Personality, tone, and what topics to stay focused on." },
+  { key: "appearance", label: "Appearance", description: "Colors, logo, and branding for the chat widget." },
 ];
 
 function ChatbotTabs() {
@@ -31,19 +31,21 @@ function ChatbotTabs() {
     router.replace(`/chatbot?${params.toString()}`);
   };
 
+  const activeTabMeta = TABS.find((t) => t.key === activeTab);
+
   return (
     <div className="space-y-0">
       {/* Page header */}
       <header className="mb-6">
         <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Chatbot</h1>
         <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">
-          View and configure your chatbot&apos;s knowledge, handoff, behavior, and appearance.
+          Configure knowledge, handoff rules, behavior, and appearance — all in one place.
         </p>
       </header>
 
       {/* Tab bar */}
       <div
-        className="mb-6 flex gap-1 rounded-xl border border-[var(--console-border)] bg-[var(--console-bg-hover)] p-1"
+        className="mb-2 flex gap-1 rounded-xl border border-[var(--console-border)] bg-[var(--console-bg-hover)] p-1"
         role="tablist"
         aria-label="Chatbot configuration tabs"
       >
@@ -64,6 +66,11 @@ function ChatbotTabs() {
           </button>
         ))}
       </div>
+
+      {/* Active tab context line */}
+      {activeTabMeta && (
+        <p className="mb-5 px-1 text-xs text-[var(--console-text-tertiary)]">{activeTabMeta.description}</p>
+      )}
 
       {/* Tab content */}
       <div role="tabpanel">

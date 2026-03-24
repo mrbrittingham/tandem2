@@ -154,7 +154,7 @@ For chatbot behavior design and quality assurance:
 
 ```
 LLM_PROVIDER=openai     # Default provider
-LLM_MODEL=gpt-5.2       # Default model
+LLM_MODEL=gpt-4o        # Default model
 OPENAI_API_KEY=sk-...    # Required for OpenAI
 ```
 

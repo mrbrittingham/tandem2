@@ -538,16 +538,16 @@ function collectSignalsFromHtml(args: {
           if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: ruleContext });
         }
 
-        // Text color in nav/header: gold/brand-colored nav links are a strong signal
-        // (e.g. Windmill Creek's gold logo text and navigation links)
+        // Text color in nav/header: gold/brand-colored nav links and logo text are a
+        // strong brand signal (e.g. Windmill Creek's gold logo text and navigation links).
+        // Tag as "logo" so the scorer gives them a positive bonus instead of the nav penalty.
         if (isNavHeader) {
           const COLOR_RE = /(?:^|;)\s*color\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/gi;
           let textMatch: RegExpExecArray | null;
           while ((textMatch = COLOR_RE.exec(declarations)) !== null) {
             const norm = normalizeHexColor(textMatch[1] ?? "");
-            // Push as "svg" context to get the svg-level bonus for logo/brand text colors
-            // that appear in header/nav CSS rules — these are intentional brand choices.
-            if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "nav" });
+            // "logo" context: intentional brand color in nav/header text (not background chrome)
+            if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "logo" });
           }
         }
       }
@@ -565,8 +565,38 @@ function collectSignalsFromHtml(args: {
       }
     }
 
+    // Pass 1.5: Explicit logo/brand-mark containers.
+    // Elements whose class or id attribute contains "logo", "brand", "navbar-brand",
+    // "site-logo", "custom-logo" etc. are almost always the brand mark — extract their
+    // inline fill/color values and any nested SVG fills as "logo" context (highest non-cssvar bonus).
+    // Covers WordPress/Elementor/Wix/Squarespace/Webflow logo widget patterns.
+    {
+      const LOGO_ELEM_RE = /<(?:a|div|span|img|figure|h1|h2|p)\s[^>]*(?:class|id)=["'][^"']*\b(?:logo|brand|site-logo|navbar-brand|custom-logo|site-branding|header-logo|brand-logo)\b[^"']*["'][^>]*>(?:[\s\S]*?)<\/(?:a|div|span|figure|h1|h2|p)>/gi;
+      const ELEMENTOR_LOGO_RE = /<div\s[^>]*class=["'][^"']*\belementor-widget-site-logo\b[^"']*["'][^>]*>(?:[\s\S]*?)<\/div>/gi;
+      const WP_LOGO_RE = /<(?:a|div)\s[^>]*class=["'][^"']*\b(?:wp-block-site-logo|site-logo|custom-logo-link)\b[^"']*["'][^>]*>(?:[\s\S]*?)<\/(?:a|div)>/gi;
+      for (const logoRe of [LOGO_ELEM_RE, ELEMENTOR_LOGO_RE, WP_LOGO_RE]) {
+        for (const block of collectRegexMatches(html, logoRe)) {
+          // SVG fills inside logo containers
+          for (const svgBlock of collectRegexMatches(block, /<svg(?:\s[^>]*)?>(?:[\s\S]*?)<\/svg>/gi)) {
+            for (const val of collectRegexMatches(svgBlock, HEX_RE)) {
+              const norm = normalizeHexColor(val);
+              if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "logo" });
+            }
+          }
+          // Inline fill/color/background in logo container
+          const LOGO_PROP_RE = /(?:fill|color|background(?:-color)?)\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b)/gi;
+          for (const val of collectRegexMatches(block, LOGO_PROP_RE)) {
+            const norm = normalizeHexColor(val);
+            if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "logo" });
+          }
+        }
+      }
+    }
+
     // Pass 2: nav/header — layout chrome (ranker applies a navRatio penalty).
-    for (const block of collectRegexMatches(html, /<(?:nav|header)(?:\s[^>]*)?>(?:[\s\S]*?)<\/(?:nav|header)>/gi)) {
+    // Strip SVG blocks first to avoid double-counting logo SVG fills from Pass 1.
+    for (const rawBlock of collectRegexMatches(html, /<(?:nav|header)(?:\s[^>]*)?>(?:[\s\S]*?)<\/(?:nav|header)>/gi)) {
+      const block = rawBlock.replace(/<svg(?:\s[^>]*)?>(?:[\s\S]*?)<\/svg>/gi, "");
       for (const val of collectRegexMatches(block, HEX_RE)) {
         const norm = normalizeHexColor(val);
         if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "nav" });

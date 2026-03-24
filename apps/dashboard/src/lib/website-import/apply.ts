@@ -19,12 +19,94 @@ function toCategory(text: string): string {
   return "General";
 }
 
-function buildThemeFromDraft(draft: WebsiteImportDraft, existing?: Partial<WidgetThemeSettings>): WidgetThemeSettings {
-  const primary = draft.brand.primaryColor.value ?? existing?.primaryColor ?? "#3170FC";
+/**
+ * Guard against overly dark brand colors slipping through to the widget theme.
+ * If a scanned primary is near-black (luminance < 12%), substitute a tasteful
+ * deep charcoal (#1E293B) that reads as dark-but-not-black in the chat UI.
+ * Warm hues (reds, golds, wines) are preserved regardless of lightness as long
+ * as they clear the absolute minimum visibility threshold (L ≥ 8%).
+ */
+function sanitizeBrandPrimary(hex: string): string {
+  // Quick luminance check (same formula as pickReadableTextColor)
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (luminance >= 0.08) return hex; // bright enough — keep as-is
+
+  // HSL check: preserve warm-hued darks (deep burgundy, dark gold) as they are
+  // intentional brand choices; only soften true neutral darks.
+  const max = Math.max(r, g, b) / 255;
+  const min = Math.min(r, g, b) / 255;
+  const d = max - min;
+  const saturation = max === 0 ? 0 : d / max; // HSV saturation proxy
+  const lightness = (max + min) / 2;
+  const hue = d === 0 ? 0 : max === r / 255 ? ((g - b) / 255) / d : max === g / 255 ? (b - r) / 255 / d + 2 : (r - g) / 255 / d + 4;
+  const hueDeg = ((hue / 6) * 360 + 360) % 360;
+  // Warm dark: reds/wines/golds with meaningful saturation — don't touch
+  const isWarmDark =
+    saturation > 0.25 &&
+    lightness < 0.15 &&
+    (hueDeg <= 55 || hueDeg >= 270);
+  if (isWarmDark) return hex;
+
+  // Neutral dark → substitute a deep slate-charcoal
+  return "#1E293B";
+}
+
+/**
+ * For warm-hued brand primaries (reds, wines, golds), derive a very light warm
+ * tinted surface instead of dead white. The tint is ~96% white + 4% primary,
+ * giving a subtle warmth that makes the theme feel intentionally designed.
+ * Cool primaries (blues, greens) continue to use pure white.
+ */
+function deriveWarmSurface(primaryHex: string): string {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(primaryHex)) return "#FFFFFF";
+  const r = parseInt(primaryHex.slice(1, 3), 16);
+  const g = parseInt(primaryHex.slice(3, 5), 16);
+  const b = parseInt(primaryHex.slice(5, 7), 16);
+
+  // Quick hue estimate to filter warm vs cool
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max === min) return "#FFFFFF"; // achromatic
+  const d = max - min;
+  let hue = max === r ? (g - b) / d + (g < b ? 6 : 0)
+    : max === g ? (b - r) / d + 2
+    : (r - g) / d + 4;
+  hue = (hue / 6) * 360;
+
+  // Warm: reds/oranges/golds (0-65°) and pinks/wines/purples (270-360°)
+  const isWarm = (hue >= 0 && hue <= 65) || hue >= 270;
+  if (!isWarm) return "#FFFFFF";
+
+  // Very light warm tint: 4% primary + 96% white
+  const tr = Math.min(255, Math.round(r * 0.04 + 255 * 0.96));
+  const tg = Math.min(255, Math.round(g * 0.04 + 255 * 0.96));
+  const tb = Math.min(255, Math.round(b * 0.04 + 255 * 0.96));
+  return `#${tr.toString(16).padStart(2, "0")}${tg.toString(16).padStart(2, "0")}${tb.toString(16).padStart(2, "0")}`.toUpperCase();
+}
+
+export function buildThemeFromDraft(draft: WebsiteImportDraft, existing?: Partial<WidgetThemeSettings>): WidgetThemeSettings {
+  const rawPrimary = draft.brand.primaryColor.value ?? existing?.primaryColor ?? "#3170FC";
+  const primary = rawPrimary.startsWith("#") ? sanitizeBrandPrimary(rawPrimary) : rawPrimary;
   const accent = draft.brand.accentColor.value ?? existing?.accentColor ?? primary;
-  const background = draft.brand.backgroundColor.value ?? existing?.surfaceColor ?? "#FFFFFF";
+
+  // Use the scanned background if present (including white — the swatch panel shows
+  // whatever was detected, so preview and apply must honor it exactly).
+  // Only fall back to the operator's saved surface or warm derivation when the scan
+  // returned nothing at all for the background field.
+  const scannedBg = draft.brand.backgroundColor.value;
+  const operatorSurface = existing?.surfaceColor;
+  const background =
+    scannedBg
+      ? scannedBg
+      : (operatorSurface && operatorSurface !== "#FFFFFF")
+        ? operatorSurface
+        : deriveWarmSurface(primary);
+
   const text = draft.brand.textColor.value ?? existing?.textPrimaryColor ?? pickReadableTextColor(background);
-  const textSecondary = existing?.textSecondaryColor ?? "#475569";
+  const textSecondary = draft.brand.mutedTextColor?.value ?? existing?.textSecondaryColor ?? "#475569";
   const fontFamily = draft.brand.fontFamily.value ?? existing?.fontFamily ?? "'Inter', sans-serif";
 
   return normalizeWidgetTheme({

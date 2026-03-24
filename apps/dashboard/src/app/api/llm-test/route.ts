@@ -6,7 +6,7 @@ import { llmGenerate } from "@tandem/shared/server";
 function getRuntimeEnv() {
   return {
     provider: process.env.LLM_PROVIDER ?? "openai",
-    model: process.env.LLM_MODEL ?? "gpt-5.2",
+    model: process.env.LLM_MODEL ?? "gpt-4o",
     hasKey: Boolean(process.env.OPENAI_API_KEY?.trim()),
   };
 }

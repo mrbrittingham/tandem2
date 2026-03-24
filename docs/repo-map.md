@@ -55,23 +55,20 @@ tandem/
 
 | Route | File | Purpose |
 |-------|------|---------|
-| `/overview` | `overview/page.tsx` | Dashboard home, setup score |
-| `/knowledge` | `knowledge/page.tsx` | Restaurant knowledge editor + website import |
+| `/overview` | `overview/page.tsx` | Dashboard home — AI overview panels + prompt chips |
+| `/chatbot` | `chatbot/page.tsx` | 4-tab chatbot config (Knowledge \| Handoff \| Behavior \| Appearance) |
 | `/conversations` | `conversations/page.tsx` | Chat history viewer |
-| `/widget` | `widget/page.tsx` | Widget customization + embed snippet |
-| `/appearance` | `appearance/page.tsx` | Theme customization |
-| `/assistant-settings` | `assistant-settings/page.tsx` | LLM behavior config |
-| `/locations` | `locations/page.tsx` | Location management |
-| `/businesses` | `businesses/page.tsx` | Business management |
-| `/handoff` | `handoff/page.tsx` | Escalation configuration |
-| `/intents` | `intents/page.tsx` | Intent routing |
-| `/integrations` | `integrations/page.tsx` | External integrations |
-| `/channels` | `channels/page.tsx` | Communication channels |
-| `/analytics` | `analytics/page.tsx` | Chat analytics |
-| `/account` | `account/page.tsx` | User/team management |
-| `/settings` | `settings/page.tsx` | General settings |
-| `/llm` | `llm/page.tsx` | LLM provider settings |
-| `/advanced` | `advanced/page.tsx` | Advanced settings |
+| `/account` | `account/page.tsx` | Business identity, integrations stub, team/billing stubs |
+| `/knowledge` | `knowledge/page.tsx` | Full knowledge editor + website import panel (tab backing page) |
+| `/handoff` | `handoff/page.tsx` | Handoff / escalation config (tab backing page) |
+| `/intents` | `intents/page.tsx` | AI behavior / persona (tab backing page) |
+| `/widget` | `widget/page.tsx` | Widget appearance + embed snippet (tab backing page) |
+| `/locations` | `locations/page.tsx` | Location listing (minimal) |
+
+Routes that redirect (defined in `next.config.ts`, no `page.tsx`):
+- `/settings` → `/account`
+- `/integrations` → `/account`
+- `/menus` → `/chatbot?tab=knowledge`
 
 ### API Routes (`apps/dashboard/src/app/api/`)
 
@@ -80,16 +77,21 @@ tandem/
 | `GET/POST /api/chat` | `chat/route.ts` | Chat streaming (canonical) |
 | `GET /api/conversations` | `conversations/route.ts` | List sessions by scope |
 | `GET /api/conversations/:id` | `conversations/[sessionId]/route.ts` | Session detail |
+| `POST /api/operator-chat` | `operator-chat/route.ts` | Operator AI with tool-calling |
+| `POST /api/operator-chat/confirm` | `operator-chat/confirm/route.ts` | Secure write boundary (auth + validate + apply) |
 | `GET/POST /api/businesses` | `businesses/route.ts` | Business CRUD |
 | `GET/POST /api/locations` | `locations/route.ts` | Location CRUD |
-| `GET/POST /api/location-config` | `location-config/route.ts` | Location knowledge + theme |
+| `GET/PUT /api/location-config` | `location-config/route.ts` | Location knowledge + theme |
 | `POST /api/widget-theme` | `widget-theme/route.ts` | Widget theme update |
 | `POST /api/bootstrap` | `bootstrap/route.ts` | Initialize membership |
 | `GET /api/health` | `health/route.ts` | Liveness check |
+| `GET/POST /api/llm-test` | `llm-test/route.ts` | LLM provider/model visibility + smoke test |
+| `GET /api/debug/env` | `debug/route.ts` | Non-prod env diagnostics |
 | `POST /api/website-import/start` | `website-import/start/route.ts` | Queue import run |
 | `GET /api/website-import/latest` | `website-import/latest/route.ts` | Latest run metadata |
 | `GET /api/website-import/:runId` | `website-import/[runId]/route.ts` | Run status + draft |
 | `POST /api/website-import/:runId/apply` | `website-import/[runId]/apply/route.ts` | Apply draft to location |
+| `GET /api/location/:locationId/website-import` | `location/[locationId]/website-import/route.ts` | Queue by location |
 
 ## Crawler & Ingestion Entrypoints
 
@@ -116,7 +118,7 @@ tandem/
 
 ### Dashboard Components (`apps/dashboard/src/components/`)
 
-ConsoleSidebar, ConsoleTopbar, LocationSwitcher, WebsiteImportPanel, ColorPicker, PreviewPanel, SaveBar, SectionCard, DataTableShell, EmptyState, CreateBusinessWizard, CreateLocationDialog, and more.
+ConsoleSidebar (operator AI chat + ConfirmationCard), ConsoleTopbar (4-item nav), AppShell, LocationSwitcher, WebsiteImportPanel, ColorPicker, WidgetPreviewColumn, SaveBar, SectionCard, DataTableShell, EmptyState, CreateBusinessWizard, CreateLocationDialog, and more.
 
 ## Database Layer
 
@@ -201,7 +203,7 @@ Active migration path: `supabase/migrations/` (9 migrations as of March 2026).
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon key |
 | `OPENAI_API_KEY` | If using OpenAI | LLM API key |
 | `LLM_PROVIDER` | No (default: openai) | LLM provider selection |
-| `LLM_MODEL` | No (default: gpt-5.2) | LLM model selection |
+| `LLM_MODEL` | No (default: gpt-4o) | LLM model selection |
 | `TANDEM_DATA_DIR` | No | Override file store path |
 | `TANDEM_API_KEY` | No | API authentication |
 | `SUPABASE_SERVICE_ROLE_KEY` | For worker | Import worker auth |

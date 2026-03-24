@@ -9,6 +9,7 @@ export type LLMMessage = {
 
 export type LLMRequest = {
   messages: LLMMessage[];
+  model?: string;
   system?: string;
   temperature?: number;
   maxTokens?: number;

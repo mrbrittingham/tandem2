@@ -4,9 +4,10 @@ export type ColorPickerProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  hint?: string;
 };
 
-export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
+export function ColorPicker({ label, value, onChange, hint }: ColorPickerProps) {
   return (
     <div className="flex flex-wrap gap-3">
       <label className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm">
@@ -19,7 +20,7 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
         />
       </label>
       <div className="min-w-[200px] flex-1">
-        <TextInput label={label} value={value} onChange={onChange} helperText="Hex value" />
+        <TextInput label={label} value={value} onChange={onChange} helperText={hint ?? "Hex value"} />
       </div>
     </div>
   );
