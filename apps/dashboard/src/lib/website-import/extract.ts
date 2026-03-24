@@ -14,7 +14,7 @@ import type {
   WebsitePageType,
 } from "./types";
 import { isLikelyFaqPage, normalizeFaqCandidate } from "./faq-heuristics";
-import { createId, normalizeHexColor, pickReadableTextColor } from "./utils";
+import { createId, normalizeHexColor, pickDistinctAccentColor, pickReadableTextColor, pickSurfaceColor, rankBrandColorCandidates } from "./utils";
 
 type RawFaq = {
   question?: unknown;
@@ -1328,9 +1328,63 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
   const firstEmail = pickBestSignal(signals.emails, /contact|visit/);
   const firstAddress = pickBestSignal(signals.addresses, /contact|visit|location/);
   const firstHours = pickBestSignal(signals.hours, /hours|visit|contact/);
-  const primaryColor = signals.colorCandidates[0];
-  const accentColor = signals.colorCandidates[1] ?? primaryColor;
-  const backgroundColor = normalizeHexColor("#FFFFFF");
+
+  // Rank color candidates by brand signal. Near-duplicate hex variants are clustered
+  // before scoring so rendering variance doesn't dilute brand signal.
+  const rankedColors = rankBrandColorCandidates(signals.colorCandidates);
+  const primaryColor = rankedColors[0];
+  const accentColor = pickDistinctAccentColor(rankedColors, primaryColor?.value) ?? primaryColor;
+
+  // Confidence correlates with which zone produced the winning color.
+  // SVG (logo) and button (CTA) contexts are the strongest designer-intentional signals.
+  const primaryZone = primaryColor?.zone ?? "style";
+  const accentZone = accentColor?.zone ?? "style";
+  const primaryConfidence = primaryColor
+    ? (primaryZone === "cssvar-primary" ? 0.95 : ["svg", "button", "cssvar-accent", "cssvar-secondary"].includes(primaryZone) ? 0.88 : ["footer", "bg", "cssvar"].includes(primaryZone) ? 0.75 : 0.62)
+    : 0;
+  const accentConfidence = accentColor
+    ? (["cssvar-accent", "cssvar-primary"].includes(accentZone) ? 0.92 : accentZone === "button" ? 0.82 : 0.55)
+    : 0;
+
+  // Surface color: prefer an explicit CSS background-color value from the scan results
+  // (light, low-saturation values only), then fall back to a warm-tint derivation.
+  const scannedSurface = pickSurfaceColor(signals.colorCandidates);
+  const backgroundColor = scannedSurface ?? (() => {
+    const hex = primaryColor?.value;
+    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return "#FFFFFF";
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max === min) return "#FFFFFF";
+    const d = max - min;
+    let h = max === r ? (g - b) / d + (g < b ? 6 : 0)
+      : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h / 6) * 360;
+    // Warm = reds, oranges, golds, warm pinks, wines/magentas
+    const isWarm = (h >= 0 && h <= 65) || h >= 310;
+    if (!isWarm) return "#FFFFFF";
+    const tr = Math.min(255, Math.round(r * 0.04 + 255 * 0.96));
+    const tg = Math.min(255, Math.round(g * 0.04 + 255 * 0.96));
+    const tb = Math.min(255, Math.round(b * 0.04 + 255 * 0.96));
+    return `#${tr.toString(16).padStart(2, "0")}${tg.toString(16).padStart(2, "0")}${tb.toString(16).padStart(2, "0")}`.toUpperCase();
+  })();
+
+  // Muted text: secondary text color for labels/timestamps. Derived from background
+  // luminance so it stays readable on both light and dark surfaces.
+  const bgLumi = (() => {
+    if (!/^#[0-9A-Fa-f]{6}$/.test(backgroundColor)) return 0.96;
+    const r = parseInt(backgroundColor.slice(1, 3), 16);
+    const g = parseInt(backgroundColor.slice(3, 5), 16);
+    const b = parseInt(backgroundColor.slice(5, 7), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  })();
+  const mutedTextColor = bgLumi > 0.45 ? "#6B7280" : "#94A3B8";
+
+  console.log(`[extract-draft] signals: ${signals.colorCandidates.length} colorCandidates → ranked: ${rankedColors.length} passed filters`);
+  console.log(`[extract-draft] primary=${primaryColor?.value ?? "none"}(${primaryZone}) accent=${accentColor?.value ?? "none"}(${accentZone}) surface=${backgroundColor}${scannedSurface ? "(scanned)" : "(derived)"} text=${pickReadableTextColor(backgroundColor)}`);
+
   const logo = signals.logoCandidates[0] ?? signals.faviconCandidates[0];
   const font = signals.fontCandidates.find((entry) => !/serif|sans-serif|monospace/i.test(entry.value)) ?? signals.fontCandidates[0];
   const events = extractEventsFromPages(classifiedPages, signals);
@@ -1384,22 +1438,27 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
       primaryColor: {
         value: primaryColor?.value ?? null,
         sourceUrl: primaryColor?.sourceUrl ?? null,
-        confidence: primaryColor ? 0.65 : 0,
+        confidence: primaryConfidence,
       },
       accentColor: {
         value: accentColor?.value ?? null,
         sourceUrl: accentColor?.sourceUrl ?? null,
-        confidence: accentColor ? 0.55 : 0,
+        confidence: accentConfidence,
       },
       backgroundColor: {
         value: backgroundColor,
         sourceUrl: homepage?.url ?? null,
-        confidence: 0.3,
+        confidence: scannedSurface ? 0.60 : 0.30,
       },
       textColor: {
         value: pickReadableTextColor(backgroundColor),
         sourceUrl: homepage?.url ?? null,
-        confidence: 0.3,
+        confidence: 0.40,
+      },
+      mutedTextColor: {
+        value: mutedTextColor,
+        sourceUrl: homepage?.url ?? null,
+        confidence: 0.35,
       },
       fontFamily: {
         value: font?.value ?? null,
@@ -1440,6 +1499,12 @@ function parseLlmDraft(input: {
   const deterministic = buildDeterministicDraft(input.sourceUrl, input.pages, input.signals);
   const allowedSources = new Set(input.pages.map((page) => asUrl(page.url)).filter((url): url is string => Boolean(url)));
   if (!input.llmDraft) {
+    console.log(
+      `[extract-draft:final] stored brand (no-LLM path) → primary=${deterministic.brand.primaryColor.value ?? "none"} ` +
+      `accent=${deterministic.brand.accentColor.value ?? "none"} ` +
+      `surface=${deterministic.brand.backgroundColor.value} ` +
+      `text=${deterministic.brand.textColor.value}`,
+    );
     return deterministic;
   }
 
@@ -1551,10 +1616,16 @@ function parseLlmDraft(input: {
       .slice(0, 20)
     : [];
 
-  const primaryColor = normalizeHexColor(asString(brandObj.primary_color));
-  const accentColor = normalizeHexColor(asString(brandObj.accent_color));
-  const backgroundColor = normalizeHexColor(asString(brandObj.background_color)) ?? deterministic.brand.backgroundColor.value;
-  const textColor = normalizeHexColor(asString(brandObj.text_color)) ?? pickReadableTextColor(backgroundColor);
+  // Brand colors: deterministic ranking (rankBrandColorCandidates) is the canonical source of
+  // truth. The LLM prompt receives all raw colorCandidates before filtering; it frequently picks
+  // dark text/nav colors (e.g. #1e293b) that the deterministic ranker correctly rejects.
+  // LLM font/logo overrides are kept because the ranker has no equivalent heuristics for those.
+  console.log(
+    `[extract-draft:final] stored brand → primary=${deterministic.brand.primaryColor.value ?? "none"} ` +
+    `accent=${deterministic.brand.accentColor.value ?? "none"} ` +
+    `surface=${deterministic.brand.backgroundColor.value} ` +
+    `text=${deterministic.brand.textColor.value}`,
+  );
 
   const name = asString(llm.business_name);
   const shortDescription = normalizeSummary(asString(llm.short_description));
@@ -1605,26 +1676,12 @@ function parseLlmDraft(input: {
     policies,
     restaurantKnowledge: deterministic.restaurantKnowledge,
     brand: {
-      primaryColor: {
-        value: primaryColor ?? deterministic.brand.primaryColor.value,
-        sourceUrl: pickSource(primaryColor, deterministic.brand.primaryColor.sourceUrl),
-        confidence: typeof brandObj.primary_confidence === "number" ? brandObj.primary_confidence : deterministic.brand.primaryColor.confidence,
-      },
-      accentColor: {
-        value: accentColor ?? deterministic.brand.accentColor.value,
-        sourceUrl: pickSource(accentColor, deterministic.brand.accentColor.sourceUrl),
-        confidence: typeof brandObj.accent_confidence === "number" ? brandObj.accent_confidence : deterministic.brand.accentColor.confidence,
-      },
-      backgroundColor: {
-        value: backgroundColor,
-        sourceUrl: pickSource(backgroundColor, deterministic.brand.backgroundColor.sourceUrl),
-        confidence: typeof brandObj.background_confidence === "number" ? brandObj.background_confidence : deterministic.brand.backgroundColor.confidence,
-      },
-      textColor: {
-        value: textColor,
-        sourceUrl: pickSource(textColor, deterministic.brand.textColor.sourceUrl),
-        confidence: typeof brandObj.text_confidence === "number" ? brandObj.text_confidence : deterministic.brand.textColor.confidence,
-      },
+      // Colors come exclusively from the deterministic ranking path — see comment above.
+      primaryColor: deterministic.brand.primaryColor,
+      accentColor: deterministic.brand.accentColor,
+      backgroundColor: deterministic.brand.backgroundColor,
+      textColor: deterministic.brand.textColor,
+      mutedTextColor: deterministic.brand.mutedTextColor,
       fontFamily: {
         value: asString(brandObj.font_family) ?? deterministic.brand.fontFamily.value,
         sourceUrl: pickSource(asString(brandObj.font_family), deterministic.brand.fontFamily.sourceUrl),

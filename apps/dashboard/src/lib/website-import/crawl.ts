@@ -425,11 +425,198 @@ function collectSignalsFromHtml(args: {
     });
   }
 
-  const colorPattern = /#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b/g;
-  for (const value of collectRegexMatches(html, colorPattern)) {
-    const normalized = normalizeHexColor(value);
-    if (normalized) {
-      signals.colorCandidates.push({ value: normalized, sourceUrl: pageUrl });
+  // Context-aware color extraction: 6 passes so the ranker can weight colors by source zone.
+  // Pass 0 – CSS custom properties in <style> blocks → highest-confidence brand signal.
+  //           Modern builders (Elementor, Squarespace, Webflow, Shopify, Wix, Divi, WP FSE)
+  //           store the brand palette as semantically-named CSS variables. Pass 0b also
+  //           extracts hex values from CSS rules with brand-zone selectors.
+  // Pass 1 – inline SVG blocks (logo fills, icon paths) → strong logo identity signal.
+  // Pass 2 – <nav> / <header> blocks → layout chrome (penalized in ranker).
+  // Pass 3 – <footer> blocks → brand identity zone (positive bonus in ranker).
+  // Pass 4 – <button> elements and CTA-styled anchors → intentional brand accent signal.
+  // Pass 5 – remaining HTML after stripping all named zones, so earlier passes are
+  //           NOT double-counted with context="style".
+
+  // Pass 0: CSS custom properties + brand-zone CSS rules from <style> blocks.
+  {
+    const styleContent = collectRegexMatches(html, /<style(?:\s[^>]*)?>([\s\S]*?)<\/style>/gi).join("\n");
+    if (styleContent.length > 0) {
+      // Sub-pass 0a: CSS custom property declarations (--varname: #hex).
+      // Covers all major site builders:
+      //   Elementor:    --e-global-color-primary, --e-global-color-accent, --e-global-color-secondary
+      //   WP Block/FSE: --wp--preset--color--primary, --wp--preset--color--vivid-red
+      //   Divi:         --et_global_primary_color, --et_global_secondary_color
+      //   Squarespace:  --accent, --color-primaryButton, --sqs-site-color-*
+      //   Webflow:      --brand-primary, --color-accent
+      //   Shopify:      --color-brand, --color-accent, --color-button
+      //   Wix:          --color_1 through --color_35 (numbered palette)
+      //   Framer/plain: --primary, --accent, --brand
+      //
+      // CRITICAL: builders like Elementor define default palette variables
+      // (--e-global-color-primary: #6EC1E4) that are NEVER applied to any element
+      // on a customized site. To avoid these swamping real brand colors, we first
+      // build a usage frequency map — counting how many times each variable appears
+      // as var(--name) across the style blocks and inline HTML. Variables with zero
+      // usages are palette ghosts and are skipped. Variables used many times are
+      // pushed that many times into the candidate pool so frequency-based scoring
+      // correctly reflects how dominant the color is on the page.
+      const varUsageCounts = new Map<string, number>();
+      {
+        const VAR_REF_RE = /var\(\s*--([\w-]+)/g;
+        let usageM: RegExpExecArray | null;
+        // Count in style block content
+        while ((usageM = VAR_REF_RE.exec(styleContent)) !== null) {
+          const name = (usageM[1] ?? "").toLowerCase();
+          varUsageCounts.set(name, (varUsageCounts.get(name) ?? 0) + 1);
+        }
+        // Count in inline style attributes and the rest of the HTML
+        const htmlVarRe = new RegExp(VAR_REF_RE.source, VAR_REF_RE.flags);
+        while ((usageM = htmlVarRe.exec(html)) !== null) {
+          const name = (usageM[1] ?? "").toLowerCase();
+          varUsageCounts.set(name, (varUsageCounts.get(name) ?? 0) + 1);
+        }
+      }
+
+      const CSS_VAR_RE = /--([a-zA-Z0-9_-]+)\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/g;
+      let varMatch: RegExpExecArray | null;
+      while ((varMatch = CSS_VAR_RE.exec(styleContent)) !== null) {
+        const varName = (varMatch[1] ?? "").toLowerCase();
+        const norm = normalizeHexColor(varMatch[2] ?? "");
+        if (!norm) continue;
+
+        const usageCount = varUsageCounts.get(varName) ?? 0;
+        // Skip completely unused variables — these are builder palette defaults
+        // that were never applied to any element (e.g. Elementor's factory blue).
+        if (usageCount === 0) continue;
+
+        let context: string;
+        if (/primary|(?:^|[-_])brand[-_]?(?:color|primary)?$|main-?color|theme-?color/.test(varName)) {
+          context = "cssvar-primary";
+        } else if (/(?:^|[-_])accent(?:[-_]|$)|(?:^|[-_])cta(?:[-_]|$)|button-?(?:bg|background)|(?:^|[-_])highlight(?:[-_]|$)|featured-?color/.test(varName)) {
+          context = "cssvar-accent";
+        } else if (/secondary/.test(varName)) {
+          context = "cssvar-secondary";
+        } else {
+          // Any used hex-valued CSS variable — even opaque builder names like
+          // --e-global-color-abc123 — is a legitimate brand signal.
+          context = "cssvar";
+        }
+
+        // Push once per usage (capped at 10): converts var() reference frequency
+        // into ranker candidate frequency so heavily-applied colors score higher.
+        const reps = Math.min(usageCount, 10);
+        for (let i = 0; i < reps; i++) {
+          signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context });
+        }
+      }
+
+      // Sub-pass 0b: CSS rule blocks with brand-zone selectors.
+      // Captures builders that emit final hex values directly in selector rules rather
+      // than CSS variables (older WP themes, Genesis, Squarespace themes, Beaver Builder).
+      // We extract both background-color AND color (text) from these zones:
+      //   - button background-color → brand accent (the CTA color)
+      //   - nav/header color (text) → brand primary (logo text, nav links like WC gold)
+      //   - footer background-color → brand identity confirmation
+      const CSS_RULE_RE = /([^{}@][^{}]*)\{([^{}]+)\}/g;
+      let ruleMatch: RegExpExecArray | null;
+      while ((ruleMatch = CSS_RULE_RE.exec(styleContent)) !== null) {
+        const selector = (ruleMatch[1] ?? "").toLowerCase();
+        const declarations = ruleMatch[2] ?? "";
+        let ruleContext: string | null = null;
+        const isButton = /\bbtn\b|\.button\b|\bbutton\s*[{,>~+ ]|\bbutton$|\[type=["']?(?:submit|button)|\belementor-button\b|\bdivi-button\b|\bwp-block-button\b/.test(selector);
+        const isFooter = /\bfooter\b/.test(selector);
+        const isNavHeader = /\bnav\b|\bheader\b|\bsite-header\b|\bsite-nav\b/.test(selector);
+
+        if (!isButton && !isFooter && !isNavHeader) continue;
+        ruleContext = isButton ? "button" : isFooter ? "footer" : "nav";
+
+        // Background color: meaningful for buttons and footers
+        const BG_RE = /background(?:-color)?\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/gi;
+        let bgMatch: RegExpExecArray | null;
+        while ((bgMatch = BG_RE.exec(declarations)) !== null) {
+          const norm = normalizeHexColor(bgMatch[1] ?? "");
+          if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: ruleContext });
+        }
+
+        // Text color in nav/header: gold/brand-colored nav links are a strong signal
+        // (e.g. Windmill Creek's gold logo text and navigation links)
+        if (isNavHeader) {
+          const COLOR_RE = /(?:^|;)\s*color\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/gi;
+          let textMatch: RegExpExecArray | null;
+          while ((textMatch = COLOR_RE.exec(declarations)) !== null) {
+            const norm = normalizeHexColor(textMatch[1] ?? "");
+            // Push as "svg" context to get the svg-level bonus for logo/brand text colors
+            // that appear in header/nav CSS rules — these are intentional brand choices.
+            if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "nav" });
+          }
+        }
+      }
+    }
+  }
+
+  {
+    const HEX_RE = /#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b/g;
+
+    // Pass 1: SVG fills/strokes — logo identity colors.
+    for (const svgBlock of collectRegexMatches(html, /<svg(?:\s[^>]*)?>(?:[\s\S]*?)<\/svg>/gi)) {
+      for (const val of collectRegexMatches(svgBlock, HEX_RE)) {
+        const norm = normalizeHexColor(val);
+        if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "svg" });
+      }
+    }
+
+    // Pass 2: nav/header — layout chrome (ranker applies a navRatio penalty).
+    for (const block of collectRegexMatches(html, /<(?:nav|header)(?:\s[^>]*)?>(?:[\s\S]*?)<\/(?:nav|header)>/gi)) {
+      for (const val of collectRegexMatches(block, HEX_RE)) {
+        const norm = normalizeHexColor(val);
+        if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "nav" });
+      }
+    }
+
+    // Pass 3: footer — brand identity zone. Footers reliably reproduce the primary brand
+    // color as a background or border, making them a strong secondary confirmation signal.
+    for (const block of collectRegexMatches(html, /<footer(?:\s[^>]*)?>(?:[\s\S]*?)<\/footer>/gi)) {
+      for (const val of collectRegexMatches(block, HEX_RE)) {
+        const norm = normalizeHexColor(val);
+        if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "footer" });
+      }
+    }
+
+    // Pass 4: buttons and CTA-styled anchor/div elements.
+    // These receive the brand accent color intentionally — a designer chose this.
+    // Matches: <button>, and <a>/<div>/<span> whose class attribute contains
+    // btn, button, or cta (common CSS conventions).
+    const CTA_RE = /<(?:button(?:\s[^>]*)?|(?:a|div|span)\s[^>]*class=["'][^"']*\b(?:btn|button|cta)\b[^"']*["'][^>]*)>[\s\S]*?<\/(?:button|a|div|span)>/gi;
+    for (const block of collectRegexMatches(html, CTA_RE)) {
+      for (const val of collectRegexMatches(block, HEX_RE)) {
+        const norm = normalizeHexColor(val);
+        if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "button" });
+      }
+    }
+
+    // Pass 5: remainder of body HTML — strip all already-extracted zones first.
+    const bodyHtml = html
+      .replace(/<svg(?:\s[^>]*)?>(?:[\s\S]*?)<\/svg>/gi, "")
+      .replace(/<(?:nav|header)(?:\s[^>]*)?>(?:[\s\S]*?)<\/(?:nav|header)>/gi, "")
+      .replace(/<footer(?:\s[^>]*)?>(?:[\s\S]*?)<\/footer>/gi, "")
+      .replace(/<(?:button(?:\s[^>]*)?|(?:a|div|span)\s[^>]*class=["'][^"']*\b(?:btn|button|cta)\b[^"']*["'][^>]*)>[\s\S]*?<\/(?:button|a|div|span)>/gi, "");
+    // Pass 5a: explicit CSS background-color / background: #hex declarations → context "bg".
+    // Solid bg-color properties reflect deliberate designer choices. Dark/saturated values
+    // boost brand primary scoring; light values feed surface-color detection.
+    {
+      const BG_PROP_RE = /background(?:-color)?\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b)/gi;
+      let bgColorMatch: RegExpExecArray | null;
+      while ((bgColorMatch = BG_PROP_RE.exec(bodyHtml)) !== null) {
+        const norm = normalizeHexColor(bgColorMatch[1] ?? "");
+        if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "bg" });
+      }
+    }
+    // Pass 5b: all remaining hex values — strip bg-color declarations first to avoid
+    // double-counting with the "bg" context captured above.
+    const bodyWithoutBg = bodyHtml.replace(/background(?:-color)?\s*:\s*#[0-9a-fA-F]{3,6}\b/gi, "");
+    for (const val of collectRegexMatches(bodyWithoutBg, HEX_RE)) {
+      const norm = normalizeHexColor(val);
+      if (norm) signals.colorCandidates.push({ value: norm, sourceUrl: pageUrl, context: "style" });
     }
   }
 
@@ -556,7 +743,7 @@ function dedupeSignals(signals: ImportSignals): ImportSignals {
     socialLinks: uniqueBy(signals.socialLinks, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
     logoCandidates: uniqueBy(signals.logoCandidates, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
     faviconCandidates: uniqueBy(signals.faviconCandidates, (entry) => `${entry.url.toLowerCase()}::${entry.sourceUrl}`),
-    colorCandidates: uniqueBy(signals.colorCandidates, (entry) => `${entry.value.toUpperCase()}::${entry.sourceUrl}`),
+    colorCandidates: uniqueBy(signals.colorCandidates, (entry) => `${entry.value.toUpperCase()}::${entry.sourceUrl}::${entry.context ?? "style"}`),
     fontCandidates: uniqueBy(signals.fontCandidates, (entry) => `${entry.value.toLowerCase()}::${entry.sourceUrl}`),
   };
 }
