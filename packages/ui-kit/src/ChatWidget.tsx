@@ -222,7 +222,7 @@ const defaultMessages: MessageDescriptor[] = [
   },
   {
     role: "assistant",
-    text: "Hi, I'm Tandem. How can I help you today?",
+    text: "Hi, I'm Tandem. What can I help you with today?",
   },
 ];
 

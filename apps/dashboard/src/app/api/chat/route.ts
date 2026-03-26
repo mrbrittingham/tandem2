@@ -531,7 +531,7 @@ export function buildKnowledgeSystemPrompt(
       : [
           "Reservations: There is NO reservation data in the knowledge for this location.",
           "If asked about reservations, booking, or walk-ins: do NOT mention any booking platform (OpenTable, Resy, Tock, etc.) or any policy.",
-          "Instead respond: 'I don't have reservation details on hand — I'd suggest giving us a call or checking the website for the latest booking info.'",
+          "Instead respond: 'I don't see reservation information on the website.' If helpful, follow with: 'You may want to check the website directly or give us a call for the latest booking details.'",
           "Never say 'reservations are available', 'you can book online', 'we accept walk-ins', or any equivalent. That information is not confirmed.",
         ].join(" "),
 
