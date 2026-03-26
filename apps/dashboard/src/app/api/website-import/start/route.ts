@@ -160,6 +160,9 @@ export async function POST(request: Request) {
       .eq("id", location.id);
 
     console.info("[website-import/start] import queued", { locationId, runId, source });
+    console.info(
+      `[DEBUG:scan-start] ━━━ NEW SCAN QUEUED ━━━  url=${url}  runId=${runId}  ts=${new Date().toISOString()}`,
+    );
 
     return NextResponse.json({ ok: true, runId, status: "queued", source });
   } catch (error) {

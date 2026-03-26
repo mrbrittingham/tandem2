@@ -134,6 +134,15 @@ async function markRunSucceeded(
 ) {
   const finishedAt = new Date().toISOString();
 
+  const brand = result.draft.brand;
+  console.info(
+    `[DEBUG:persist-colors] saving result_json for runId=${run.id}  ` +
+    `primary=${brand.primaryColor.value ?? "none"}(conf=${(brand.primaryColor.confidence ?? 0).toFixed(2)})  ` +
+    `accent=${brand.accentColor.value ?? "none"}(conf=${(brand.accentColor.confidence ?? 0).toFixed(2)})  ` +
+    `surface=${brand.backgroundColor.value ?? "none"}  ` +
+    `text=${brand.textColor.value ?? "none"}`,
+  );
+
   const { error } = await client
     .from("onboarding_import_runs")
     .update({

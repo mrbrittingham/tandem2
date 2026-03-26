@@ -9,12 +9,14 @@ import type {
   ImportPolicy,
   ImportReservationInfo,
   ImportSignals,
+  MenuSemanticCategory,
+  ReservationStatus,
   WebsiteImportDraft,
   WebsiteImportResult,
   WebsitePageType,
 } from "./types";
 import { isLikelyFaqPage, normalizeFaqCandidate } from "./faq-heuristics";
-import { createId, normalizeHexColor, pickDistinctAccentColor, pickReadableTextColor, pickSurfaceColor, rankBrandColorCandidates } from "./utils";
+import { createId, normalizeHexColor, pickDistinctAccentColor, pickReadableTextColor, pickSurfaceColor, rankBrandColorCandidates, stripBoilerplateText } from "./utils";
 
 type RawFaq = {
   question?: unknown;
@@ -59,6 +61,7 @@ function bestPageSnippet(pages: CrawledPage[], matcher: RegExp, fallbackLength =
 }
 
 const POLICY_HINT_REGEX = /(policy|policies|terms|privacy|return|refund|shipping|reservation|booking|cancellation|cancel)/i;
+const BOOKING_PLATFORM_REGEX = /(opentable|resy|tock|toasttab|sevenrooms|exploretock|bookeo)/i;
 const POLICY_NOISE_REGEX = /(skip\s+to\s+content|main\s+menu|see\s+more|share\b|comments?|likes?|copy\s+link|facebook|instagram|x\.com|twitter|pinterest|utm_|cookie\s+policy|newsletter)/i;
 const MONTH_REGEX = /(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)/i;
 
@@ -254,11 +257,38 @@ function extractEventDescription(text: string, title: string): string {
   return trimmed.slice(0, 420);
 }
 
+// Generic event category/listing titles that should not produce individual event entries
+// unless actual event content (dates + distinct titles) is present on the page.
+const GENERIC_EVENT_CATEGORY_REGEX = /^(upcoming\s+events?|events?\s*calendar|what'?s\s+on|happenings?|live\s+music|live\s+entertainment|entertainment|events?|calendar|activities|shows?|performances?)$/i;
+
 function hasStrongEventSignal(page: CrawledPage): boolean {
-  const haystack = `${page.url} ${page.title} ${page.textExcerpt}`.toLowerCase();
-  return /\/event\//.test(page.url)
-    || /event\s+series|all\s+events|upcoming\s+events|calendar/.test(haystack)
-    || /\b(march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b\s+\d{1,2}/.test(haystack);
+  const urlLower = page.url.toLowerCase();
+
+  // Explicit event detail URL is the strongest signal
+  if (/\/event\/|\/events\/[^/]+$/.test(urlLower)) return true;
+
+  const titleLower = (page.title ?? "").toLowerCase();
+  const excerptLower = (page.textExcerpt ?? "").toLowerCase().slice(0, 800);
+
+  // Event listing/calendar page patterns based on URL or title
+  if (/event\s+series|all\s+events|upcoming\s+events|what'?s\s+on|happenings|event\s+calendar/.test(`${urlLower} ${titleLower}`)) return true;
+
+  // Date evidence: require MULTIPLE dates (calendar-like content) OR a date adjacent
+  // to explicit event language — a single date alone is too noisy (e.g. founding year,
+  // seasonal hours like "open March–October").
+  const dateMatches = excerptLower.match(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\s+\d{1,2}/g);
+  if (dateMatches && dateMatches.length >= 2) return true;
+
+  // Single date + explicit event-type language
+  if (
+    dateMatches &&
+    dateMatches.length >= 1 &&
+    /\b(concert|performance|show\b|band\b|musician|dj\b|ticke|rsvp\b|register\b|workshop|trivia|comedy|fundraiser|tasting\s+event|dinner\s+event|prix\s+fixe)\b/.test(excerptLower)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function rankSourceUrlForSignal(url: string, preferred: RegExp): number {
@@ -277,10 +307,19 @@ function pickBestSignal<T extends { sourceUrl: string }>(values: T[], preferred:
     .sort((left, right) => rankSourceUrlForSignal(right.sourceUrl, preferred) - rankSourceUrlForSignal(left.sourceUrl, preferred))[0] ?? null;
 }
 
-function extractEventsFromPages(pages: CrawledPage[], signals: ImportSignals): ImportEvent[] {
+type EventsExtractionResult = {
+  events: ImportEvent[];
+  /** True if any event-related pages were found during the crawl, even with no confirmed listings. */
+  eventPagesPresent: boolean;
+  /** True only when concrete dated event listings were successfully extracted. */
+  currentEventsFound: boolean;
+};
+
+function extractEventsFromPages(pages: CrawledPage[], signals: ImportSignals): EventsExtractionResult {
   const events: ImportEvent[] = [];
   const seen = new Set<string>();
   const eventPages = pages.filter((page) => page.pageType === "events" || hasStrongEventSignal(page));
+  const eventPagesPresent = eventPages.length > 0;
   const detailPages = eventPages.filter((page) => /\/event\//.test(page.url));
   const listingPages = eventPages.filter((page) => !/\/event\//.test(page.url));
   const orderedPages = [...detailPages, ...listingPages];
@@ -306,6 +345,17 @@ function extractEventsFromPages(pages: CrawledPage[], signals: ImportSignals): I
     const normalizedTitle = title.toLowerCase();
     if (!normalizedTitle || /skip\s+to\s+content|winery\s+events\s+in|what'?s\s+happening/.test(normalizedTitle)) {
       continue;
+    }
+
+    // For listing pages (not /event/ detail paths), reject entries whose title is
+    // a generic category label ("Live Music", "Upcoming Events", etc.) unless the
+    // page evidences at least two distinct dates — indicating a real event calendar.
+    if (!/\/event\//.test(page.url) && GENERIC_EVENT_CATEGORY_REGEX.test(normalizedTitle)) {
+      const dateMentions = (normalizedText.match(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\s+\d{1,2}/g) ?? []).length;
+      if (dateMentions < 2) {
+        console.log(`[events] SKIP generic-category title="${normalizedTitle}" url=${page.url}`);
+        continue;
+      }
     }
 
     const key = `${normalizedTitle}::${dateTime.date ?? ""}::${dateTime.time ?? ""}`;
@@ -335,48 +385,144 @@ function extractEventsFromPages(pages: CrawledPage[], signals: ImportSignals): I
     }
   }
 
-  return events
+  const finalEvents = events
     .filter((entry) => entry.title.length >= 4)
     .slice(0, 20);
+
+  if (eventPagesPresent && finalEvents.length === 0) {
+    console.log(`[events] eventPagesPresent=true but currentEventsFound=false — event pages exist without confirmed dated listings`);
+  }
+
+  return {
+    events: finalEvents,
+    eventPagesPresent,
+    currentEventsFound: finalEvents.length > 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Menu section semantic-category normalisation
+// ---------------------------------------------------------------------------
+
+/** Ordered rules — first match wins. */
+const MENU_CATEGORY_RULES: Array<{ pattern: RegExp; category: MenuSemanticCategory }> = [
+  // Kids must be first — "Lil Hooper Troopers", "Kids Menu", etc.
+  { pattern: /kids?|children|junior|lil['\s]|little\s+ones?/i, category: "kids_menu" },
+  // Alcholic drinks detected before the generic "beverages" rule
+  { pattern: /beer|wine|cocktail|spirits?|alcohol|bar\s*menu|liquor|whiskey|whisky|bourbon|craft\s*drinks?/i, category: "alcohol" },
+  // Starters / apps
+  { pattern: /starter|appetizer|app(?:etiser)?|small\s*plate|bite|to\s*start/i, category: "starters" },
+  // Specific protein category
+  { pattern: /seafood|fish|shell|lobster|shrimp|oyster|crab|catch/i, category: "seafood" },
+  // Salad / greens
+  { pattern: /salad|greens/i, category: "salads" },
+  // Soup
+  { pattern: /soup/i, category: "soups" },
+  // Brunch
+  { pattern: /brunch/i, category: "brunch" },
+  // Desserts
+  { pattern: /dessert|sweet|cake|ice\s*cream|pastry/i, category: "desserts" },
+  // Generic non-alcoholic beverages
+  { pattern: /non[‐\-\s]?alcohol|mocktail|soda|soft\s*drink|juice|iced\s+tea|lemonade|coffee|tea|beverage|drink/i, category: "beverages" },
+  // Mains / entrees (keep near bottom — broad terms)
+  { pattern: /entree|entre[ée]|main|dinner|lunch|mains|feature|signature/i, category: "entrees" },
+];
+
+/** Noise section titles that should be excluded from menu ingestion. */
+const MENU_NOISE_TITLE_REGEX = /skip\s+to|navigation|nav|search|cart|checkout|home|footer|header|sidebar|promotions?|banner|announcement|seasonal\s+special|happy\s+hour|deal|offer/i;
+
+/**
+ * Derive a normalised semantic category for a menu section title.
+ * Returns null if no rule matches (caller can use "other").
+ */
+function normalizeMenuSectionCategory(title: string): MenuSemanticCategory | null {
+  for (const rule of MENU_CATEGORY_RULES) {
+    if (rule.pattern.test(title)) {
+      return rule.category;
+    }
+  }
+  return null;
+}
+
+/**
+ * Detect sections that are noisy / non-food content and should be excluded.
+ */
+function isNoiseMenuSection(title: string, items: ImportMenuItem[]): boolean {
+  if (MENU_NOISE_TITLE_REGEX.test(title)) return true;
+  // A section with a single item whose name exactly echoes the section title is
+  // likely a navigation/teaser artefact rather than a real section.
+  if (items.length === 1 && items[0] && items[0].name.toLowerCase().trim() === title.toLowerCase().trim()) return true;
+  return false;
 }
 
 function extractMenuSectionsFromPages(pages: CrawledPage[]): ImportMenuSection[] {
   const menuPages = pages.filter((page) => {
     // Skip home pages — their headings are often event titles, not menu sections
     if ((page as ClassifiedPage).pageType === "home") return false;
-    return (page as ClassifiedPage).pageType === "menu" || /\bmenu\b|\bfood\b|\bwine\s+list\b|\bcocktail\b|\bbrunch\b|\bdinner\b/i.test(`${page.url} ${page.title}`);
+    // Include explicitly classified menu pages, plus URL/title heuristics.
+    // Broader pattern than classifyPageType so that pages classified as "general"
+    // but containing menu content are still processed.
+    return (
+      (page as ClassifiedPage).pageType === "menu" ||
+      /\bmenu\b|\bfood\b|\bwine\s+list\b|\bcocktail\b|\bbrunch\b|\bdinner\b|\bdining\b|\bdrinks?\b|\beats?\b|\blunch\b|\border\s+online\b/i
+        .test(`${page.url} ${page.title}`)
+    );
   });
+
+  console.log(`[menu] Scanning ${menuPages.length} menu-candidate pages (total pages: ${pages.length})`);
+  for (const p of menuPages) {
+    console.log(`[menu]   ${(p as ClassifiedPage).pageType ?? "general"} | ${new URL(p.url).pathname} — "${p.title.slice(0, 60)}"`);
+  }
+
   const sections: ImportMenuSection[] = [];
 
   for (const page of menuPages) {
-    const text = compact(page.textExcerpt);
+    const rawText = compact(page.textExcerpt);
+    const text = rawText;
     const structuredText = page.structuredText ?? "";
+
+    const hasStructuredHeadings = structuredText.includes("##");
+    const hasPriceSignals = /\$\s?\d/.test(text);
+    const headingCount = (page.headingText ?? []).filter((h) => h.length >= 3 && h.length <= 60).length;
+    console.log(`[menu] ${new URL(page.url).pathname}: structuredHeadings=${hasStructuredHeadings} priceSignals=${hasPriceSignals} headings=${headingCount} textLen=${text.length}`);
 
     // Try heading-based structured parsing first (## Section / - Item lines)
     const structuredSections = parseStructuredMenuText(structuredText, page);
     if (structuredSections.length > 0) {
+      console.log(`[menu] ${new URL(page.url).pathname}: structured-text → ${structuredSections.length} sections`);
       sections.push(...structuredSections);
       continue;
+    }
+    if (hasStructuredHeadings) {
+      console.log(`[menu] ${new URL(page.url).pathname}: structuredText had ## but parseStructuredMenuText found 0 sections — text may have items only under root headings`);
     }
 
     // Try price-pattern parsing
     const priceSections = parsePricePatternMenu(text, page);
     if (priceSections.length > 0) {
+      console.log(`[menu] ${new URL(page.url).pathname}: price-pattern → ${priceSections.length} sections`);
       sections.push(...priceSections);
       continue;
+    }
+    if (!hasPriceSignals) {
+      console.log(`[menu] ${new URL(page.url).pathname}: no $price signals found — price-pattern skipped`);
     }
 
     // Try text-block heuristic parsing (for plain text menus without prices)
     const heuristicSections = parseTextBlockMenu(text, page);
     if (heuristicSections.length > 0) {
+      console.log(`[menu] ${new URL(page.url).pathname}: text-block → ${heuristicSections.length} sections`);
       sections.push(...heuristicSections);
       continue;
     }
 
+
     // Final fallback: single overview section
+    const fallbackTitle = page.title || "Menu";
     sections.push({
       id: createId("menu_section"),
-      title: page.title || "Menu",
+      title: fallbackTitle,
+      semanticCategory: normalizeMenuSectionCategory(fallbackTitle) ?? "other",
       sourceUrl: page.url,
       include: true,
       items: [{
@@ -390,7 +536,16 @@ function extractMenuSectionsFromPages(pages: CrawledPage[]): ImportMenuSection[]
     });
   }
 
-  return sections.slice(0, 12);
+  // Remove noise sections (navigation artefacts, promotional blocks, etc.)
+  const cleaned = sections.filter((s) => {
+    const isNoise = isNoiseMenuSection(s.title, s.items);
+    if (isNoise) {
+      console.log(`[menu] DISCARD noise section "${s.title.slice(0, 50)}" items=${s.items.length}`);
+    }
+    return !isNoise;
+  });
+  console.log(`[menu] ${sections.length} total sections → ${cleaned.length} after noise filtering`);
+  return cleaned.slice(0, 12);
 }
 
 function parseStructuredMenuText(structuredText: string, page: CrawledPage): ImportMenuSection[] {
@@ -414,6 +569,7 @@ function parseStructuredMenuText(structuredText: string, page: CrawledPage): Imp
         sections.push({
           id: createId("menu_section"),
           title: currentSection.title,
+          semanticCategory: normalizeMenuSectionCategory(currentSection.title) ?? "other",
           sourceUrl: page.url,
           include: true,
           items: currentSection.items.slice(0, 20),
@@ -459,6 +615,7 @@ function parseStructuredMenuText(structuredText: string, page: CrawledPage): Imp
     sections.push({
       id: createId("menu_section"),
       title: currentSection.title,
+      semanticCategory: normalizeMenuSectionCategory(currentSection.title) ?? "other",
       sourceUrl: page.url,
       include: true,
       items: currentSection.items.slice(0, 20),
@@ -479,7 +636,8 @@ function parsePricePatternMenu(text: string, page: CrawledPage): ImportMenuSecti
   const hasDietaryNotes = /vegan|vegetarian|gluten|allergy|dairy/i.test(text);
   const items: ImportMenuItem[] = priceMatches.slice(0, 20).map((match) => ({
     id: createId("menu_item"),
-    name: compact((match[1] ?? "Item").replace(/[^a-zA-Z0-9&,'\-\s]/g, "")).slice(-48) || "Menu item",
+    // .slice(0, 48) — take the FIRST 48 chars (was erroneously .slice(-48) which took the last 48)
+    name: compact((match[1] ?? "Item").replace(/[^a-zA-Z0-9&,'\-\s]/g, "")).slice(0, 48) || "Menu item",
     price: `$${match[2]}`,
     description: "",
     dietaryNotes: hasDietaryNotes ? "Contains dietary notes on page" : null,
@@ -489,6 +647,7 @@ function parsePricePatternMenu(text: string, page: CrawledPage): ImportMenuSecti
   return [{
     id: createId("menu_section"),
     title: sectionTitle,
+    semanticCategory: normalizeMenuSectionCategory(sectionTitle) ?? "other",
     sourceUrl: page.url,
     include: true,
     items,
@@ -500,11 +659,13 @@ function parseTextBlockMenu(text: string, page: CrawledPage): ImportMenuSection[
   const headings = page.headingText ?? [];
   const menuHeadings = headings.filter((h) =>
     h.length >= 3 && h.length <= 60
-    && !/skip|menu|navigation|search|cart|home|back/i.test(h)
+    && !/skip|(?:^|\s)menu(?:$|\s)|navigation|search|cart|home|back/i.test(h)
     && !/^\d+$/.test(h),
   );
 
-  if (menuHeadings.length < 2) return [];
+  // Allow single-heading pages — a menu page can have just one major section heading.
+  // A single heading with substantive text beneath it is still extractable.
+  if (menuHeadings.length < 1) return [];
 
   // Heuristic: if a page has multiple short headings and text between them,
   // treat each heading as a menu section
@@ -554,6 +715,7 @@ function parseTextBlockMenu(text: string, page: CrawledPage): ImportMenuSection[
     sections.push({
       id: createId("menu_section"),
       title: heading,
+      semanticCategory: normalizeMenuSectionCategory(heading) ?? "other",
       sourceUrl: page.url,
       include: true,
       items,
@@ -563,14 +725,31 @@ function parseTextBlockMenu(text: string, page: CrawledPage): ImportMenuSection[
   return sections;
 }
 
+// Strong signal for an actual reservation system vs. a generic contact/inquiry form.
+// "table", "book" alone, and "experience" are explicitly excluded — they match too many
+// non-reservation contexts (e.g. "picnic table", "cookbook", "tasting experience").
+const STRONG_RESERVATION_REGEX = /\breserv(?:e|ation|ations|ed)?\b|\bopentable\b|\bresy(?:\.com)?\b|\bsevenrooms\b|\btock(?:\.com)?\b|\bexploretock\b|\btoasttab\b|\bbook\s+a\s+(?:table|reservation|seat)\b|\bmake\s+a\s+(?:reservation|booking)\b|\breservation\s+(?:required|recommended|policy)\b/i;
+
 function extractReservationInfo(pages: CrawledPage[], signals: ImportSignals): ImportReservationInfo {
+  // Only count pages with explicit, unambiguous reservation language; "experience",
+  // "table", and standalone "book" are excluded because they appear on almost every
+  // restaurant page and produce false positives.
   const reservationPages = pages.filter(
-    (page) => page.pageType === "reservations" || page.pageType === "private-events" || /reserv|book|table|opentable|resy|tock|experience/i.test(`${page.url} ${page.title} ${page.textExcerpt.slice(0, 280)}`),
+    (page) =>
+      page.pageType === "reservations" ||
+      page.pageType === "private-events" ||
+      STRONG_RESERVATION_REGEX.test(`${page.url} ${page.title} ${page.textExcerpt.slice(0, 320)}`),
   );
-  const bookingSignal = signals.bookingLinks[0] ?? null;
+
+  // A real booking platform link is strong independent evidence of a reservation system
+  const platformBookingSignal =
+    signals.bookingLinks.find((l) => BOOKING_PLATFORM_REGEX.test(l.url)) ?? null;
+  const bookingSignal = platformBookingSignal ?? signals.bookingLinks[0] ?? null;
 
   if (!reservationPages.length && !bookingSignal) {
+    console.log(`[reservations] status=not-offered — no reservation pages found and no booking links detected`);
     return {
+      status: "not-offered",
       include: false,
       sourceUrl: null,
       bookingUrl: null,
@@ -582,16 +761,43 @@ function extractReservationInfo(pages: CrawledPage[], signals: ImportSignals): I
     };
   }
 
-  const joined = compact(reservationPages.map((entry) => `${entry.title}. ${entry.textExcerpt}`).join(" "));
-  const bookingUrl =
+  // Strip platform boilerplate (Squarespace scheduling text, accessibility skip links, etc.)
+  // before evaluating content quality — polluted text can falsely exceed the length threshold.
+  const joined = stripBoilerplateText(compact(reservationPages.map((entry) => `${entry.title}. ${entry.textExcerpt}`).join(" ")));
+  // Only use the source page URL as bookingUrl when it matches a booking platform.
+  // Falling back to a generic reservation page URL inflates confidence.
+  const confirmedBookingUrl =
     bookingSignal?.url
-    ?? reservationPages.find((entry) => /resy|opentable|tock|book|reserv|sevenrooms|toast/i.test(`${entry.url} ${entry.textExcerpt}`))?.url
-    ?? reservationPages[0]?.url
+    ?? reservationPages.find((entry) => /resy|opentable|tock|sevenrooms|toasttab/i.test(`${entry.url} ${entry.textExcerpt}`))?.url
     ?? null;
-  const platforms = ["resy", "opentable", "tock", "sevenrooms", "toast"].filter((platform) => new RegExp(platform, "i").test(`${joined} ${bookingUrl}`));
+  const bookingUrl = confirmedBookingUrl;
+  const platforms = ["resy", "opentable", "tock", "sevenrooms", "toast"].filter((platform) => new RegExp(platform, "i").test(`${joined} ${bookingUrl ?? ""}`));
+
+  // "confirmed" = explicit booking platform URL was found, or meaningful booking
+  // instructions were extracted from reservation pages. "page-exists-unconfirmed" =
+  // reservation pages exist but no actionable booking details were confirmed.
+  // Require reservation-relevant terms in the cleaned text to avoid false positives
+  // from generic pages (e.g., a contact page that happened to pass the filter).
+  const hasLikelyBookingUrl = !!(platformBookingSignal?.url ?? (bookingUrl && /resy|opentable|tock|sevenrooms|toasttab|book|reserv/i.test(bookingUrl)));
+  const hasSubstantialInstructions =
+    joined.length > 60 && /reserv(ation)?|book(ing)?|table|walk.?in|opentable|resy|tock|sevenrooms/i.test(joined);
+  const status: ReservationStatus =
+    hasLikelyBookingUrl || hasSubstantialInstructions ? "confirmed" : "page-exists-unconfirmed";
+
+  console.log(
+    `[reservations] status=${status} reservationPages=${reservationPages.length} bookingSignal=${bookingSignal?.url ?? "none"}` +
+    ` platformSignal=${platformBookingSignal?.url ?? "none"} hasInstructions=${hasSubstantialInstructions}`,
+  );
+  for (const p of reservationPages) {
+    const matchReason = p.pageType === "reservations" ? "pageType=reservations"
+      : p.pageType === "private-events" ? "pageType=private-events"
+      : `regex match in ${new URL(p.url).pathname}`;
+    console.log(`[reservations]   + ${matchReason} — "${p.title.slice(0, 60)}"`);
+  }
 
   return {
-    include: true,
+    status,
+    include: true, // status is confirmed or page-exists-unconfirmed here; not-offered was returned early above
     sourceUrl: reservationPages[0]?.url ?? bookingSignal?.sourceUrl ?? null,
     bookingUrl,
     platforms,
@@ -1331,9 +1537,16 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
 
   // Rank color candidates by brand signal. Near-duplicate hex variants are clustered
   // before scoring so rendering variance doesn't dilute brand signal.
+  console.log(
+    `[DEBUG:color-pre-rank] about to rank ${signals.colorCandidates.length} colorCandidates` +
+    ` — sample: ${signals.colorCandidates.slice(0, 5).map((c) => `${c.value}(${c.context ?? "style"})`).join(", ")}`,
+  );
   const rankedColors = rankBrandColorCandidates(signals.colorCandidates);
   // Skip cssvar-accent zone colors for primary: a variable named --accent/--cta
   // should be the accent, not the brand primary. Let it fall through to accent selection.
+  console.log(
+    `[DEBUG:color-post-rank] top 5 ranked: ${rankedColors.slice(0, 5).map((c) => `${c.value}(zone=${c.zone})`).join(", ") || "(none)"}`,
+  );
   const primaryColor = rankedColors.find((c) => c.zone !== "cssvar-accent") ?? rankedColors[0];
   const accentColor = pickDistinctAccentColor(rankedColors, primaryColor?.value) ?? primaryColor;
 
@@ -1342,7 +1555,7 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
   const primaryZone = primaryColor?.zone ?? "style";
   const accentZone = accentColor?.zone ?? "style";
   const primaryConfidence = primaryColor
-    ? (primaryZone === "cssvar-primary" ? 0.95 : ["svg", "button", "cssvar-accent", "cssvar-secondary"].includes(primaryZone) ? 0.88 : ["footer", "bg", "cssvar"].includes(primaryZone) ? 0.75 : 0.62)
+    ? (primaryZone === "cssvar-primary" ? 0.95 : ["svg", "button", "cssvar-accent", "cssvar-secondary"].includes(primaryZone) ? 0.88 : ["footer", "bg", "cssvar", "nav-bg"].includes(primaryZone) ? 0.75 : 0.62)
     : 0;
   const accentConfidence = accentColor
     ? (["cssvar-accent", "cssvar-primary"].includes(accentZone) ? 0.92 : accentZone === "button" ? 0.82 : 0.55)
@@ -1396,10 +1609,30 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
 
   const logo = signals.logoCandidates[0] ?? signals.faviconCandidates[0];
   const font = signals.fontCandidates.find((entry) => !/serif|sans-serif|monospace/i.test(entry.value)) ?? signals.fontCandidates[0];
-  const events = extractEventsFromPages(classifiedPages, signals);
+  const eventsResult = extractEventsFromPages(classifiedPages, signals);
+  const events = eventsResult.events;
+  const { eventPagesPresent, currentEventsFound } = eventsResult;
   const menuSections = extractMenuSectionsFromPages(classifiedPages);
   const reservations = extractReservationInfo(classifiedPages, signals);
   const memberships = extractMembershipInfo(classifiedPages);
+
+  // Structured extraction summary — helps diagnose ingestion quality issues
+  console.log(`[extract-draft] ── KNOWLEDGE EXTRACTION SUMMARY ─────────────────────────────`);
+  console.log(`[extract-draft] pages: ${classifiedPages.length} total`);
+  for (const p of classifiedPages) {
+    console.log(`[extract-draft]   type=${p.pageType ?? "general"} url=${new URL(p.url).pathname} title="${p.title.slice(0, 60)}"`);
+  }
+  console.log(`[extract-draft] events: ${events.length} extracted eventPagesPresent=${eventPagesPresent} currentEventsFound=${currentEventsFound}`);
+  for (const e of events) {
+    console.log(`[extract-draft]   event "${e.title.slice(0, 60)}" date=${e.date ?? "none"} url=${e.sourceUrl ? new URL(e.sourceUrl).pathname : "null"}`);
+  }
+  console.log(`[extract-draft] menuSections: ${menuSections.length} extracted`);
+  for (const s of menuSections) {
+    console.log(`[extract-draft]   section "${s.title.slice(0, 50)}" cat=${s.semanticCategory} items=${s.items.length} url=${s.sourceUrl ? new URL(s.sourceUrl).pathname : "null"}`);
+  }
+  console.log(`[extract-draft] reservations: status=${reservations.status} platforms=${reservations.platforms.join(",") || "none"} bookingUrl=${reservations.bookingUrl ?? "none"}`);
+  console.log(`[extract-draft] memberships: include=${memberships.include} name="${memberships.name}"`);
+  console.log(`[extract-draft] ─────────────────────────────────────────────────────────────`);
 
   return {
     sourceUrl,
@@ -1439,6 +1672,8 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
     policies: [],
     restaurantKnowledge: {
       events,
+      eventPagesPresent,
+      currentEventsFound,
       menuSections,
       reservations,
       memberships,
@@ -1481,8 +1716,15 @@ function buildDeterministicDraft(sourceUrl: string, pages: CrawledPage[], signal
       },
     },
     restaurantInsights: {
-      eventHighlights: events[0]?.description ?? bestPageSnippet(classifiedPages, /event|music|calendar|happenings|what'?s on/, 260),
-      reservationGuidance: reservations.instructions || bestPageSnippet(classifiedPages, /reserv|book|table|opentable|resy/, 260),
+      // Only populate eventHighlights when actual confirmed listings were extracted;
+      // do not fall back to page snippets when event pages exist but have no listings.
+      eventHighlights: currentEventsFound
+        ? (events[0]?.description ?? bestPageSnippet(classifiedPages, /event|music|calendar|happenings|what'?s on/, 260))
+        : null,
+      // Only emit reservation guidance when booking is confirmed, not just page-exists.
+      reservationGuidance: reservations.status === "confirmed"
+        ? (reservations.instructions || bestPageSnippet(classifiedPages, /reserv|book|table|opentable|resy/, 260))
+        : null,
       membershipNotes: memberships.benefits || bestPageSnippet(classifiedPages, /club|membership|wine club|loyalty/, 260),
       menuSummary: menuSections[0]?.items[0]?.description || bestPageSnippet(classifiedPages, /menu|dining|food|drink|tasting/, 260),
     },
@@ -2004,6 +2246,7 @@ export async function buildWebsiteImportResult(input: {
   sourceUrl: string;
   pages: CrawledPage[];
   signals: ImportSignals;
+  crawlReport?: import("./types").CrawlReport;
 }): Promise<WebsiteImportResult> {
   const classifiedPages = classifyPages(input.pages);
 
@@ -2086,15 +2329,16 @@ export async function buildWebsiteImportResult(input: {
     pages: classifiedPages,
     signals: input.signals,
     draft,
+    crawlReport: input.crawlReport,
   };
 }
 
 function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraft["faqs"] {
   const faqs: WebsiteImportDraft["faqs"] = [];
 
-  // Reservation FAQ
+  // Reservation FAQ: only when booking is confirmed (has platform URL or actionable instructions)
   const reservations = draft.restaurantKnowledge.reservations;
-  if (reservations.include && (reservations.bookingUrl || reservations.instructions)) {
+  if (reservations.status === "confirmed" && (reservations.bookingUrl || reservations.instructions)) {
     const parts: string[] = [];
     if (reservations.platforms.length) {
       parts.push(`Reservations are available through ${reservations.platforms.join(" and ")}.`);
@@ -2115,6 +2359,11 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
     });
 
     if (reservations.depositPolicy) {
+      // Guard: skip if extracted text doesn't look like an actual deposit/cancellation policy
+      const isQualityPolicy =
+        /deposit|\$\d+|cancell?ation|refund|fee/i.test(reservations.depositPolicy) &&
+        !/skip\s+to|load\s+more|opens?\s+in\s+a\s+new/i.test(reservations.depositPolicy);
+      if (isQualityPolicy) {
       const answer = toConversationalAnswer(reservations.depositPolicy);
       if (answer) {
         faqs.push({
@@ -2126,9 +2375,15 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
           confidence: 0.8,
         });
       }
+      }
     }
 
     if (reservations.partySizeNotes) {
+      // Guard: skip if extracted text doesn't look like actual party size guidance
+      const isQualityNote =
+        /party|group|guest|seat|reserv|table/i.test(reservations.partySizeNotes) &&
+        !/skip\s+to|load\s+more|opens?\s+in\s+a\s+new/i.test(reservations.partySizeNotes);
+      if (isQualityNote) {
       const answer = validateFaqAnswer(toConversationalAnswer(reservations.partySizeNotes));
       if (answer) {
         faqs.push({
@@ -2140,12 +2395,14 @@ function generateFaqsFromKnowledge(draft: WebsiteImportDraft): WebsiteImportDraf
           confidence: 0.8,
         });
       }
+      }
     }
   }
 
-  // Events FAQ
+  // Events FAQ: only when concrete dated listings were found
   const events = draft.restaurantKnowledge.events.filter((e) => e.include);
-  if (events.length > 0) {
+  const currentEventsFound = draft.restaurantKnowledge.currentEventsFound ?? (events.length > 0);
+  if (currentEventsFound && events.length > 0) {
     const upcoming = events.slice(0, 3);
     const eventList = upcoming.map((e) => `${e.title}${e.date ? ` (${e.date})` : ""}`).join(", ");
     faqs.push({

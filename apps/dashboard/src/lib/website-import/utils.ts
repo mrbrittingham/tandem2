@@ -1,4 +1,4 @@
-export const WEBSITE_IMPORT_LIMITS = {
+﻿export const WEBSITE_IMPORT_LIMITS = {
   maxPages: Number(process.env.WEBSITE_IMPORT_MAX_PAGES ?? 48),
   maxChars: 420_000,
   perPageChars: 24_000,
@@ -75,12 +75,54 @@ export function htmlToText(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
     .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
     .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
     .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
     .replace(/<header[\s\S]*?<\/header>/gi, " ");
 
   const stripped = withoutNoisyBlocks.replace(/<[^>]+>/g, " ");
-  return decodeHtml(stripped).replace(/\s+/g, " ").trim();
+  return stripBoilerplateText(decodeHtml(stripped)).replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Removes known platform/accessibility boilerplate that survives HTML stripping.
+ * Targets: accessibility skip links, platform attribution, SPA shell UI chrome,
+ * booking/calendar widget scaffolding text.
+ */
+export function stripBoilerplateText(text: string): string {
+  return text
+    // Accessibility skip links
+    .replace(/\bskip\s+to\s+(?:main\s+)?content\b[^.]*?(?=\s|$)/gi, "")
+    .replace(/\bskip\s+(?:navigation|to\s+nav)\b[^.]*?(?=\s|$)/gi, "")
+    // Link accessibility labels injected by CMS / accessibility overlays
+    .replace(/[\[(]?\bopens?\s+in\s+a\s+new\s+(?:window|tab)\b[\])]?/gi, "")
+    .replace(/\bopen\s+in\s+new\s+(?:window|tab)\b/gi, "")
+    // Booking/calendar platform UI chrome
+    .replace(/\bload\s+more\s+(?:content|results?|events?|items?)\b/gi, "")
+    .replace(/\bpowered\s+by\s+[A-Za-z0-9\s]+\b(?=\.|$|,)/gi, "")
+    .replace(/\bmade\s+with\s+[A-Za-z0-9\s]+\b(?=\.|$|,)/gi, "")
+    .replace(/\bbuilt\s+(?:with|on|using)\s+[A-Za-z0-9\s]+\b(?=\.|$|,)/gi, "")
+    // Toast / BentoBox / Lightspeed / scheduling platform shell text
+    .replace(/\bsquarespace\s+(?:scheduling|booking)\b[^.]*?(?=\s|$)/gi, "")
+    .replace(/\bsquare\s+online\s+store\b[^.]*?(?=\s|$)/gi, "")
+    .replace(/\btoast(?:tab)?\s+online\s+ordering\b[^.]*?(?=\s|$)/gi, "")
+    // Pagination / infinite scroll UI
+    .replace(/\bview\s+(?:all|more)\s+(?:events?|results?|items?|posts?)\b/gi, "")
+    .replace(/\bsee\s+(?:all|more)\s+(?:events?|results?|items?|posts?)\b/gi, "")
+    // Calendar widget noise
+    .replace(/\b(?:previous|next)\s+month\b/gi, "")
+    .replace(/\bmonthly\s+view\b|\bweekly\s+view\b|\blist\s+view\b/gi, "")
+    .replace(/\badd\s+to\s+(?:google\s+)?calendar\b/gi, "")
+    .replace(/\biCal\s+download\b/gi, "")
+    // Social share buttons text
+    .replace(/\bshare\s+(?:on|via|this|to)\s+(?:facebook|twitter|instagram|x|linkedin|pinterest|email)\b/gi, "")
+    // Cookie / privacy banners
+    .replace(/\baccept\s+(?:all\s+)?cookies\b[^.]*?(?:\.|$)/gi, "")
+    .replace(/\bwe\s+use\s+cookies\b[^.]*?(?:\.|$)/gi, "")
+    // Breadcrumb separators left after HTML stripping
+    .replace(/(?<=\s)|^\s*>\s*|\s*\|\s*(?=[A-Z])/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /**
@@ -94,6 +136,7 @@ export function htmlToStructuredText(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
     .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
     .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
     .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
     .replace(/<header[\s\S]*?<\/header>/gi, " ");
@@ -106,13 +149,24 @@ export function htmlToStructuredText(html: string): string {
     .replace(/<\/div>/gi, "\n")
     .replace(/<[^>]+>/g, " ");
 
-  return decodeHtml(withHeadings).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  const decoded = decodeHtml(withHeadings).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  // Strip boilerplate from each line to keep heading markers intact
+  return decoded.split("\n").map((line) => {
+    if (line.startsWith("## ") || line.startsWith("- ")) {
+      const prefix = line.startsWith("## ") ? "## " : "- ";
+      return prefix + stripBoilerplateText(line.slice(prefix.length));
+    }
+    return stripBoilerplateText(line);
+  }).filter((line) => line.replace(/^##\s*$|^-\s*$/, "").trim().length > 0).join("\n")
+    .replace(/\n{3,}/g, "\n\n").trim();
 }
 
 const PRIORITY_PATH_HINTS = [
+  // Core restaurant pages — highest crawl priority
   "contact",
   "about",
   "faq",
+  "faqs",
   "help",
   "hours",
   "menu",
@@ -128,6 +182,7 @@ const PRIORITY_PATH_HINTS = [
   "kitchen",
   "restaurant",
   "reservation",
+  "reservations",
   "booking",
   "opentable",
   "resy",
@@ -138,17 +193,19 @@ const PRIORITY_PATH_HINTS = [
   "upcoming",
   "wedding",
   "private-event",
+  "private-dining",
   "group-dining",
   "club",
   "membership",
-  "service",
-  "pricing",
+  "catering",
   "policy",
-  "shipping",
-  "return",
+  "policies",
   "cancellation",
   "privacy",
   "terms",
+  // Intentionally removed: "service", "pricing", "shipping", "return"
+  // Those are e-commerce/retail signals that inflate scores for product pages
+  // and are not core restaurant content pages.
 ];
 
 export function linkPriorityScore(url: string): number {
@@ -271,16 +328,20 @@ function warmHueScore(hue: number, saturation: number, lightness: number): numbe
  * Returns candidates sorted high-to-low by brand-signal score, each tagged
  * with their dominant zone ("logo" | "svg" | "button" | "footer" | "bg" | "nav" | "style").
  */
+
 export function rankBrandColorCandidates(
   candidates: Array<{ value: string; sourceUrl: string; context?: string }>,
 ): Array<{ value: string; sourceUrl: string; zone: string }> {
   console.log(`[color-rank] ★ NEW COLOR ENGINE ACTIVE ★  (${candidates.length} input candidates)`);
-  // logoCount: colors from explicit logo/brand containers or nav/header CSS text properties
+
+  // ── ColorData: all per-color counters accumulated during the frequency pass ──
   type ColorData = {
     count: number;
     logoCount: number;
     svgCount: number;
     navCount: number;
+    navBgCount: number;     // background-color from nav/header = solid brand backdrop
+    sectionBgCount: number; // background-color from <section>/<main>/<article>/layout <div>
     buttonCount: number;
     footerCount: number;
     bgCount: number;
@@ -288,39 +349,75 @@ export function rankBrandColorCandidates(
     cssvarAccentCount: number;
     cssvarSecondaryCount: number;
     cssvarCount: number;
+    areaWeight: number;     // accumulated visual-area proxy ∑ baseAreaWeight(context) per instance
     sourceUrl: string;
   };
+
+  // ── Area-weight lookup ───────────────────────────────────────────────────────
+  // Each context has an inherent visual-area proxy reflecting how large a portion of
+  // the page that source zone typically covers. Accumulated across all instances to
+  // produce a totalAreaWeight that feeds the areaBonus in scoring.
+  //   nav-bg / section-bg: full-width bands or major sections → highest weight
+  //   footer / cssvar-primary: full-width or site-wide application → high weight
+  //   bg / cssvar variants: medium layout areas
+  //   logo / nav / svg / button / style: small or unknown visual mass → low weight
+  function baseAreaWeight(ctx: string): number {
+    switch (ctx) {
+      case "nav-bg":           return 9;  // full-width navbar backdrop
+      case "section-bg":       return 8;  // major page section (large visual area)
+      case "footer":           return 7;  // full-width footer block
+      case "cssvar-primary":   return 7;  // applied site-wide across many large elements
+      case "cssvar-accent":    return 5;
+      case "cssvar-secondary": return 5;
+      case "cssvar":           return 4;
+      case "bg":               return 4;  // explicit bg-color in body content
+      case "nav":              return 3;  // nav text/border — smaller area than the backdrop
+      case "logo":             return 3;
+      case "svg":              return 2;
+      case "button":           return 2;
+      default:                 return 1;  // "style" catch-all
+    }
+  }
+
+  // ── Frequency pass ───────────────────────────────────────────────────────────
   const freq = new Map<string, ColorData>();
 
   for (const c of candidates) {
     const key = c.value.toUpperCase();
     const ctx = c.context ?? "style";
+    const w = baseAreaWeight(ctx);
     const existing = freq.get(key);
     if (existing) {
       existing.count += 1;
-      if (ctx === "logo") existing.logoCount += 1;
-      if (ctx === "svg") existing.svgCount += 1;
-      if (ctx === "nav") existing.navCount += 1;
-      if (ctx === "button") existing.buttonCount += 1;
-      if (ctx === "footer") existing.footerCount += 1;
-      if (ctx === "bg") existing.bgCount += 1;
+      existing.areaWeight += w;
+      if (ctx === "logo")           existing.logoCount += 1;
+      if (ctx === "svg")            existing.svgCount += 1;
+      if (ctx === "nav")            existing.navCount += 1;
+      if (ctx === "nav-bg")         existing.navBgCount += 1;
+      if (ctx === "section-bg")     existing.sectionBgCount += 1;
+      if (ctx === "button")         existing.buttonCount += 1;
+      if (ctx === "footer")         existing.footerCount += 1;
+      if (ctx === "bg")             existing.bgCount += 1;
       if (ctx === "cssvar-primary") existing.cssvarPrimaryCount += 1;
-      if (ctx === "cssvar-accent") existing.cssvarAccentCount += 1;
+      if (ctx === "cssvar-accent")  existing.cssvarAccentCount += 1;
       if (ctx === "cssvar-secondary") existing.cssvarSecondaryCount += 1;
-      if (ctx === "cssvar") existing.cssvarCount += 1;
+      if (ctx === "cssvar")         existing.cssvarCount += 1;
     } else {
       freq.set(key, {
         count: 1,
-        logoCount: ctx === "logo" ? 1 : 0,
-        svgCount: ctx === "svg" ? 1 : 0,
-        navCount: ctx === "nav" ? 1 : 0,
-        buttonCount: ctx === "button" ? 1 : 0,
-        footerCount: ctx === "footer" ? 1 : 0,
-        bgCount: ctx === "bg" ? 1 : 0,
-        cssvarPrimaryCount: ctx === "cssvar-primary" ? 1 : 0,
-        cssvarAccentCount: ctx === "cssvar-accent" ? 1 : 0,
+        areaWeight: w,
+        logoCount:            ctx === "logo" ? 1 : 0,
+        svgCount:             ctx === "svg" ? 1 : 0,
+        navCount:             ctx === "nav" ? 1 : 0,
+        navBgCount:           ctx === "nav-bg" ? 1 : 0,
+        sectionBgCount:       ctx === "section-bg" ? 1 : 0,
+        buttonCount:          ctx === "button" ? 1 : 0,
+        footerCount:          ctx === "footer" ? 1 : 0,
+        bgCount:              ctx === "bg" ? 1 : 0,
+        cssvarPrimaryCount:   ctx === "cssvar-primary" ? 1 : 0,
+        cssvarAccentCount:    ctx === "cssvar-accent" ? 1 : 0,
         cssvarSecondaryCount: ctx === "cssvar-secondary" ? 1 : 0,
-        cssvarCount: ctx === "cssvar" ? 1 : 0,
+        cssvarCount:          ctx === "cssvar" ? 1 : 0,
         sourceUrl: c.sourceUrl,
       });
     }
@@ -328,7 +425,7 @@ export function rankBrandColorCandidates(
 
   console.log(`[color-rank] ${candidates.length} raw candidates, ${freq.size} unique hex values`);
 
-  // Cluster near-duplicate hex variants so rendering noise doesn't dilute brand signal.
+  // ── Clustering: merge near-duplicate hex variants ────────────────────────────
   // Sort by saturation desc first — the most-saturated form is the best cluster center.
   const clustered = new Map<string, ColorData>();
   {
@@ -349,23 +446,25 @@ export function rankBrandColorCandidates(
         );
         const dl = Math.abs(center.hsl[2] - candidate.hsl[2]);
         if (dh <= 15 && dl <= 18) {
-          cluster.count += candidate.data.count;
-          cluster.logoCount += candidate.data.logoCount;
-          cluster.svgCount += candidate.data.svgCount;
-          cluster.navCount += candidate.data.navCount;
-          cluster.buttonCount += candidate.data.buttonCount;
-          cluster.footerCount += candidate.data.footerCount;
-          cluster.bgCount += candidate.data.bgCount;
-          cluster.cssvarPrimaryCount += candidate.data.cssvarPrimaryCount;
-          cluster.cssvarAccentCount += candidate.data.cssvarAccentCount;
+          cluster.count              += candidate.data.count;
+          cluster.areaWeight         += candidate.data.areaWeight;
+          cluster.logoCount          += candidate.data.logoCount;
+          cluster.svgCount           += candidate.data.svgCount;
+          cluster.navCount           += candidate.data.navCount;
+          cluster.navBgCount         += candidate.data.navBgCount;
+          cluster.sectionBgCount     += candidate.data.sectionBgCount;
+          cluster.buttonCount        += candidate.data.buttonCount;
+          cluster.footerCount        += candidate.data.footerCount;
+          cluster.bgCount            += candidate.data.bgCount;
+          cluster.cssvarPrimaryCount   += candidate.data.cssvarPrimaryCount;
+          cluster.cssvarAccentCount    += candidate.data.cssvarAccentCount;
           cluster.cssvarSecondaryCount += candidate.data.cssvarSecondaryCount;
-          cluster.cssvarCount += candidate.data.cssvarCount;
+          cluster.cssvarCount          += candidate.data.cssvarCount;
           assigned.add(candidate.hex);
         }
       }
       clustered.set(center.hex, cluster);
     }
-    // Colors that failed hexToHslTriplet cannot be clustered — pass through unchanged
     for (const [hex, data] of freq) {
       if (!assigned.has(hex)) clustered.set(hex, data);
     }
@@ -374,20 +473,24 @@ export function rankBrandColorCandidates(
     console.log(`[color-rank] clustered ${freq.size} → ${clustered.size} unique colors (merged ${freq.size - clustered.size} near-duplicates)`);
   }
 
+  // ── Dominant zone label ──────────────────────────────────────────────────────
   function dominantZone(d: ColorData): string {
-    if (d.cssvarPrimaryCount > 0) return "cssvar-primary";
-    if (d.cssvarAccentCount > 0) return "cssvar-accent";
+    if (d.cssvarPrimaryCount > 0)   return "cssvar-primary";
+    if (d.cssvarAccentCount > 0)    return "cssvar-accent";
     if (d.cssvarSecondaryCount > 0) return "cssvar-secondary";
-    if (d.cssvarCount > 0) return "cssvar";
-    if (d.logoCount > 0) return "logo";
-    if (d.svgCount > 0) return "svg";
-    if (d.buttonCount > 0) return "button";
-    if (d.footerCount > 0) return "footer";
-    if (d.bgCount > 0) return "bg";
+    if (d.cssvarCount > 0)          return "cssvar";
+    if (d.logoCount > 0)            return "logo";
+    if (d.svgCount > 0)             return "svg";
+    if (d.buttonCount > 0)          return "button";
+    if (d.footerCount > 0)          return "footer";
+    if (d.navBgCount > 0)           return "nav-bg";
+    if (d.sectionBgCount > 0)       return "section-bg";
+    if (d.bgCount > 0)              return "bg";
     if (d.count > 0 && d.navCount / d.count > 0.5) return "nav";
     return "style";
   }
 
+  // ── Scoring ──────────────────────────────────────────────────────────────────
   type ScoredEntry = {
     value: string;
     sourceUrl: string;
@@ -399,6 +502,7 @@ export function rankBrandColorCandidates(
     lightBonus: number;
     hueBonus: number;
     zoneBonus: number;
+    areaBonus: number;
     navPenalty: number;
     builderPenalty: number;
   };
@@ -416,15 +520,17 @@ export function rankBrandColorCandidates(
     if (s < 10) continue;   // achromatic: UI chrome, not brand
 
     const {
-      count, logoCount, svgCount, navCount, buttonCount, footerCount,
-      bgCount, cssvarPrimaryCount, cssvarAccentCount, cssvarSecondaryCount, cssvarCount, sourceUrl,
+      count, logoCount, svgCount, navCount, navBgCount, sectionBgCount,
+      buttonCount, footerCount, bgCount,
+      cssvarPrimaryCount, cssvarAccentCount, cssvarSecondaryCount, cssvarCount,
+      areaWeight, sourceUrl,
     } = data;
 
     // --- Frequency score ---
     // Brand-zone usages count fully; plain nav usages are discounted.
-    // Logo/svg/button/footer are definitive brand zones → full weight.
+    // Logo/svg/button/footer/nav-bg/section-bg are definitive brand zones → full weight.
     // Nav is ambiguous (could be brand text OR layout chrome) → 40% weight.
-    const brandZoneCount = logoCount + svgCount + buttonCount + footerCount + bgCount;
+    const brandZoneCount = logoCount + svgCount + buttonCount + footerCount + bgCount + navBgCount + sectionBgCount;
     const weightedCount = brandZoneCount + Math.round(navCount * 0.4) + Math.max(0, count - brandZoneCount - navCount);
     const freqScore = Math.min(Math.round(Math.log2(Math.max(1, weightedCount) + 1) * 10), 38);
 
@@ -440,43 +546,59 @@ export function rankBrandColorCandidates(
 
     // --- Zone bonuses (brand-signal zones) ---
     let zoneBonus = 0;
-    // Logo containers and brand-mark SVGs — designer explicitly placed brand color here.
-    // A color appearing even once in a logo container is strong evidence.
-    if (logoCount > 0) zoneBonus += 60;    // logo container/brand-mark text: strongest non-cssvar signal
-    if (svgCount > 0) zoneBonus += 42;     // inline SVG fill/stroke → logo identity color
-    if (buttonCount > 0) zoneBonus += 28;  // button/CTA background → designer-intentional accent
-    if (footerCount > 0) zoneBonus += 16;  // footer: brand identity confirmation
-    if (bgCount > 0) zoneBonus += 18;      // explicit CSS background-color → deliberate
+    if (logoCount > 0)      zoneBonus += 60;  // logo container/brand-mark: strongest non-cssvar signal
+    if (svgCount > 0)       zoneBonus += 42;  // inline SVG fill/stroke → logo identity color
+    if (buttonCount > 0)    zoneBonus += 28;  // button/CTA → designer-intentional accent
+    if (navBgCount > 0)     zoneBonus += 35;  // solid bg-color on nav/header = brand backdrop
+    if (footerCount > 0)    zoneBonus += 16;  // footer: brand identity confirmation
+    if (bgCount > 0)        zoneBonus += 18;  // explicit CSS background-color → deliberate
+    if (sectionBgCount > 0) zoneBonus += 12;  // large layout-section bg: area signal confirmation
 
-    // CSS custom property bonuses — semantically-named variables are strong brand signals.
-    if (cssvarPrimaryCount > 0) zoneBonus += 65;
-    if (cssvarAccentCount > 0) zoneBonus += 55;
+    // CSS custom property bonuses
+    if (cssvarPrimaryCount > 0)   zoneBonus += 65;
+    if (cssvarAccentCount > 0)    zoneBonus += 55;
     if (cssvarSecondaryCount > 0) zoneBonus += 40;
-    if (cssvarCount > 0) zoneBonus += 25;
+    if (cssvarCount > 0)          zoneBonus += 25;
 
-    // Builder default defense: cssvar bonus earned from a CSS variable that is ONLY
-    // present in generic body / non-zone contexts suggests it may be a framework default
-    // color used for body text or generic accents — apply a discount.
+    // --- Area weight bonus ---
+    // Colors appearing on large visual areas accumulate more areaWeight points (∑ baseAreaWeight).
+    // This rewards colors that dominate the visual field (full-width navbars, large section
+    // backgrounds) and diminishes colors only seen in small elements (buttons, icons).
+    //
+    // SAFEGUARD against large neutral backgrounds:
+    //   • Saturated/warm colors (s ≥ 20) receive full log-scaled bonus (up to +20).
+    //   • Low-saturation colors (s < 20) receive a heavily capped bonus (up to +6).
+    //     This prevents site-wide light grays and off-whites (which GENERIC_HEX_COLORS
+    //     doesn't catch due to slight tinting) from overriding a visually dominant brand color.
+    let areaBonus = 0;
+    if (s >= 20) {
+      // log2(areaWeight+1) * 4: weight=9 → ~12pts, weight=26 → ~18pts, capped at 20
+      areaBonus = Math.min(Math.round(Math.log2(areaWeight + 1) * 4), 20);
+    } else {
+      // Low-saturation: small signal, capped at 6 — never enough to dethrone a brand primary
+      areaBonus = Math.min(Math.round(Math.log2(areaWeight + 1) * 1.5), 6);
+    }
+
+    // --- Builder default defense ---
     let builderPenalty = 0;
     const hasCssvar = cssvarPrimaryCount + cssvarAccentCount + cssvarSecondaryCount + cssvarCount > 0;
-    const hasBrandZone = logoCount + svgCount + buttonCount + footerCount > 0;
+    const hasBrandZone = logoCount + svgCount + buttonCount + footerCount + navBgCount + sectionBgCount > 0;
     if (hasCssvar && !hasBrandZone) {
-      // CSS variable is used but never appears in a brand-defining zone.
-      // Could be Elementor factory default or body text variable — discount it.
+      // CSS variable used but never in a physical brand zone — may be a framework default.
       builderPenalty = -18;
     }
 
-    // Nav penalty: colors that appear ONLY or predominantly in nav/header are layout chrome.
-    // EXCEPTION: if the color also has logo or SVG presence, it's a brand color (not chrome) —
-    // skip the penalty so we don't hurt gold/maroon logo text colors.
+    // --- Nav penalty ---
+    // Colors predominantly in nav/header are layout chrome — penalized unless they also
+    // appear in logo, SVG, or nav-bg contexts (those ARE brand colors).
     let navPenalty = 0;
-    if (navCount > 0 && logoCount === 0 && svgCount === 0) {
+    if (navCount > 0 && logoCount === 0 && svgCount === 0 && navBgCount === 0) {
       const navRatio = navCount / count;
       if (navRatio > 0.55) navPenalty = -22;
       else if (navRatio > 0.28) navPenalty = -8;
     }
 
-    const score = freqScore + satBonus + lightBonus + hueBonus + zoneBonus + navPenalty + builderPenalty;
+    const score = freqScore + satBonus + lightBonus + hueBonus + zoneBonus + areaBonus + navPenalty + builderPenalty;
 
     scored.push({
       value,
@@ -488,12 +610,44 @@ export function rankBrandColorCandidates(
       lightBonus,
       hueBonus,
       zoneBonus,
+      areaBonus,
       navPenalty,
       builderPenalty,
     });
   }
 
   scored.sort((a, b) => b.score - a.score);
+
+  // ── Saturation promotion safeguard ──────────────────────────────────────────
+  // If the top-ranked color is low-saturation (S < 30) but a well-saturated warm-hued
+  // color exists (reds, golds, wines — S > 50, H ≤ 80° or ≥ 270°) with a meaningful score,
+  // promote that warm color to primary. This prevents builder-default grays/muted blues
+  // from overriding an obvious brand identity color like a restaurant's signature red.
+  if (scored.length >= 2) {
+    const topEntry = scored[0]!;
+    const topHsl = hexToHslTriplet(topEntry.value);
+    if (topHsl && topHsl[1] < 30) {
+      const warmIdx = scored.findIndex((c, i) => {
+        if (i === 0) return false;
+        const hsl = hexToHslTriplet(c.value);
+        if (!hsl) return false;
+        const [h, sat] = hsl;
+        const isWarmSaturated = sat > 50 && (h <= 80 || h >= 270);
+        const hasMeaningfulScore = c.score >= 40 && c.score >= topEntry.score * 0.35;
+        return isWarmSaturated && hasMeaningfulScore;
+      });
+      if (warmIdx !== -1) {
+        const [promoted] = scored.splice(warmIdx, 1);
+        scored.unshift(promoted!);
+        const promHsl = hexToHslTriplet(promoted!.value)!;
+        console.log(
+          `[color-rank] ⚡ saturation-guard: promoted warm ${promoted!.value}` +
+          ` (H=${promHsl[0]} S=${promHsl[1]} zone=${promoted!.zone})` +
+          ` over desaturated ${topEntry.value} (S=${topHsl[1]} zone=${topEntry.zone})`,
+        );
+      }
+    }
+  }
 
   // ── Rich debug output ────────────────────────────────────────────────────────
   if (scored.length > 0) {
@@ -506,11 +660,11 @@ export function rankBrandColorCandidates(
         `  score=${c.score}` +
         `  zone=${c.zone}` +
         `  H=${hsl[0]} S=${hsl[1]} L=${hsl[2]}` +
-        `  n=${d.count}` +
+        `  n=${d.count} areaW=${d.areaWeight}` +
         `  logo=${d.logoCount} svg=${d.svgCount} btn=${d.buttonCount}` +
-        `  footer=${d.footerCount} bg=${d.bgCount} nav=${d.navCount}` +
+        `  navBg=${d.navBgCount} secBg=${d.sectionBgCount} footer=${d.footerCount} bg=${d.bgCount} nav=${d.navCount}` +
         `  cvP=${d.cssvarPrimaryCount} cvA=${d.cssvarAccentCount} cvS=${d.cssvarSecondaryCount} cv=${d.cssvarCount}` +
-        `  [freq=${c.freqScore} sat=${c.satBonus} light=${c.lightBonus} hue=${c.hueBonus} zone=${c.zoneBonus} navPen=${c.navPenalty} builderPen=${c.builderPenalty}]`,
+        `  [freq=${c.freqScore} sat=${c.satBonus} light=${c.lightBonus} hue=${c.hueBonus} zone=${c.zoneBonus} area=${c.areaBonus} navPen=${c.navPenalty} bldPen=${c.builderPenalty}]`,
       );
     }
     console.log(`[color-rank] ── ${scored.length} candidates survived filters ──────────────────────────`);
@@ -520,7 +674,6 @@ export function rankBrandColorCandidates(
 
   return scored.map(({ value, sourceUrl, zone }) => ({ value, sourceUrl, zone }));
 }
-
 /**
  * Given a ranked color list and a chosen primary, find the best accent:
  * a color visually distinct from the primary (hue ≥28° apart, or L ≥22 pts different).

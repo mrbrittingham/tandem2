@@ -315,8 +315,11 @@ function normalizeDraft(draft: WebsiteImportDraft | null): WebsiteImportDraft | 
     pageClassification: Array.isArray(draft.pageClassification) ? draft.pageClassification : [],
     restaurantKnowledge: {
       events: Array.isArray(draft.restaurantKnowledge?.events) ? draft.restaurantKnowledge.events : [],
+      eventPagesPresent: draft.restaurantKnowledge?.eventPagesPresent ?? false,
+      currentEventsFound: draft.restaurantKnowledge?.currentEventsFound ?? (Array.isArray(draft.restaurantKnowledge?.events) && draft.restaurantKnowledge.events.length > 0),
       menuSections: Array.isArray(draft.restaurantKnowledge?.menuSections) ? draft.restaurantKnowledge.menuSections : [],
       reservations: draft.restaurantKnowledge?.reservations ?? {
+        status: "not-offered" as const,
         include: false,
         sourceUrl: null,
         bookingUrl: null,
@@ -491,7 +494,16 @@ export function WebsiteImportPanel({
 
         setUrl((payload.location?.websiteUrl ?? payload.run?.url ?? "").trim());
         setRun(payload.run ?? null);
-        setDraft(normalizeDraft(payload.run?.result ?? null));
+
+        const loadedResult = payload.run?.result ?? null;
+        console.log(
+          `[DEBUG:ui-load-latest] runId=${payload.run?.id ?? "none"}  status=${payload.run?.status ?? "none"}  ` +
+          `source=loadLatest(stored-result)  ` +
+          `primary=${loadedResult?.brand?.primaryColor?.value ?? "none"}  ` +
+          `accent=${loadedResult?.brand?.accentColor?.value ?? "none"}  ` +
+          `finishedAt=${payload.run?.finishedAt ?? "none"}`,
+        );
+        setDraft(normalizeDraft(loadedResult));
 
         if (payload.run?.id && (payload.run.status === "queued" || payload.run.status === "running")) {
           setActiveRunId(payload.run.id);
@@ -581,9 +593,17 @@ export function WebsiteImportPanel({
         }
 
         setRun(runPayload.run);
-        setDraft(normalizeDraft(runPayload.run.result ?? null));
+
+        const pollResult = runPayload.run.result ?? null;
+        setDraft(normalizeDraft(pollResult));
 
         if (runPayload.run.status === "succeeded") {
+          console.log(
+            `[DEBUG:ui-poll-result] runId=${runPayload.run.id}  source=fresh-poll(succeeded)  ` +
+            `primary=${pollResult?.brand?.primaryColor?.value ?? "none"}  ` +
+            `accent=${pollResult?.brand?.accentColor?.value ?? "none"}  ` +
+            `finishedAt=${runPayload.run.finishedAt ?? "none"}`,
+          );
           setSuccess("Scan complete. Review detected knowledge and apply when ready.");
           setIsLoading(false);
           setActiveRunId(null);

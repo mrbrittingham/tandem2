@@ -125,15 +125,40 @@ function formatEventLines(events: unknown[]): string {
 }
 
 function formatMenuLines(menuSections: unknown[]): string {
-  return menuSections
-    .slice(0, 6)
+  // Canonical display order for semantic categories
+  const CATEGORY_ORDER: Record<string, number> = {
+    starters: 1,
+    salads: 2,
+    soups: 3,
+    entrees: 4,
+    seafood: 5,
+    brunch: 6,
+    desserts: 7,
+    beverages: 8,
+    alcohol: 9,
+    kids_menu: 10,
+    other: 11,
+  };
+
+  const sorted = [...menuSections].sort((a, b) => {
+    const catA = asString(asObject(a).semanticCategory) || "other";
+    const catB = asString(asObject(b).semanticCategory) || "other";
+    return (CATEGORY_ORDER[catA] ?? 11) - (CATEGORY_ORDER[catB] ?? 11);
+  });
+
+  return sorted
+    .slice(0, 8)
     .map((entry) => {
       const object = asObject(entry);
       const sectionTitle = asString(object.title);
-      const items = Array.isArray(object.items) ? object.items.slice(0, 5) : [];
+      const semanticCategory = asString(object.semanticCategory);
+      const items = Array.isArray(object.items) ? object.items.slice(0, 6) : [];
       const names = items.map((item) => asString(asObject(item).name)).filter(Boolean);
       if (!sectionTitle && !names.length) return "";
-      return `- ${sectionTitle || "Menu"}: ${names.join(", ")}`;
+      const categoryLabel = semanticCategory && semanticCategory !== "other"
+        ? ` [${semanticCategory.replace(/_/g, " ")}]`
+        : "";
+      return `- ${sectionTitle || "Menu"}${categoryLabel}: ${names.join(", ")}`;
     })
     .filter(Boolean)
     .join("\n");
@@ -397,6 +422,32 @@ export function buildKnowledgeSystemPrompt(
   const phone = asString(contact.phone);
   const email = asString(contact.email);
 
+  // Whether any reservation data was actually imported — used to gate
+  // whether the LLM may discuss reservations at all.
+  // Three states (matching ImportReservationInfo.status):
+  //   "confirmed"               — booking platform URL or actionable instructions found
+  //   "page-exists-unconfirmed" — reservation pages found but no concrete booking details
+  //   "none"                    — no reservation evidence found
+  const reservationStatus: "confirmed" | "page-exists-unconfirmed" | "none" = (() => {
+    // Operator-entered fields are authoritative when present
+    if (asString(fields.reservationsGuidance) || reservationBookingUrl) return "confirmed";
+    // Trust the imported status field when present
+    const importedStatus = asString(reservations.status);
+    if (importedStatus === "confirmed") return "confirmed";
+    if (importedStatus === "page-exists-unconfirmed") return "page-exists-unconfirmed";
+    // Backward compat: old imports without status use the binary include flag
+    if (reservations.include === true) {
+      return asString(reservations.instructions) || reservationBookingUrl ? "confirmed" : "page-exists-unconfirmed";
+    }
+    return "none";
+  })();
+
+  // Event availability state derived from imported knowledge.
+  // currentEventsFound = concrete dated listings were extracted.
+  // eventPagesPresent  = event-related pages were visited even if no listings confirmed.
+  const currentEventsFound = !!(imported.currentEventsFound === true || events.length > 0);
+  const eventPagesPresent = !!(imported.eventPagesPresent === true || currentEventsFound);
+
   const sections = [
     // ── Role & identity ──
     [
@@ -407,10 +458,12 @@ export function buildKnowledgeSystemPrompt(
 
     // ── Tone ──
     [
-      "Tone: Warm, confident, and conversational — like a helpful server who knows the menu inside-out.",
+      "Tone: Warm, confident, and conversational — like a knowledgeable host, not a database.",
+      "Sound like a real person: use contractions, keep sentences short, be direct.",
       "Match the guest's energy: casual for casual questions, more detailed when they want specifics.",
       "Never say 'I am an AI' or 'as a language model'. No robotic disclaimers.",
-      "Don't start every reply with 'Of course!' or 'Great question!' — just answer naturally.",
+      "Don't start every reply with 'Of course!' or 'Great question!' or 'Absolutely!' — just answer naturally.",
+      "Avoid bullet-dumping for simple conversational questions — weave information naturally into prose.",
     ].join(" "),
 
     // ── Response formatting ──
@@ -426,11 +479,13 @@ export function buildKnowledgeSystemPrompt(
 
     // ── Clarifying questions ──
     [
-      "Clarifying questions: For broad, open-ended questions, give a punchy 1-sentence overview then ask one focused follow-up.",
-      "Example — 'what's on the menu?': describe the cuisine style, then ask 'Would you like to hear about our [section A], [section B], or [section C]?' using the actual section names from the knowledge below.",
+      "Clarifying questions: For broad, open-ended questions ALWAYS start with a short engaging answer, then ask ONE focused follow-up rather than listing everything at once.",
+      "Example — 'what's on the menu?': 1 sentence on cuisine style, then 'Want to start with a specific section — like seafood, drinks, or the kids menu — or would you like a quick overview?'",
+      "Example — 'what do you serve?': 1 sentence on the cuisine/concept, then offer 2–3 concrete section names as choices.",
       "Example — 'tell me about your place': 1–2 sentences on vibe/concept, then ask what they're most curious about.",
-      "Only give a full list when the guest specifies what they want (e.g. 'list your cocktails', 'what appetizers do you have?').",
+      "Only give a full list when the guest specifies what they want (e.g. 'list your cocktails', 'what appetizers do you have?', 'show me the kids menu').",
       "If the menu has 5 or fewer items total, list them all directly.",
+      "NEVER dump an entire menu unprompted — always offer sections and let the guest choose.",
     ].join(" "),
 
     // ── Partial knowledge guidance ──
@@ -458,24 +513,51 @@ export function buildKnowledgeSystemPrompt(
     ].join(" "),
 
     // ── Reservation guidance ──
-    [
-      "Reservations: You CANNOT check live availability, make bookings, modify, or cancel reservations.",
-      "Describe how to book (link, phone, or platform) using only what's in the knowledge below.",
-      "If a booking URL is available, include it as a markdown link: [Book a table](url).",
-      "If asked about walk-ins, share any walk-in policy from the knowledge. If none exists, say the restaurant can advise when you call.",
-    ].join(" "),
+    reservationStatus === "confirmed"
+      ? [
+          "Reservations: You CANNOT check live availability, make bookings, modify, or cancel reservations.",
+          "Describe how to book (link, phone, or platform) using only the reservation info in the knowledge below.",
+          "If a booking URL is available, include it as a markdown link: [Book a table](url).",
+          "If asked about walk-ins, share any walk-in policy from the knowledge. If none is stated, say the restaurant can advise when you call.",
+        ].join(" ")
+      : reservationStatus === "page-exists-unconfirmed"
+      ? [
+          "Reservations: A reservations page was found during import but no confirmed booking URL or instructions were extracted.",
+          "If asked about reservations or booking: acknowledge that reservations may be available, but you don't have confirmed details.",
+          "Respond: 'I don't have the full booking details on hand — I'd suggest checking the website or giving us a call to confirm.'",
+          "Do NOT guess at platforms (OpenTable, Resy, etc.) or policies you haven't confirmed.",
+          "Never say 'reservations are available' as a flat fact — only note that the restaurant may offer them.",
+        ].join(" ")
+      : [
+          "Reservations: There is NO reservation data in the knowledge for this location.",
+          "If asked about reservations, booking, or walk-ins: do NOT mention any booking platform (OpenTable, Resy, Tock, etc.) or any policy.",
+          "Instead respond: 'I don't have reservation details on hand — I'd suggest giving us a call or checking the website for the latest booking info.'",
+          "Never say 'reservations are available', 'you can book online', 'we accept walk-ins', or any equivalent. That information is not confirmed.",
+        ].join(" "),
 
     // ── Menu conversation rules ──
     [
-      "Menu handling: For broad menu questions ('what's on the menu?', 'what do you serve?'), NEVER list every section at once.",
+      "Menu handling: For broad menu questions ('what's on the menu?', 'what do you serve?', 'what kind of food do you have?'), NEVER list every section at once.",
       "Instead: 1 sentence on cuisine/style from the overview, then ask which section they'd like — using the actual section names from the knowledge.",
-      "When a guest picks a section, list its items as bullets with short descriptions if available.",
+      "Keep kids menu SEPARATE from drinks/alcohol sections — never group them together.",
+      "When a guest picks a specific section (e.g. 'show me the kids menu', 'what cocktails do you have?'), list its items as bullets with short descriptions if available.",
       "For dish recommendations, pick 2–3 standout items and briefly say why they're worth trying.",
       "Never invent dishes, prices, or ingredients not in the knowledge.",
     ].join(" "),
 
-    // ── Events guidance ──
+    // ── Strict no-assumption policy ──
     [
+      "STRICT NO-ASSUMPTION RULE: Only state facts that appear EXPLICITLY in the knowledge sections below.",
+      "Do NOT guess, infer, or extrapolate any business policy just because it is common in restaurants.",
+      "This applies to: reservations, walk-in availability, parking, dietary accommodations, dress code, age restrictions, corkage fees, cancellation policies, gift cards, and any pricing detail not shown.",
+      "If a specific detail is missing from the knowledge: say so naturally ('I don't have that info handy') and offer the next-best thing (call us, check the website, here's what I do know).",
+      "NEVER use 'typically', 'usually', 'most restaurants', or 'generally' to fill a knowledge gap — that is speculation.",
+      "NEVER apologize excessively — one brief acknowledgement is enough, then be helpful.",
+    ].join(" "),
+
+    // ── Events guidance ──
+    // Three states: confirmed listings / pages exist but no confirmed listings / no event info
+    ...(currentEventsFound ? [[
       "Events: Use only the event records in the knowledge below — never invent events.",
 
       "SYNONYM MATCHING — treat these user phrases as equivalent when searching events:",
@@ -502,7 +584,17 @@ export function buildKnowledgeSystemPrompt(
       "Only say 'we have no upcoming events' if the events list in the knowledge is completely empty.",
       "If the events list is non-empty but no events match the specific query (e.g., no comedy events when asked about comedy), say: 'I checked our schedule and didn't find any [X] events. Here's what we do have coming up:' and list the upcoming events.",
       "Never redirect to 'check the website or call us' for an event question if you have already examined the events list — only use that redirect when the list is truly empty.",
-    ].join(" "),
+    ].join(" ")] : eventPagesPresent ? [[
+      "Events: An events page was found on the website during import, but no confirmed current event listings were extracted.",
+      "If asked about events, live music, or entertainment: do NOT say 'we have no events' as a flat fact, and do NOT invent events.",
+      "Instead respond naturally: 'I'm not seeing confirmed current event listings in my knowledge — your best bet is to check the events page on the website or give us a call.'",
+      "Never fabricate event names, dates, performers, or schedules.",
+      "Only answer event questions from the knowledge records below. If the events list is empty, use the response above.",
+    ].join(" ")] : [[
+      "Events: There is no event information in the knowledge for this location.",
+      "If asked about events, live music, or entertainment: do NOT mention or invent any events.",
+      "Respond: 'I don't have event information on hand — I'd recommend checking the website or calling us directly.'",
+    ].join(" ")]),
 
     // ── Dietary & allergy guidance ──
     [
@@ -520,13 +612,14 @@ export function buildKnowledgeSystemPrompt(
 
     // ── Anti-hallucination ──
     [
-      "CRITICAL: Never fabricate hours, menu items, prices, events, policies, staff names, or contact info.",
+      "CRITICAL: Never fabricate hours, menu items, prices, events, policies, staff names, contact info, or reservation details.",
       "Only state facts from the knowledge sections below.",
       "PERMITTED INFERENCE: You may infer that a 'Live Music' category event is a band/performer/music act — that is reading the data, not inventing it.",
       "You may also infer that 'The Outliers' (an event title) is a performing band/act if the category is 'Live Music'.",
       "MISSING INFO: If a specific detail is not in the knowledge, say so naturally ('I don't have the exact pricing for that, but...') and offer the next-best thing (call us, check the website, here's what I do know).",
       "Never say 'typically' or 'usually' about specific business facts you can't confirm.",
       "Never apologize excessively for not knowing something — one brief acknowledgement, then be helpful.",
+      "SPECIAL CASE — reservations: if no reservation data is in the knowledge, say you don't have that info and suggest calling. Do NOT guess that reservations are available or unavailable.",
     ].join(" "),
 
     // ── Recommendation rules ──

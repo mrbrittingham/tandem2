@@ -282,43 +282,6 @@ const defaultContentConfig: WidgetContentConfig = {
   },
 };
 
-const RESERVATIONS_URL = "https://tables.toasttab.com/restaurants/5141cf5b-aa25-4949-ba69-e6d787c6355b/findTime";
-
-const WEEKDAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
-
-const FALLBACK_HOURS: Record<(typeof WEEKDAY_ORDER)[number], string> = {
-  Sunday: "10:00 AM – 8:00 PM",
-  Monday: "11:00 AM – 9:00 PM",
-  Tuesday: "11:00 AM – 9:00 PM",
-  Wednesday: "11:00 AM – 9:00 PM",
-  Thursday: "11:00 AM – 10:00 PM",
-  Friday: "11:00 AM – 11:00 PM",
-  Saturday: "10:00 AM – 11:00 PM",
-};
-
-const MENU_OPTIONS = [
-  {
-    key: "1",
-    label: "Appetizers",
-    items: ["Crispy Calamari", "Truffle Fries", "Burrata & Tomato"],
-  },
-  {
-    key: "2",
-    label: "Sandwiches",
-    items: ["Steak Sandwich", "Cedar Chicken Club", "Roasted Veggie Panini"],
-  },
-  {
-    key: "3",
-    label: "Entrees",
-    items: ["Herb Salmon", "Braised Short Rib", "Wild Mushroom Risotto"],
-  },
-  {
-    key: "4",
-    label: "Desserts",
-    items: ["Basque Cheesecake", "Dark Chocolate Torte", "Seasonal Sorbet"],
-  },
-] as const;
-
 const createId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
@@ -443,7 +406,6 @@ export function ChatWidget({
 
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [inputValue, setInputValue] = useState("");
-  const [awaitingMenuSelection, setAwaitingMenuSelection] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => hydrateMessages(initialMessages));
   const [isStreaming, setIsStreaming] = useState(false);
   const [composerError, setComposerError] = useState<InlineComposerError | null>(null);
@@ -674,67 +636,6 @@ export function ChatWidget({
     ]);
   }, []);
 
-  const formatHoursMessage = useCallback(() => {
-    const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
-    const orderedDays = WEEKDAY_ORDER.filter((day) => day === today).concat(
-      WEEKDAY_ORDER.filter((day) => day !== today),
-    );
-
-    const lines = orderedDays.map((day) => {
-      const value = FALLBACK_HOURS[day];
-      if (day === today) {
-        return `Today (${day}): ${value}`;
-      }
-      return `${day}: ${value}`;
-    });
-
-    return `Here are our hours:\n${lines.join("\n")}`;
-  }, []);
-
-  const menuPromptMessage = useMemo(
-    () =>
-      [
-        "Which menu would you like to view? Reply with a number:",
-        ...MENU_OPTIONS.map((option) => `${option.key}) ${option.label}`),
-      ].join("\n"),
-    [],
-  );
-
-  const resolveMenuOption = useCallback((value: string) => {
-    const normalized = value.trim().toLowerCase();
-    return MENU_OPTIONS.find(
-      (option) =>
-        option.key === normalized ||
-        option.label.toLowerCase() === normalized ||
-        normalized.includes(option.label.toLowerCase()),
-    );
-  }, []);
-
-  const handleQuickAction = useCallback(
-    (action: QuickAction) => {
-      setComposerError(null);
-
-      if (action === "hours") {
-        setAwaitingMenuSelection(false);
-        appendAssistantMessage(formatHoursMessage());
-        return;
-      }
-
-      if (action === "reservations") {
-        setAwaitingMenuSelection(false);
-        appendAssistantMessage("You can book a table here:", {
-          label: "Open reservations",
-          href: RESERVATIONS_URL,
-        });
-        return;
-      }
-
-      setAwaitingMenuSelection(true);
-      appendAssistantMessage(menuPromptMessage);
-    },
-    [appendAssistantMessage, formatHoursMessage, menuPromptMessage],
-  );
-
   const startAssistantResponse = useCallback(
     async (history: Message[], assistantMessageId: string) => {
       if (!runtimeConfig.isValid) {
@@ -883,6 +784,26 @@ export function ChatWidget({
     ],
   );
 
+  const handleQuickAction = useCallback(
+    (action: QuickAction) => {
+      setComposerError(null);
+      const prompts: Record<QuickAction, string> = {
+        hours: "What are your hours and where are you located?",
+        reservations: "How do I make a reservation or book a table?",
+        menu: "What's on your menu?",
+      };
+      const prompt = prompts[action];
+      const userMessage: Message = { id: createId(), role: "user", text: prompt };
+      const assistantMessageId = createId();
+      const assistantPlaceholder: Message = { id: assistantMessageId, role: "assistant", text: "" };
+      const snapshot = [...messages, userMessage];
+      setMessages([...snapshot, assistantPlaceholder]);
+      setLastSubmittedMessage(prompt);
+      void startAssistantResponse(snapshot, assistantMessageId);
+    },
+    [messages, startAssistantResponse],
+  );
+
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -903,35 +824,6 @@ export function ChatWidget({
       return;
     }
 
-    if (awaitingMenuSelection) {
-      const option = resolveMenuOption(trimmed);
-      const userMessage: Message = {
-        id: createId(),
-        role: "user",
-        text: trimmed,
-      };
-
-      const assistantMessage: Message = option
-        ? {
-            id: createId(),
-            role: "assistant",
-            text: `${option.label}:\n${option.items.map((item) => `• ${item}`).join("\n")}`,
-          }
-        : {
-            id: createId(),
-            role: "assistant",
-            text: "Please choose a menu by replying with 1, 2, 3, or 4.",
-          };
-
-      setMessages((prev) => [...prev, userMessage, assistantMessage]);
-      setInputValue("");
-      setLastSubmittedMessage(trimmed);
-      if (option) {
-        setAwaitingMenuSelection(false);
-      }
-      return;
-    }
-
     const userMessage: Message = {
       id: createId(),
       role: "user",
@@ -949,10 +841,9 @@ export function ChatWidget({
     setMessages([...conversationSnapshot, assistantPlaceholder]);
     setInputValue("");
     setLastSubmittedMessage(trimmed);
-    setAwaitingMenuSelection(false);
 
     await startAssistantResponse(conversationSnapshot, assistantMessageId);
-  }, [awaitingMenuSelection, inputValue, isHydratingHistory, isStreaming, messages, resolveMenuOption, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, startAssistantResponse]);
+  }, [inputValue, isHydratingHistory, isStreaming, messages, runtimeConfig.businessId, runtimeConfig.error, runtimeConfig.isValid, startAssistantResponse]);
 
   const retryLastMessage = useCallback(async () => {
     const retryText = lastSubmittedMessage?.trim();

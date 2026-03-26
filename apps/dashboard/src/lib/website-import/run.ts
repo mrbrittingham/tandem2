@@ -22,5 +22,6 @@ export async function runWebsiteImport(url: string, options?: RunOptions): Promi
     sourceUrl: normalizedUrl,
     pages: crawl.pages,
     signals: crawl.signals,
+    crawlReport: crawl.crawlReport,
   });
 }

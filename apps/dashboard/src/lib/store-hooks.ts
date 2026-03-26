@@ -19,8 +19,14 @@ import {
   type MockState,
 } from "@tandem/shared";
 
+const EMPTY_MOCK_STATE: MockState = {
+  businesses: [],
+  activeLocationId: undefined,
+  activeBusinessId: undefined,
+};
+
 export function useConsoleStore(): MockState {
-  return useSyncExternalStore(subscribeToMockState, getMockState, getMockState);
+  return useSyncExternalStore(subscribeToMockState, getMockState, () => EMPTY_MOCK_STATE);
 }
 
 export function useActiveBusiness(): BusinessProfile | undefined {

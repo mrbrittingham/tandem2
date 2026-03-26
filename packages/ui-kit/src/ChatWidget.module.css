@@ -105,8 +105,12 @@
         padding: var(--tandem-space-20, 20px);
         padding-right: 64px;
         position: relative;
-        border-bottom: 1px solid var(--tandem-border, #e5e5e5);
-        background: var(--tandem-header-bg, var(--tandem-primary, #4f46e5));
+        border-bottom: 1px solid rgba(0, 0, 0, 0.10);
+        background: linear-gradient(
+                170deg,
+                var(--tandem-header-bg, var(--tandem-primary, #4f46e5)) 0%,
+                color-mix(in srgb, var(--tandem-header-bg, var(--tandem-primary, #4f46e5)) 82%, #000000) 100%
+        );
 }
 
 .brand {
@@ -121,7 +125,7 @@
         height: 40px;
         border-radius: 12px;
         object-fit: cover;
-        border: 1px solid var(--tandem-border-light, #f0f0f0);
+        border: 1.5px solid color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 28%, transparent);
         background: var(--tandem-surface-elevated, #fafafa);
 }
 
@@ -166,22 +170,26 @@
 .quickActionButton {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        height: 32px;
-        padding: 0 10px;
+        gap: 5px;
+        height: 34px;
+        padding: 0 12px;
         border-radius: 999px;
-        border: 1px solid var(--tandem-quick-action-border, var(--tandem-primary, #2563eb));
-        background: var(--tandem-quick-action-bg, var(--tandem-accent-light, #eef2ff));
-        color: var(--tandem-quick-action-text, var(--tandem-text-primary, #1a1a1a));
+        /* Use header-text-relative colors so buttons look right on any header color */
+        border: 1px solid var(--tandem-quick-action-border, color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 30%, transparent));
+        background: var(--tandem-quick-action-bg, color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 14%, transparent));
+        color: var(--tandem-quick-action-text, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)));
         font-size: 0.78rem;
         font-weight: 600;
         cursor: pointer;
         transition: background-color 150ms ease, border-color 150ms ease;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        letter-spacing: 0.01em;
 }
 
 .quickActionButton:hover {
-        background: var(--tandem-quick-action-hover, var(--tandem-accent-light, #eef2ff));
-        border-color: var(--tandem-quick-action-border, var(--tandem-primary, #2563eb));
+        background: var(--tandem-quick-action-hover, color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 26%, transparent));
+        border-color: var(--tandem-quick-action-border, color-mix(in srgb, var(--tandem-header-text, var(--tandem-text-on-primary, #ffffff)) 50%, transparent));
 }
 
 .viewSwitch {
@@ -242,7 +250,7 @@
         flex-direction: column;
         min-height: 0;
         overflow: hidden;
-        background: var(--tandem-surface-elevated, #fafafa);
+        background: var(--tandem-surface-elevated, #f5f6f8);
 }
 
 .chatContent {
@@ -409,14 +417,18 @@
 
 .assistantBubble {
         align-self: flex-start;
-        background: var(--tandem-assistant-bg, #f2f2f2);
+        background: var(--tandem-assistant-bg, #ffffff);
         color: var(--tandem-assistant-text, #1a1a1a);
+        border: 1px solid var(--tandem-border-light, #ebebeb);
+        /* Override the generic messageBubble shadow with a crisper one */
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07), 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .userBubble {
         align-self: flex-end;
         background: var(--tandem-user-bg, var(--tandem-send-bg, var(--tandem-primary, #2563eb)));
         color: var(--tandem-user-text, #ffffff);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16), 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .systemBubble {

@@ -94,15 +94,44 @@ export type ImportMenuItem = {
   include: boolean;
 };
 
+export type MenuSemanticCategory =
+  | "starters"
+  | "salads"
+  | "soups"
+  | "entrees"
+  | "seafood"
+  | "kids_menu"
+  | "desserts"
+  | "beverages"
+  | "alcohol"
+  | "brunch"
+  | "other";
+
 export type ImportMenuSection = {
   id: string;
   title: string;
+  /** Normalised semantic bucket — populated during ingestion, used by chat formatter */
+  semanticCategory?: MenuSemanticCategory | null;
   sourceUrl: string | null;
   include: boolean;
   items: ImportMenuItem[];
 };
 
+/**
+ * Three-state signal for whether reservations are available at this location.
+ * - "confirmed": booking platform URL or actionable instructions were extracted.
+ * - "page-exists-unconfirmed": reservation-related pages were found but no concrete booking details confirmed.
+ * - "not-offered": no reservation evidence found at all.
+ */
+export type ReservationStatus = "confirmed" | "page-exists-unconfirmed" | "not-offered";
+
 export type ImportReservationInfo = {
+  /**
+   * Three-state reservation signal. Replaces the binary `include` flag for new imports.
+   * Older stored configs that lack this field should fall back to the `include` boolean.
+   */
+  status: ReservationStatus;
+  /** @deprecated Use `status !== "not-offered"` instead. Kept for backward compat with stored configs. */
   include: boolean;
   sourceUrl: string | null;
   bookingUrl: string | null;
@@ -139,6 +168,17 @@ export type WebsiteImportDraft = {
   policies: ImportPolicy[];
   restaurantKnowledge: {
     events: ImportEvent[];
+    /**
+     * True if any event-related pages were visited during crawl, even if no
+     * confirmed dated listings were extracted. Use this to distinguish
+     * "pages exist but no listings confirmed" from "no event info at all".
+     */
+    eventPagesPresent: boolean;
+    /**
+     * True only when concrete event listings with sufficient evidence (dates,
+     * recurring entries, etc.) were successfully extracted.
+     */
+    currentEventsFound: boolean;
     menuSections: ImportMenuSection[];
     reservations: ImportReservationInfo;
     memberships: ImportMembershipInfo;
@@ -163,10 +203,46 @@ export type WebsiteImportDraft = {
   };
 };
 
+// ── Crawl intelligence types ──────────────────────────────────────────────────
+
+export type LinkTier = "core" | "secondary" | "low-value";
+
+export type KnowledgeArea =
+  | "business-identity"
+  | "menu"
+  | "hours"
+  | "contact-location"
+  | "reservations"
+  | "events"
+  | "service-notes"
+  | "special-programs";
+
+export type KnowledgeCoverage = {
+  area: KnowledgeArea;
+  found: boolean;
+  confidence: "high" | "medium" | "low" | "none";
+  sourcePages: string[];
+};
+
+export type SiblingEntity = {
+  name: string;
+  probableUrl: string;
+  reason: string;
+};
+
+export type CrawlReport = {
+  knowledgeCoverage: KnowledgeCoverage[];
+  includedPages: Array<{ url: string; title: string; pageType: string; tier: LinkTier }>;
+  excludedLinks: Array<{ url: string; anchorText: string; reason: string }>;
+  siblingEntities: SiblingEntity[];
+  stoppingReason: string;
+};
+
 export type WebsiteImportResult = {
   pages: CrawledPage[];
   signals: ImportSignals;
   draft: WebsiteImportDraft;
+  crawlReport?: CrawlReport;
 };
 
 export type WebsiteImportRunRecord = {
