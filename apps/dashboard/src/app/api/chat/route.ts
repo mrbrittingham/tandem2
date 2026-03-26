@@ -47,6 +47,39 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+const DETERMINISTIC_NO_RESERVATION_REPLY = "I don't see reservation information on the website. You may want to check the website directly or give them a call for the latest details.";
+
+function getReservationStatusFromKnowledge(knowledgeConfig: unknown): "confirmed" | "page-exists-unconfirmed" | "none" {
+  const root = asObject(knowledgeConfig);
+  const structured = asObject(root.structured);
+  const fields = asObject(structured.fields);
+  const imported = asObject(root.structuredWebsiteKnowledge);
+  const reservations = asObject(imported.reservations);
+  const reservationBookingUrl = asString(reservations.bookingUrl);
+
+  if (asString(fields.reservationsGuidance) || reservationBookingUrl) return "confirmed";
+
+  const importedStatus = asString(reservations.status);
+  if (importedStatus === "confirmed") return "confirmed";
+  if (importedStatus === "page-exists-unconfirmed") return "page-exists-unconfirmed";
+
+  if (reservations.include === true) {
+    return asString(reservations.instructions) || reservationBookingUrl ? "confirmed" : "page-exists-unconfirmed";
+  }
+
+  return "none";
+}
+
+function isReservationIntentMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return [
+    /\breservation(?:s)?\b/,
+    /\bbook(?:ing|ed)?\b/,
+    /\bbook\s+(?:a\s+)?table\b/,
+    /\bwalk[ -]?ins?\b/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 // ---------------------------------------------------------------------------
 // Format helpers and event data sanitisation
 // Some events (especially those imported from Eventbrite-style pages) end up
@@ -422,25 +455,7 @@ export function buildKnowledgeSystemPrompt(
   const phone = asString(contact.phone);
   const email = asString(contact.email);
 
-  // Whether any reservation data was actually imported — used to gate
-  // whether the LLM may discuss reservations at all.
-  // Three states (matching ImportReservationInfo.status):
-  //   "confirmed"               — booking platform URL or actionable instructions found
-  //   "page-exists-unconfirmed" — reservation pages found but no concrete booking details
-  //   "none"                    — no reservation evidence found
-  const reservationStatus: "confirmed" | "page-exists-unconfirmed" | "none" = (() => {
-    // Operator-entered fields are authoritative when present
-    if (asString(fields.reservationsGuidance) || reservationBookingUrl) return "confirmed";
-    // Trust the imported status field when present
-    const importedStatus = asString(reservations.status);
-    if (importedStatus === "confirmed") return "confirmed";
-    if (importedStatus === "page-exists-unconfirmed") return "page-exists-unconfirmed";
-    // Backward compat: old imports without status use the binary include flag
-    if (reservations.include === true) {
-      return asString(reservations.instructions) || reservationBookingUrl ? "confirmed" : "page-exists-unconfirmed";
-    }
-    return "none";
-  })();
+  const reservationStatus = getReservationStatusFromKnowledge(knowledgeConfig);
 
   // Event availability state derived from imported knowledge.
   // currentEventsFound = concrete dated listings were extracted.
@@ -921,6 +936,37 @@ export async function POST(request: Request) {
     const knowledgeSystem = locationConfig.knowledgeConfig
       ? buildKnowledgeSystemPrompt(locationConfig.knowledgeConfig, locationConfig.handoffConfig)
       : "";
+
+    const latestUserMessage = [...(body.messages ?? [])].reverse().find(
+      (message) => message?.role === "user" && typeof message?.content === "string" && message.content.trim().length > 0,
+    );
+    const shouldBypassForMissingReservations =
+      !!locationConfig.knowledgeConfig
+      && getReservationStatusFromKnowledge(locationConfig.knowledgeConfig) === "none"
+      && !!latestUserMessage
+      && typeof latestUserMessage.content === "string"
+      && isReservationIntentMessage(latestUserMessage.content);
+
+    if (shouldBypassForMissingReservations) {
+      const nextBody = {
+        ...body,
+        businessId: resolvedScope.businessId,
+        businessSlug: resolvedScope.businessSlug,
+        locationId: resolvedScope.locationId,
+        locationSlug: resolvedScope.locationSlug,
+        messages: latestUserMessage ? [latestUserMessage] : [],
+        system: body.system,
+        deterministicReply: DETERMINISTIC_NO_RESERVATION_REPLY,
+      };
+
+      const nextRequest = new Request(request.url, {
+        method: "POST",
+        headers: request.headers,
+        body: JSON.stringify(nextBody),
+      });
+
+      return handleChatPost(nextRequest, { requireRequestApiKey: false });
+    }
 
     // Debug: log every event title stored for this location so we can diagnose
     // missing-event issues without needing a DB query.

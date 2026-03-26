@@ -16,6 +16,7 @@ type ChatRequestBody = {
   system?: string;
   temperature?: number;
   maxTokens?: number;
+  deterministicReply?: string;
 };
 
 type ChatHandlerOptions = {
@@ -279,6 +280,21 @@ export async function handleChatPost(req: Request, options?: ChatHandlerOptions)
     // --- If input screening failed, return canned reply without consuming LLM tokens ---
     if (!screenResult.ok) {
       const reply = screenResult.reply;
+      await store.appendMessage(session.id, {
+        role: "assistant",
+        content: reply,
+      });
+
+      const headers = new Headers({ "content-type": "text/plain; charset=utf-8" });
+      if (created) {
+        headers.append("Set-Cookie", buildSessionCookie(session.id));
+      }
+
+      return new Response(reply, { status: 200, headers });
+    }
+
+    if (typeof body.deterministicReply === "string" && body.deterministicReply.trim().length > 0) {
+      const reply = body.deterministicReply;
       await store.appendMessage(session.id, {
         role: "assistant",
         content: reply,
