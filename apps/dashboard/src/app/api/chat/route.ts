@@ -80,6 +80,50 @@ function isReservationIntentMessage(message: string): boolean {
   ].some((pattern) => pattern.test(normalized));
 }
 
+function buildSpecificDishGroundingRules(menuSections: unknown[]): string {
+  const lines: string[] = [];
+
+  for (const section of menuSections) {
+    const sectionObject = asObject(section);
+    const sectionTitle = asString(sectionObject.title) || "Menu";
+    const items = Array.isArray(sectionObject.items) ? sectionObject.items : [];
+
+    for (const item of items) {
+      const itemObject = asObject(item);
+      const name = asString(itemObject.name).trim();
+      if (!name) continue;
+
+      const description = asString(itemObject.description).trim();
+      const price = asString(itemObject.price).trim();
+      const detailParts = [
+        description ? `description: ${description}` : "",
+        price ? `price: ${price}` : "",
+      ].filter(Boolean);
+
+      lines.push(
+        detailParts.length > 0
+          ? `- ${name} (${sectionTitle}) — ${detailParts.join(" | ")}`
+          : `- ${name} (${sectionTitle}) — name only, no further detail provided on the website`,
+      );
+    }
+  }
+
+  if (!lines.length) return "";
+
+  return [
+    "SPECIFIC DISH GROUNDING RULES:",
+    "When the guest asks about a specific dish or menu item, answer ONLY from the explicit menu data below for that item.",
+    "You MAY lightly paraphrase or reorganize the explicit dish description so the reply sounds natural.",
+    "Stay close to the source wording. Do NOT add new sensory claims, promotional adjectives, or restaurant-sales language that is not explicitly supported by the menu or website.",
+    "Do NOT infer preparation style, ingredients, pairings, portion size, texture, spice level, finish, richness, freshness, local sourcing, or sides unless they are explicitly stated.",
+    "Do NOT use filler like 'often', 'typically', 'usually', 'balanced and delicious', 'luxurious', 'savory finish', 'paired with', 'highlights the local flavors', or similar language unless the website explicitly says that.",
+    "If the item is listed by name only or with very limited detail, say so plainly.",
+    "Example phrasing: 'I can tell you it's listed as Rockfish Imperial, but I don't see more dish detail on the website.'",
+    "Grounded menu item data:",
+    ...lines,
+  ].join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Format helpers and event data sanitisation
 // Some events (especially those imported from Eventbrite-style pages) end up
@@ -443,6 +487,7 @@ export function buildKnowledgeSystemPrompt(
   const eventLines = formatEventLines(events);
   const eventCategoryHints = buildEventCategoryHints(events);
   const menuLines = formatMenuLines(menuSections);
+  const specificDishGroundingRules = buildSpecificDishGroundingRules(menuSections);
   const menuSectionTitles = menuSections
     .map((s) => asString(asObject(s).title))
     .filter(Boolean)
@@ -687,6 +732,7 @@ export function buildKnowledgeSystemPrompt(
     eventLines ? `Upcoming events:\n${eventLines}` : "",
     menuSectionTitles ? `Available menu sections (use these names when asking clarifying questions): ${menuSectionTitles}` : "",
     menuLines ? `Menu sections (full detail — only share a specific section when the customer asks for it):\n${menuLines}` : "",
+    specificDishGroundingRules,
     faqLines ? `Q&A knowledge (use these to answer common questions directly):\n${faqLines}` : "",
     policyLines ? `Policies:\n${policyLines}` : "",
     handoffLines,

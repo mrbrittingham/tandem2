@@ -489,9 +489,9 @@ export function ConsoleSidebar() {
         <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
           <div className="flex flex-1 flex-col items-center justify-center px-4 py-4 text-center">
             <BotAvatar />
-            <h2 className="text-lg font-bold text-white mb-1.5">Hey there!</h2>
+            <h2 className="text-lg font-bold text-white mb-1.5">Tandem Operator Console</h2>
             <p className="text-sm text-white/60 leading-relaxed mb-5">
-              Ask me questions or commands. Or just use my advice to boost your performance.
+              You're in the Tandem Operator Console. I help you manage and configure your AI concierge, review suggested changes, and keep everything running accurately. What would you like to update?
             </p>
             <div className="flex w-full flex-col gap-2">
               {QUICK_ACTIONS.map((qa) => (
