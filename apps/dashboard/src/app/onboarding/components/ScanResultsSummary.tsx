@@ -19,7 +19,7 @@ type CategoryCardProps = {
 function CategoryCard({ icon, label, found, detail }: CategoryCardProps) {
   return (
     <div
-      className={`rounded-[var(--console-radius-md)] border p-4 ${
+      className={`rounded-[var(--radius-md)] border p-4 ${
         found
           ? "border-emerald-200 bg-emerald-50"
           : "border-orange-200 bg-orange-50"
@@ -28,7 +28,7 @@ function CategoryCard({ icon, label, found, detail }: CategoryCardProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-lg">{icon}</span>
-          <span className="text-sm font-semibold text-[var(--console-text-primary)]">{label}</span>
+          <span className="text-sm font-semibold text-[var(--color-text)]">{label}</span>
         </div>
         <span
           className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -41,7 +41,7 @@ function CategoryCard({ icon, label, found, detail }: CategoryCardProps) {
         </span>
       </div>
       {detail ? (
-        <p className="mt-1.5 text-xs text-[var(--console-text-secondary)] line-clamp-2">{detail}</p>
+        <p className="mt-1.5 text-xs text-[var(--color-text-secondary)] line-clamp-2">{detail}</p>
       ) : null}
     </div>
   );
@@ -86,10 +86,10 @@ export function ScanResultsSummary({ draft, onApply, onReview, isApplying = fals
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
           Scan complete
         </p>
-        <p className="mt-1 text-lg font-semibold text-[var(--console-text-primary)]">
+        <p className="mt-1 text-lg font-semibold text-[var(--color-text)]">
           What I learned about your restaurant
         </p>
       </div>
@@ -132,7 +132,7 @@ export function ScanResultsSummary({ draft, onApply, onReview, isApplying = fals
           type="button"
           onClick={onApply}
           disabled={isApplying}
-          className="w-full rounded-[var(--console-radius-sm)] bg-[var(--console-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isApplying ? "Applying…" : "✓ Yes, set this up"}
         </button>
@@ -140,7 +140,7 @@ export function ScanResultsSummary({ draft, onApply, onReview, isApplying = fals
           type="button"
           onClick={onReview}
           disabled={isApplying}
-          className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-transparent px-4 py-2.5 text-sm font-medium text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-hover)] hover:text-[var(--console-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-transparent px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Review details first
         </button>

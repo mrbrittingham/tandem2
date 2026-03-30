@@ -123,9 +123,9 @@ export function BusinessSubNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-[200px] shrink-0 flex-col overflow-y-auto border-r border-[var(--console-border)] bg-white lg:flex">
-      <div className="px-4 py-4 border-b border-[var(--console-border)]">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--console-text-tertiary)]">
+    <aside className="hidden w-[200px] shrink-0 flex-col overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] lg:flex">
+      <div className="px-4 py-4 border-b border-[var(--color-border)]">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Your business
         </h2>
       </div>
@@ -138,11 +138,11 @@ export function BusinessSubNav() {
               href={item.href}
               className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
                 isActive
-                  ? "bg-[var(--console-primary-light)] text-[var(--console-primary)] font-medium"
-                  : "text-[var(--console-text-secondary)] hover:bg-[var(--console-bg-hover)] hover:text-[var(--console-text-primary)]"
+                  ? "bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium"
+                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
               }`}
             >
-              <span className={isActive ? "text-[var(--console-primary)]" : "text-[var(--console-text-tertiary)]"}>
+              <span className={isActive ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}>
                 {item.icon}
               </span>
               {item.label}

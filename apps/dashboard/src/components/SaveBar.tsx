@@ -34,8 +34,8 @@ export function SaveBar({ visible, onSave, saving = false, label = "Unsaved chan
         visible ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-8 pointer-events-none"
       }`}
     >
-      <div className="flex flex-col items-end gap-2.5 rounded-2xl border border-[var(--console-border)] bg-white px-5 py-4 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.08)]">
-        <span className="text-xs font-semibold uppercase tracking-widest text-[var(--console-text-secondary)]">
+      <div className="flex flex-col items-end gap-2.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.08)]">
+        <span className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-secondary)]">
           {saving ? "Saving…" : label}
         </span>
         <button

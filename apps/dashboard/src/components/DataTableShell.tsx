@@ -7,7 +7,7 @@ type DataTableShellProps = {
 
 export function DataTableShell({ children, className }: DataTableShellProps) {
   const resolvedClassName = [
-    "overflow-x-auto rounded-xl border border-slate-200 bg-white",
+    "overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]",
     className,
   ]
     .filter(Boolean)

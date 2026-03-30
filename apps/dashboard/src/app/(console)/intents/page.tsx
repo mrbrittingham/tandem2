@@ -292,7 +292,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
               <p className="mb-2 text-sm font-medium text-[var(--color-text)]">When this topic comes up…</p>
               <div className="space-y-2">
                 {ROUTE_OPTIONS.map((opt) => (
-                  <label key={opt.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 transition-colors ${intentForm.routeType === opt.value ? "border-[var(--color-primary)] bg-white" : "border-[var(--color-border)] hover:border-[var(--color-primary)]"}`}>
+                  <label key={opt.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 transition-colors ${intentForm.routeType === opt.value ? "border-[var(--color-primary)] bg-[var(--color-surface)]" : "border-[var(--color-border)] hover:border-[var(--color-primary)]"}`}>
                     <input
                       type="radio"
                       className="mt-0.5"
@@ -313,7 +313,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
               <TextInput label="Handoff note (internal)" value={intentForm.routeHint} onChange={(v) => setIntentForm((f) => ({ ...f, routeHint: v }))} placeholder="Route to reservations team" />
             )}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => { setAddingIntent(false); setEditingId(null); setIntentForm(defaultIntent); }} className="rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-secondary)] hover:bg-white">Cancel</button>
+              <button type="button" onClick={() => { setAddingIntent(false); setEditingId(null); setIntentForm(defaultIntent); }} className="rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]">Cancel</button>
               <button type="button" onClick={handleSaveIntent} className="rounded-xl bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)]">
                 {editingId ? "Update topic" : "Add topic"}
               </button>
@@ -336,7 +336,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
               const routeIcon = route.type === "link" ? "🔗" : route.type === "handoff" ? "🙋" : "📚";
               const routeLabel = route.type === "link" ? "Opens a link" : route.type === "handoff" ? "Routes to a person" : "Answers from knowledge";
               return (
-                <li key={intent.id} className="flex items-start gap-4 rounded-2xl border border-[var(--color-border)] bg-white p-4">
+                <li key={intent.id} className="flex items-start gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-light)] text-lg">{routeIcon}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[var(--color-text)]">{intent.label}</p>

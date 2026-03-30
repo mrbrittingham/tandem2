@@ -150,7 +150,7 @@ function ConversationsClient() {
           { label: "Escalated", value: escalated, warn: escalated > 0 },
           { label: "Resolved", value: resolved, ok: resolved > 0 },
         ].map((stat) => (
-          <div key={stat.label} className="rounded-2xl border border-[var(--color-border)] bg-white px-4 py-3">
+          <div key={stat.label} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-secondary)]">{stat.label}</p>
             <p className={`mt-1 text-2xl font-bold tabular-nums ${stat.warn ? "text-orange-600" : stat.ok ? "text-emerald-600" : "text-[var(--color-text)]"}`}>
               {sessionsLoading ? "…" : stat.value}
@@ -179,7 +179,7 @@ function ConversationsClient() {
       {/* Two-panel layout */}
       <div className="flex flex-1 gap-4 overflow-hidden" style={{ minHeight: "400px" }}>
         {/* Session list */}
-        <div className="w-80 shrink-0 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-white">
+        <div className="w-80 shrink-0 overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
           {sessionsLoading ? (
             <div className="flex items-center justify-center py-16 text-sm text-[var(--color-text-secondary)]">Loading…</div>
           ) : sorted.length === 0 ? (
@@ -224,7 +224,7 @@ function ConversationsClient() {
         </div>
 
         {/* Thread detail */}
-        <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white">
+        <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
           {!selectedSession ? (
             <div className="flex flex-1 items-center justify-center text-center px-8">
               <div>

@@ -121,10 +121,10 @@ export function HandoffContactInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-3 rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4 space-y-3"
+      className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3"
     >
       <div className="space-y-2">
-        <label className="block text-xs font-medium text-[var(--console-text-secondary)]">
+        <label className="block text-xs font-medium text-[var(--color-text-secondary)]">
           <span className="flex items-center gap-1.5 mb-1">
             <span>📞</span>
             <span>Phone number</span>
@@ -135,11 +135,11 @@ export function HandoffContactInput({
             onChange={(e) => setPhone(e.target.value)}
             disabled={isSaving || disabled}
             placeholder="+1 (555) 000-0000"
-            className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
 
-        <label className="block text-xs font-medium text-[var(--console-text-secondary)]">
+        <label className="block text-xs font-medium text-[var(--color-text-secondary)]">
           <span className="flex items-center gap-1.5 mb-1">
             <span>🔗</span>
             <span>Reservation link</span>
@@ -150,11 +150,11 @@ export function HandoffContactInput({
             onChange={(e) => setLink(e.target.value)}
             disabled={isSaving || disabled}
             placeholder="https://resy.com/…"
-            className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
 
-        <label className="block text-xs font-medium text-[var(--console-text-secondary)]">
+        <label className="block text-xs font-medium text-[var(--color-text-secondary)]">
           <span className="flex items-center gap-1.5 mb-1">
             <span>📧</span>
             <span>Email</span>
@@ -165,13 +165,13 @@ export function HandoffContactInput({
             onChange={(e) => setEmail(e.target.value)}
             disabled={isSaving || disabled}
             placeholder="hello@yourrestaurant.com"
-            className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
       </div>
 
       {error ? (
-        <p className="rounded-[var(--console-radius-sm)] bg-[var(--console-error-light)] px-3 py-2 text-xs text-[var(--console-error)]">
+        <p className="rounded-[var(--radius-sm)] bg-[var(--color-danger-light)] px-3 py-2 text-xs text-[var(--color-danger)]">
           {error}
         </p>
       ) : null}
@@ -180,7 +180,7 @@ export function HandoffContactInput({
         <button
           type="submit"
           disabled={!hasInput || isSaving || disabled}
-          className="rounded-[var(--console-radius-sm)] bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSaving ? "Saving…" : "Save contact method"}
         </button>
@@ -188,7 +188,7 @@ export function HandoffContactInput({
           type="button"
           onClick={onSkip}
           disabled={isSaving || disabled}
-          className="rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-hover)] hover:text-[var(--console-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Skip for now
         </button>

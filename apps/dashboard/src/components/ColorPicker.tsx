@@ -10,7 +10,7 @@ export type ColorPickerProps = {
 export function ColorPicker({ label, value, onChange, hint }: ColorPickerProps) {
   return (
     <div className="flex flex-wrap gap-3">
-      <label className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-sm">
+      <label className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
         <span className="sr-only">{label}</span>
         <input
           type="color"

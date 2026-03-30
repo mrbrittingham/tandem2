@@ -249,7 +249,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
             </article>
           ))}
 
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[var(--color-text-muted)]">
             Tip: Email and phone channels appear directly in the chat widget for guests to use instantly. SMS and form links are also shown when enabled.
           </p>
         </div>
@@ -259,7 +259,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-[var(--console-primary-hover)] hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex items-center gap-2 rounded-2xl bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-[var(--color-primary-hover)] hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saving && (
             <svg className="animate-spin" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

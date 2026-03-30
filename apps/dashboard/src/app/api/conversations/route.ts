@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { assertDashboardEnv, getChatStore, isDevSmokeBypass, isMissingColumnError, recordScopeFallback } from "@tandem/shared/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+// Intentional cap: returns the 50 most-recent sessions per business+location scope.
+// Sufficient for the current dashboard view; increase when pagination is added.
 const DEFAULT_LIMIT = 50;
 const SCOPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/;
 

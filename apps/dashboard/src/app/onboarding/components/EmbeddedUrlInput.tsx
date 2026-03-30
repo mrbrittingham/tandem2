@@ -41,9 +41,9 @@ export function EmbeddedUrlInput({ onScan, onSkip, disabled = false }: Props) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-3 rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-[var(--console-bg-card)] p-4"
+      className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
     >
-      <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--console-text-secondary)]">
+      <label className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
         <span>🌐</span>
         <span>Your website URL</span>
       </label>
@@ -55,11 +55,11 @@ export function EmbeddedUrlInput({ onScan, onSkip, disabled = false }: Props) {
         onBlur={() => setTouched(true)}
         disabled={disabled}
         placeholder="https://yourrestaurant.com"
-        className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
       />
 
       {showError ? (
-        <p className="mt-1 text-xs text-[var(--console-error)]">
+        <p className="mt-1 text-xs text-[var(--color-danger)]">
           Please enter a valid website URL (e.g. yourrestaurant.com)
         </p>
       ) : null}
@@ -68,7 +68,7 @@ export function EmbeddedUrlInput({ onScan, onSkip, disabled = false }: Props) {
         <button
           type="submit"
           disabled={!isValidUrl(trimmed) || disabled}
-          className="rounded-[var(--console-radius-sm)] bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Scan my website
         </button>
@@ -76,7 +76,7 @@ export function EmbeddedUrlInput({ onScan, onSkip, disabled = false }: Props) {
           type="button"
           onClick={onSkip}
           disabled={disabled}
-          className="rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--console-text-secondary)] transition hover:border-[var(--console-border-hover)] hover:text-[var(--console-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-transparent px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Skip for now
         </button>

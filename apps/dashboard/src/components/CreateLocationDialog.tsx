@@ -34,12 +34,12 @@ export function CreateLocationDialog({ open, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6">
-      <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-2xl rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-400">Location setup</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-900">Add location</h2>
-            <p className="text-sm text-slate-500">Create a new location and optionally kick off an initial website crawl.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-[var(--color-text-muted)]">Location setup</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--color-text)]">Add location</h2>
+            <p className="text-sm text-[var(--color-text-muted)]">Create a new location and optionally kick off an initial website crawl.</p>
           </div>
           <button
             type="button"
@@ -47,42 +47,42 @@ export function CreateLocationDialog({ open, onClose }: Props) {
               reset();
               onClose();
             }}
-            className="rounded-2xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            className="rounded-2xl border border-[var(--color-border)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]"
           >
             Close
           </button>
         </div>
 
         <div className="mt-6 space-y-4">
-          <label className="flex flex-col gap-2 text-sm text-slate-700">
-            <span className="font-semibold text-slate-900">Location name</span>
+          <label className="flex flex-col gap-2 text-sm text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Location name</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Berlin"
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-blue-300 focus:outline-none"
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]"
             />
           </label>
-          <label className="flex flex-col gap-2 text-sm text-slate-700">
-            <span className="font-semibold text-slate-900">Address (optional)</span>
+          <label className="flex flex-col gap-2 text-sm text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Address (optional)</span>
             <input
               value={address}
               onChange={(event) => setAddress(event.target.value)}
               placeholder="11206 Worcester Hwy, Berlin, MD 21811"
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-blue-300 focus:outline-none"
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]"
             />
           </label>
-          <label className="flex flex-col gap-2 text-sm text-slate-700">
-            <span className="font-semibold text-slate-900">Website URL (optional)</span>
+          <label className="flex flex-col gap-2 text-sm text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">Website URL (optional)</span>
             <input
               value={websiteUrl}
               onChange={(event) => setWebsiteUrl(event.target.value)}
               placeholder="https://www.windmillcreekvineyard.com"
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 focus:border-blue-300 focus:outline-none"
+              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]"
             />
           </label>
 
-          {status ? <p className="text-xs text-slate-600">{status}</p> : null}
+          {status ? <p className="text-xs text-[var(--color-text-muted)]">{status}</p> : null}
 
           <div className="flex justify-end">
             <button

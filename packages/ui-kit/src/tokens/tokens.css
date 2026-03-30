@@ -3,6 +3,8 @@
 /* Consumed by both apps/dashboard and packages/ui-kit.           */
 
 :root {
+  color-scheme: light;
+
   /* ── Brand ─────────────────────────────────────── */
   --color-primary:        #2563EB;
   --color-primary-hover:  #1D4ED8;

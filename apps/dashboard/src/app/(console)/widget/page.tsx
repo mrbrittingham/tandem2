@@ -285,8 +285,8 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <div>
-                  <p className="text-xs font-semibold text-slate-700">Brand color</p>
-                  <p className="text-[10px] text-slate-400">Chat header, user message bubbles, and primary CTA</p>
+                  <p className="text-xs font-semibold text-[var(--color-text)]">Brand color</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)]">Chat header, user message bubbles, and primary CTA</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <ColorSwatchPicker
@@ -294,13 +294,13 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
                     value={theme.headerBackground?.solidColor ?? theme.primaryColor}
                     onChange={handleBrandColorChange}
                   />
-                  <span className="font-mono text-[10px] text-slate-400">{theme.headerBackground?.solidColor ?? theme.primaryColor}</span>
+                  <span className="font-mono text-[10px] text-[var(--color-text-muted)]">{theme.headerBackground?.solidColor ?? theme.primaryColor}</span>
                 </div>
               </div>
               <div className="space-y-1.5">
                 <div>
-                  <p className="text-xs font-semibold text-slate-700">Accent color</p>
-                  <p className="text-[10px] text-slate-400">Quick-reply chips and send button</p>
+                  <p className="text-xs font-semibold text-[var(--color-text)]">Accent color</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)]">Quick-reply chips and send button</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <ColorSwatchPicker
@@ -308,7 +308,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
                     value={theme.quickActions?.color ?? theme.accentColor}
                     onChange={handleAccentColorChange}
                   />
-                  <span className="font-mono text-[10px] text-slate-400">{theme.quickActions?.color ?? theme.accentColor}</span>
+                  <span className="font-mono text-[10px] text-[var(--color-text-muted)]">{theme.quickActions?.color ?? theme.accentColor}</span>
                 </div>
               </div>
             </div>
@@ -321,8 +321,8 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
               {textAndSurfaceFields.map((field) => (
                 <div key={field.key} className="space-y-1.5">
                   <div>
-                    <p className="text-xs font-semibold text-slate-700">{field.label}</p>
-                    <p className="text-[10px] text-slate-400">{field.hint}</p>
+                    <p className="text-xs font-semibold text-[var(--color-text)]">{field.label}</p>
+                    <p className="text-[10px] text-[var(--color-text-muted)]">{field.hint}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <ColorSwatchPicker
@@ -330,7 +330,7 @@ function WidgetEditor({ business, activeLocationSlug }: { business: BusinessProf
                       value={theme[field.key]}
                       onChange={(value) => updateBaseColor(field.key, value)}
                     />
-                    <span className="font-mono text-[10px] text-slate-400">{theme[field.key]}</span>
+                    <span className="font-mono text-[10px] text-[var(--color-text-muted)]">{theme[field.key]}</span>
                   </div>
                 </div>
               ))}

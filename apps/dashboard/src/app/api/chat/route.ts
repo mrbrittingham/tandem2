@@ -481,7 +481,14 @@ export function buildKnowledgeSystemPrompt(
   const importedFaqs = Array.isArray(root.faqs) ? root.faqs : Array.isArray(root.importedFaqs) ? root.importedFaqs : [];
   const reservations = asObject(imported.reservations);
   const memberships = asObject(imported.memberships);
-  const events = Array.isArray(imported.events) ? imported.events : [];
+  const _now = new Date();
+  const events = (Array.isArray(imported.events) ? imported.events : []).filter((e) => {
+    const expiresAt = typeof (e as Record<string, unknown>).expires_at === "string"
+      ? (e as Record<string, unknown>).expires_at as string
+      : null;
+    if (!expiresAt) return true;
+    try { return new Date(expiresAt) > _now; } catch { return true; }
+  });
   const menuSections = Array.isArray(imported.menuSections) ? imported.menuSections : [];
 
   const eventLines = formatEventLines(events);

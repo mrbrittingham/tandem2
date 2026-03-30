@@ -30,7 +30,7 @@ export function SectionCard({
   children,
 }: SectionCardProps) {
   const sectionClassName = [
-    "group/card rounded-[16px] border border-[var(--color-border)] bg-white p-5 shadow-xs md:p-6 transition-all duration-200 relative overflow-hidden",
+    "group/card rounded-[16px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xs md:p-6 transition-all duration-200 relative overflow-hidden",
     className,
   ]
     .filter(Boolean)

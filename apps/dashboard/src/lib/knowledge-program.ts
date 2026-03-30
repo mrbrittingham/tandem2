@@ -26,6 +26,56 @@ export type RestaurantKnowledgeFields = {
   seasonalSpecials: string;
 };
 
+// Lightweight business profile editable by the operator in the Knowledge UI.
+export type KnowledgeBusinessProfile = {
+  name: string;
+  phone: string;
+  address: string;
+  website: string;
+  logoUrl: string;
+};
+
+// Lightweight scan suggestion shown in the "Suggested Updates" section.
+export type KnowledgeScanSuggestion = {
+  id: string;
+  category: string;
+  summary: string;
+  detail?: string;
+  decision: "pending" | "accepted" | "rejected";
+  created_at: string;
+};
+
+export type StructuredEvent = {
+  id: string;
+  title: string;
+  date: string | null;
+  time: string | null;
+  description: string;
+  category: string;
+  bookingInfo: string | null;
+  sourceUrl: string | null;
+  recurring: boolean;
+  /** ISO datetime after which this event should not be surfaced to guests */
+  expires_at?: string | null;
+};
+
+export type StructuredMenuItem = {
+  id: string;
+  name: string;
+  price: string | null;
+  description: string;
+  dietaryNotes: string | null;
+  /** URL to an image for this menu item */
+  imageUrl?: string | null;
+};
+
+export type StructuredMenuSection = {
+  id: string;
+  title: string;
+  sourceUrl: string | null;
+  items: StructuredMenuItem[];
+};
+
 export type KnowledgeProgram = {
   setupPrompt: string;
   fields: RestaurantKnowledgeFields;
@@ -44,31 +94,14 @@ export type KnowledgeProgram = {
     membershipNotes?: string;
     menuSummary?: string;
   };
+  /** Operator-editable business profile (name, phone, address, website, logo) */
+  businessProfile: KnowledgeBusinessProfile;
+  /** Pending scan suggestions awaiting operator review */
+  scanSuggestions: KnowledgeScanSuggestion[];
   structuredWebsiteKnowledge: {
     pageClassification: Array<{ url: string; title: string; pageType: string }>;
-    events: Array<{
-      id: string;
-      title: string;
-      date: string | null;
-      time: string | null;
-      description: string;
-      category: string;
-      bookingInfo: string | null;
-      sourceUrl: string | null;
-      recurring: boolean;
-    }>;
-    menuSections: Array<{
-      id: string;
-      title: string;
-      sourceUrl: string | null;
-      items: Array<{
-        id: string;
-        name: string;
-        price: string | null;
-        description: string;
-        dietaryNotes: string | null;
-      }>;
-    }>;
+    events: StructuredEvent[];
+    menuSections: StructuredMenuSection[];
     reservations: {
       sourceUrl: string | null;
       bookingUrl: string | null;
@@ -116,8 +149,20 @@ export function buildKnowledgeProgramFromBusiness(business: BusinessProfile): Kn
     .map((entry) => `${entry.label}: ${entry.days.join(", ")} ${entry.open}-${entry.close}`)
     .join(" | ");
 
+  // Derive phone/website from contacts array
+  const phoneContact = business.contacts?.find((c) => c.type === "phone" && c.enabled !== false);
+  const websiteContact = business.contacts?.find((c) => c.type === "link" && c.enabled !== false);
+
   return {
     setupPrompt: "",
+    businessProfile: {
+      name: business.businessName ?? business.name ?? "",
+      phone: phoneContact?.value ?? "",
+      address: business.location ?? "",
+      website: websiteContact?.value ?? "",
+      logoUrl: business.theme?.logoUrl ?? "",
+    },
+    scanSuggestions: [],
     fields: {
       businessOverview: business.summary ?? "",
       cuisineServiceStyle: business.tagline ?? "",
@@ -230,6 +275,16 @@ export function hydrateKnowledgeProgram(value: unknown, fallback: KnowledgeProgr
       .filter((entry): entry is KnowledgeProgram["uploadedSources"][number] => Boolean(entry)),
     faqs: deduplicateById(Array.isArray(root.faqs) ? (root.faqs as FAQItem[]) : fallback.faqs),
     policies: deduplicateById(Array.isArray(root.policies) ? (root.policies as PolicyItem[]) : fallback.policies),
+    businessProfile: {
+      name: asString(asObject(root.businessProfile).name) || fallback.businessProfile.name,
+      phone: asString(asObject(root.businessProfile).phone) || fallback.businessProfile.phone,
+      address: asString(asObject(root.businessProfile).address) || fallback.businessProfile.address,
+      website: asString(asObject(root.businessProfile).website) || fallback.businessProfile.website,
+      logoUrl: asString(asObject(root.businessProfile).logoUrl) || fallback.businessProfile.logoUrl,
+    },
+    scanSuggestions: Array.isArray(root.scanSuggestions)
+      ? (root.scanSuggestions as KnowledgeScanSuggestion[])
+      : fallback.scanSuggestions,
     importedInsights: {
       eventHighlights: asString(importedInsights.eventHighlights) || undefined,
       reservationGuidance: asString(importedInsights.reservationGuidance) || undefined,
@@ -271,6 +326,8 @@ export function toKnowledgeConfig(program: KnowledgeProgram) {
     importedFaqs: program.faqs,
     importedPolicies: program.policies,
     importedInsights: program.importedInsights,
+    businessProfile: program.businessProfile,
+    scanSuggestions: program.scanSuggestions,
     structuredWebsiteKnowledge: program.structuredWebsiteKnowledge,
   };
 }

@@ -59,10 +59,10 @@ export function ScanProgressPanel({ url, pages, status }: Props) {
     <div className="flex flex-col gap-6 p-6">
       {/* Domain header */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
           Scanning
         </p>
-        <p className="mt-1 text-lg font-semibold text-[var(--console-text-primary)] break-all">
+        <p className="mt-1 text-lg font-semibold text-[var(--color-text)] break-all">
           {domain}
         </p>
       </div>
@@ -74,14 +74,14 @@ export function ScanProgressPanel({ url, pages, status }: Props) {
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="inline-block h-2 w-2 rounded-full bg-[var(--console-primary)] opacity-80"
+                className="inline-block h-2 w-2 rounded-full bg-[var(--color-primary)] opacity-80"
                 style={{
                   animation: `pulse 1.4s ease-in-out ${i * 0.2}s infinite`,
                 }}
               />
             ))}
           </span>
-          <span className="text-sm text-[var(--console-text-secondary)]">
+          <span className="text-sm text-[var(--color-text-secondary)]">
             Crawling pages…
           </span>
         </div>
@@ -89,10 +89,10 @@ export function ScanProgressPanel({ url, pages, status }: Props) {
 
       {/* Page count */}
       <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-bold tabular-nums text-[var(--console-text-primary)]">
+        <span className="text-3xl font-bold tabular-nums text-[var(--color-text)]">
           {pages.length}
         </span>
-        <span className="text-sm text-[var(--console-text-secondary)]">
+        <span className="text-sm text-[var(--color-text-secondary)]">
           {pages.length === 1 ? "page visited" : "pages visited"}
         </span>
       </div>
@@ -100,7 +100,7 @@ export function ScanProgressPanel({ url, pages, status }: Props) {
       {/* Page type badges */}
       {seenTypes.size > 0 ? (
         <div>
-          <p className="mb-2 text-xs font-medium text-[var(--console-text-tertiary)]">
+          <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
             Content types discovered
           </p>
           <div className="flex flex-wrap gap-2">
@@ -122,14 +122,14 @@ export function ScanProgressPanel({ url, pages, status }: Props) {
       {/* Page list (recent, up to 8) */}
       {pages.length > 0 ? (
         <div>
-          <p className="mb-2 text-xs font-medium text-[var(--console-text-tertiary)]">
+          <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">
             Pages crawled
           </p>
           <ul className="space-y-1.5">
             {pages.slice(-8).map((page, index) => (
               <li
                 key={`${page.url}-${index}`}
-                className="flex items-center gap-2 text-xs text-[var(--console-text-secondary)]"
+                className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]"
               >
                 <span className="text-emerald-500 flex-shrink-0">✓</span>
                 <span className="truncate">{page.title || extractDomain(page.url)}</span>
@@ -145,7 +145,7 @@ export function ScanProgressPanel({ url, pages, status }: Props) {
           </ul>
         </div>
       ) : (
-        <p className="text-sm text-[var(--console-text-tertiary)]">
+        <p className="text-sm text-[var(--color-text-muted)]">
           Fetching pages…
         </p>
       )}

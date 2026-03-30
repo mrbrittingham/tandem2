@@ -122,7 +122,7 @@ function TimeInput({ value, onChange }: { value: string; onChange: (v: string) =
       <select
         value={snapped}
         onChange={(e) => onChange(e.target.value)}
-        className="appearance-none w-36 rounded-xl border border-[var(--color-border)] bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] cursor-pointer transition-colors"
+        className="appearance-none w-36 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] pl-4 pr-9 py-2.5 text-sm font-medium text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] cursor-pointer transition-colors"
       >
         {TIME_OPTIONS.map(({ value: v, label }) => (
           <option key={v} value={v}>{label}</option>
@@ -246,7 +246,7 @@ function GeneralInfoEditor() {
             <select
               value={form.timezone}
               onChange={(e) => set("timezone", e.target.value)}
-              className="rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
             >
               {TIMEZONES.map((tz) => (
                 <option key={tz} value={tz}>{tz}</option>

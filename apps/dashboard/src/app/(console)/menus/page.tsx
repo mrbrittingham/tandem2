@@ -283,8 +283,8 @@ function MenuOrganizer() {
       {/* Page header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--console-text-primary)]">Menu Organizer</h1>
-          <p className="mt-0.5 text-sm text-[var(--console-text-secondary)]">
+          <h1 className="text-xl font-semibold text-[var(--color-text)]">Menu Organizer</h1>
+          <p className="mt-0.5 text-sm text-[var(--color-text-secondary)]">
             Review, edit, and save your restaurant menus. The AI assistant uses this data to answer menu questions.
           </p>
         </div>
@@ -292,7 +292,7 @@ function MenuOrganizer() {
           <button
             type="button"
             onClick={() => { setExtractOpen(true); setExtractError(null); }}
-            className="inline-flex items-center gap-1.5 rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--console-text-primary)] transition hover:bg-[var(--console-bg-hover)]"
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]  px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)]"
           >
             <SparkleIcon />
             Extract from website
@@ -300,7 +300,7 @@ function MenuOrganizer() {
           <button
             type="button"
             onClick={addSection}
-            className="inline-flex items-center gap-1.5 rounded-[var(--console-radius-md)] bg-[var(--console-primary)] px-3 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]"
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)]"
           >
             <PlusIcon />
             Add section
@@ -310,18 +310,18 @@ function MenuOrganizer() {
 
       {/* Extract panel */}
       {extractOpen && (
-        <div className="rounded-[var(--console-radius-lg)] border border-[var(--console-border)] bg-[var(--console-bg-card)] p-5 shadow-sm">
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-[var(--console-text-primary)]">Extract menu from website</h2>
-              <p className="mt-0.5 text-xs text-[var(--console-text-secondary)]">
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">Extract menu from website</h2>
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                 Enter a URL or paste menu text. New sections will be added without overwriting existing ones.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setExtractOpen(false)}
-              className="rounded-full p-1 text-[var(--console-text-tertiary)] hover:bg-[var(--console-bg-hover)]"
+              className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
               aria-label="Close"
             >
               <CloseIcon />
@@ -334,8 +334,8 @@ function MenuOrganizer() {
               onClick={() => setExtractMode("url")}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                 extractMode === "url"
-                  ? "bg-[var(--console-primary)] text-[var(--console-text-inverse)]"
-                  : "border border-[var(--console-border)] bg-white text-[var(--console-text-secondary)] hover:bg-[var(--console-bg-hover)]"
+                  ? "bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
+                  : "border border-[var(--color-border)] bg-[var(--color-surface)]  text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
               }`}
             >
               URL
@@ -345,8 +345,8 @@ function MenuOrganizer() {
               onClick={() => setExtractMode("text")}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                 extractMode === "text"
-                  ? "bg-[var(--console-primary)] text-[var(--console-text-inverse)]"
-                  : "border border-[var(--console-border)] bg-white text-[var(--console-text-secondary)] hover:bg-[var(--console-bg-hover)]"
+                  ? "bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
+                  : "border border-[var(--color-border)] bg-[var(--color-surface)]  text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]"
               }`}
             >
               Paste text
@@ -359,7 +359,7 @@ function MenuOrganizer() {
               placeholder="https://yourrestaurant.com/menu"
               value={extractUrl}
               onChange={(e) => setExtractUrl(e.target.value)}
-              className="w-full rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-white px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary)]/20"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]  px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
             />
           ) : (
             <textarea
@@ -367,7 +367,7 @@ function MenuOrganizer() {
               value={extractText}
               onChange={(e) => setExtractText(e.target.value)}
               rows={6}
-              className="w-full rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-white px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary)]/20 resize-y"
+              className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]  px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 resize-y"
             />
           )}
 
@@ -380,7 +380,7 @@ function MenuOrganizer() {
               type="button"
               onClick={() => void handleExtract()}
               disabled={extracting || (extractMode === "url" ? !extractUrl.trim() : !extractText.trim())}
-              className="inline-flex items-center gap-1.5 rounded-[var(--console-radius-md)] bg-[var(--console-primary)] px-4 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
             >
               {extracting ? "Extracting..." : "Extract menus"}
             </button>
@@ -390,19 +390,19 @@ function MenuOrganizer() {
 
       {/* Empty state */}
       {sections.length === 0 && !extractOpen && (
-        <div className="rounded-[var(--console-radius-lg)] border border-dashed border-[var(--console-border)] bg-white p-10 text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--console-bg-hover)]">
+        <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]  p-10 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-surface-hover)]">
             <MenuBookIcon />
           </div>
-          <p className="text-sm font-medium text-[var(--console-text-primary)]">No menus yet</p>
-          <p className="mt-1 text-xs text-[var(--console-text-secondary)]">
+          <p className="text-sm font-medium text-[var(--color-text)]">No menus yet</p>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             Extract from your website or add sections manually.
           </p>
           <div className="mt-4 flex justify-center gap-2">
             <button
               type="button"
               onClick={() => { setExtractOpen(true); setExtractError(null); }}
-              className="inline-flex items-center gap-1.5 rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--console-text-primary)] transition hover:bg-[var(--console-bg-hover)]"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]  px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:bg-[var(--color-surface-hover)]"
             >
               <SparkleIcon />
               Extract from website
@@ -410,7 +410,7 @@ function MenuOrganizer() {
             <button
               type="button"
               onClick={addSection}
-              className="inline-flex items-center gap-1.5 rounded-[var(--console-radius-md)] bg-[var(--console-primary)] px-3 py-2 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)]"
             >
               <PlusIcon />
               Add section
@@ -425,14 +425,14 @@ function MenuOrganizer() {
         return (
           <div
             key={section.id}
-            className="rounded-[var(--console-radius-lg)] border border-[var(--console-border)] bg-[var(--console-bg-card)] shadow-xs overflow-hidden"
+            className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs overflow-hidden"
           >
             {/* Section header */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-[var(--console-bg-card)]">
+            <div className="flex items-center gap-3 px-4 py-3 bg-[var(--color-surface)]">
               <button
                 type="button"
                 onClick={() => toggleExpand(section.id)}
-                className="flex-shrink-0 text-[var(--console-text-tertiary)] hover:text-[var(--console-text-primary)] transition"
+                className="flex-shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition"
                 aria-label={isExpanded ? "Collapse section" : "Expand section"}
               >
                 <ChevronIcon open={isExpanded} />
@@ -444,18 +444,18 @@ function MenuOrganizer() {
                   value={section.title}
                   onChange={(e) => updateSectionTitle(section.id, e.target.value)}
                   placeholder="Section name (e.g. Appetizers)"
-                  className="w-full bg-transparent text-sm font-semibold text-[var(--console-text-primary)] placeholder:font-normal placeholder:text-[var(--console-text-tertiary)] focus:outline-none"
+                  className="w-full bg-transparent text-sm font-semibold text-[var(--color-text)] placeholder:font-normal placeholder:text-[var(--color-text-muted)] focus:outline-none"
                 />
               </div>
 
-              <span className="flex-shrink-0 text-xs text-[var(--console-text-tertiary)]">
+              <span className="flex-shrink-0 text-xs text-[var(--color-text-muted)]">
                 {section.items.length} {section.items.length === 1 ? "item" : "items"}
               </span>
 
               <button
                 type="button"
                 onClick={() => deleteSection(section.id)}
-                className="flex-shrink-0 rounded-md p-1 text-[var(--console-text-tertiary)] hover:bg-red-50 hover:text-red-600 transition"
+                className="flex-shrink-0 rounded-md p-1 text-[var(--color-text-muted)] hover:bg-red-50 hover:text-red-600 transition"
                 aria-label="Delete section"
               >
                 <TrashIcon />
@@ -464,11 +464,11 @@ function MenuOrganizer() {
 
             {/* Section items */}
             {isExpanded && (
-              <div className="border-t border-[var(--console-border)]">
+              <div className="border-t border-[var(--color-border)]">
                 {section.items.length > 0 && (
                   <div>
                     {/* Column headers */}
-                    <div className="grid grid-cols-[2fr_1fr_2fr_1.5fr_2rem] gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-[var(--console-text-tertiary)] bg-[var(--console-bg-disabled)] border-b border-[var(--console-border)]">
+                    <div className="grid grid-cols-[2fr_1fr_2fr_1.5fr_2rem] gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)] bg-[var(--color-disabled-bg)] border-b border-[var(--color-border)]">
                       <span>Name</span>
                       <span>Price</span>
                       <span>Description</span>
@@ -480,40 +480,40 @@ function MenuOrganizer() {
                     {section.items.map((item) => (
                       <div
                         key={item.id}
-                        className="grid grid-cols-[2fr_1fr_2fr_1.5fr_2rem] gap-2 px-4 py-2 items-center border-b border-[var(--console-border)] last:border-b-0 hover:bg-[var(--console-bg-hover)]/40 group"
+                        className="grid grid-cols-[2fr_1fr_2fr_1.5fr_2rem] gap-2 px-4 py-2 items-center border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-surface-hover)]/40 group"
                       >
                         <input
                           type="text"
                           value={item.name}
                           onChange={(e) => updateItem(section.id, item.id, "name", e.target.value)}
                           placeholder="Item name"
-                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--console-primary)]/30 rounded-sm"
+                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface)]  focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]/30 rounded-sm"
                         />
                         <input
                           type="text"
                           value={item.price}
                           onChange={(e) => updateItem(section.id, item.id, "price", e.target.value)}
                           placeholder="$0.00"
-                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--console-primary)]/30 rounded-sm"
+                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface)]  focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]/30 rounded-sm"
                         />
                         <input
                           type="text"
                           value={item.description}
                           onChange={(e) => updateItem(section.id, item.id, "description", e.target.value)}
                           placeholder="Brief description"
-                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--console-text-secondary)] placeholder:text-[var(--console-text-tertiary)] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--console-primary)]/30 rounded-sm"
+                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface)]  focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]/30 rounded-sm"
                         />
                         <input
                           type="text"
                           value={item.dietaryNotes}
                           onChange={(e) => updateItem(section.id, item.id, "dietaryNotes", e.target.value)}
                           placeholder="GF, vegan, etc."
-                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--console-text-secondary)] placeholder:text-[var(--console-text-tertiary)] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--console-primary)]/30 rounded-sm"
+                          className="w-full rounded border-0 bg-transparent px-1 py-1 text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface)]  focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]/30 rounded-sm"
                         />
                         <button
                           type="button"
                           onClick={() => deleteItem(section.id, item.id)}
-                          className="rounded p-1 text-[var(--console-text-tertiary)] opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 transition"
+                          className="rounded p-1 text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 transition"
                           aria-label="Delete item"
                         >
                           <CloseIcon size={14} />
@@ -528,7 +528,7 @@ function MenuOrganizer() {
                   <button
                     type="button"
                     onClick={() => addItem(section.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[var(--console-text-tertiary)] hover:bg-[var(--console-bg-hover)] hover:text-[var(--console-text-primary)] transition"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] transition"
                   >
                     <PlusIcon size={12} />
                     Add item
@@ -545,7 +545,7 @@ function MenuOrganizer() {
         <button
           type="button"
           onClick={addSection}
-          className="inline-flex items-center gap-1.5 rounded-[var(--console-radius-md)] border border-dashed border-[var(--console-border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--console-text-secondary)] transition hover:border-[var(--console-primary)] hover:text-[var(--console-text-primary)]"
+          className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]  px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-[var(--color-primary)] hover:text-[var(--color-text)]"
         >
           <PlusIcon />
           Add section

@@ -78,6 +78,10 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// Tell Next.js which routes this proxy runs on.
+// Excludes _next internals and static files; the isStaticAsset() guard above
+// handles anything else that slips through. Without this config the proxy only
+// runs on page routes, not on /api/** routes — causing 401s from expired sessions.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
 };

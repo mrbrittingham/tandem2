@@ -15,7 +15,7 @@ import { SCHEMA_OUT_OF_DATE_CODE } from "@/lib/website-import/api-errors";
 import { buildThemeFromDraft } from "@/lib/website-import/apply";
 import { ColorSwatchPicker } from "./ColorSwatchPicker";
 import { TextInput } from "./TextInput";
-import { updateBusiness } from "@/lib/store-hooks";
+import { updateBusiness, useLocations } from "@/lib/store-hooks";
 import { usePreviewDock } from "@/components/PreviewDockContext";
 
 // ── Color helpers ────────────────────────────────────────────────────────────
@@ -352,6 +352,10 @@ export function WebsiteImportPanel({
   const businessSlug = (business.businessSlug ?? business.slug ?? "").trim();
   const initialLocationSlug = (business.locationSlug ?? business.slug ?? "").trim();
 
+  // Mock-store locations used as fallback when the Supabase API can't fetch locations
+  // (e.g., not authenticated locally, or business only exists in localStorage mock state).
+  const mockStoreLocations = useLocations();
+
   const [locationOptions, setLocationOptions] = useState<LocationOption[]>([]);
   const [selectedLocationSlug, setSelectedLocationSlug] = useState("");
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
@@ -444,11 +448,58 @@ export function WebsiteImportPanel({
         }
 
         const options = payload.locations ?? [];
+
+        // If the API returns no results (e.g. user running in mock/dev mode without
+        // matching Supabase records), fall back to mock-store locations so the dropdown
+        // is usable in local development.
+        if (options.length === 0 && mockStoreLocations.length > 0) {
+          const fallback = mockStoreLocations
+            .filter((loc) => {
+              const locBiz = (loc.businessSlug ?? "").toLowerCase();
+              const biz = businessSlug.toLowerCase();
+              return locBiz === biz || locBiz.startsWith(biz) || biz.startsWith(locBiz);
+            })
+            .map((loc) => ({
+              id: loc.id,
+              businessId: loc.businessSlug ?? businessSlug,
+              name: loc.locationName ?? loc.name ?? loc.businessName ?? "Location",
+              slug: loc.locationSlug ?? loc.slug ?? businessSlug,
+            }));
+          if (fallback.length > 0) {
+            setLocationOptions(fallback);
+            const preferred = fallback.find((o) => o.slug === initialLocationSlug) ?? fallback[0];
+            setSelectedLocationSlug(preferred?.slug ?? "");
+            return;
+          }
+        }
+
         setLocationOptions(options);
         const preferred = options.find((entry) => entry.slug === initialLocationSlug) ?? options[0];
         setSelectedLocationSlug(preferred?.slug ?? "");
       } catch {
         if (!cancelled) {
+          // On API error, try to fall back to mock-store locations so the UI is not broken
+          // in local dev environments where Supabase auth is not set up.
+          if (mockStoreLocations.length > 0) {
+            const fallback = mockStoreLocations
+              .filter((loc) => {
+                const locBiz = (loc.businessSlug ?? "").toLowerCase();
+                const biz = businessSlug.toLowerCase();
+                return locBiz === biz || locBiz.startsWith(biz) || biz.startsWith(locBiz);
+              })
+              .map((loc) => ({
+                id: loc.id,
+                businessId: loc.businessSlug ?? businessSlug,
+                name: loc.locationName ?? loc.name ?? loc.businessName ?? "Location",
+                slug: loc.locationSlug ?? loc.slug ?? businessSlug,
+              }));
+            if (fallback.length > 0) {
+              setLocationOptions(fallback);
+              const preferred = fallback.find((o) => o.slug === initialLocationSlug) ?? fallback[0];
+              setSelectedLocationSlug(preferred?.slug ?? "");
+              return;
+            }
+          }
           setLocationOptions([]);
           setSelectedLocationSlug("");
           setError("Could not load locations for website scan.");
@@ -556,12 +607,15 @@ export function WebsiteImportPanel({
       });
 
       const payload = (await response.json().catch(() => ({}))) as StartImportResponse;
+      if (response.status === 401) {
+        throw new Error("Your session expired. Please refresh the page.");
+      }
       if (!response.ok || !payload.runId) {
         throw new Error(getFriendlyImportError(payload.error, payload.code));
       }
 
       setActiveRunId(payload.runId);
-      setSuccess("Scan started. Tandem is classifying pages and extracting structured restaurant knowledge.");
+      setSuccess("Scan started. We're reading your website and pulling in menus, hours, events, and more.");
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : "Scan failed";
       setError(message);
@@ -611,6 +665,7 @@ export function WebsiteImportPanel({
         }
 
         if (runPayload.run.status === "failed") {
+          setSuccess(null);
           setError(getFriendlyImportError(runPayload.run.error ?? "Scan failed", runPayload.run.errorCode ?? undefined));
           setIsLoading(false);
           setActiveRunId(null);
@@ -618,6 +673,7 @@ export function WebsiteImportPanel({
       } catch (pollError) {
         if (!cancelled) {
           const message = pollError instanceof Error ? pollError.message : "Failed to load scan status";
+          setSuccess(null);
           setError(message);
           setIsLoading(false);
           setActiveRunId(null);
@@ -863,18 +919,18 @@ export function WebsiteImportPanel({
   return (
     <div className="space-y-5">
       {/* Scan Controls */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Scan Website</h3>
-        <p className="mt-1 text-sm text-slate-600">Tandem classifies pages first, then extracts structured restaurant knowledge by page type.</p>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Scan Website</h3>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">We'll read your website and extract your menu, events, hours, and more — automatically.</p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Location</span>
+            <span className="mb-1 block font-medium text-[var(--color-text-secondary)]">Location</span>
             <select
               value={selectedLocationSlug}
               onChange={(event) => setSelectedLocationSlug(event.target.value)}
               disabled={isLoadingLocations || locationOptions.length === 0}
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-slate-900"
+              className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[var(--color-text)]"
             >
               {locationOptions.length === 0 ? <option value="">No locations available</option> : null}
               {locationOptions.map((location) => (
@@ -882,7 +938,7 @@ export function WebsiteImportPanel({
               ))}
             </select>
           </label>
-          <button type="button" onClick={runImport} disabled={isLoading || Boolean(locationGuardError)} className="rounded-2xl bg-[var(--console-primary)] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="button" onClick={runImport} disabled={isLoading || Boolean(locationGuardError)} className="rounded-2xl bg-[var(--color-primary)] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
             {isLoading ? "Scanning..." : "Scan website"}
           </button>
         </div>
@@ -891,33 +947,33 @@ export function WebsiteImportPanel({
           <TextInput label="Website URL" value={url} onChange={setUrl} placeholder="https://example.com" />
         </div>
 
-        {run ? <p className="mt-3 text-xs text-slate-500">Last scan: {formatDate(run.finishedAt ?? run.createdAt)} ({run.status})</p> : null}
-        {run ? <p className="mt-1 text-xs text-slate-500">Pages scanned: {run.pages.length} • Signals: {run.signals.emails.length + run.signals.phones.length + run.signals.addresses.length + run.signals.hours.length + run.signals.bookingLinks.length}</p> : null}
+        {run ? <p className="mt-3 text-xs text-[var(--color-text-muted)]">Last scan: {formatDate(run.finishedAt ?? run.createdAt)} ({run.status})</p> : null}
+        {run ? <p className="mt-1 text-xs text-[var(--color-text-muted)]">Pages scanned: {run.pages.length} • Signals: {run.signals.emails.length + run.signals.phones.length + run.signals.addresses.length + run.signals.hours.length + run.signals.bookingLinks.length}</p> : null}
         {locationGuardError ? <p className="mt-2 text-sm text-amber-700">{locationGuardError}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
         {success ? <p className="mt-2 text-sm text-emerald-600">{success}</p> : null}
       </div>
 
       {/* Page Type Breakdown */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Detected Page Types</h3>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Detected Page Types</h3>
         {!draft ? (
-          <p className="mt-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">Run a scan to see page classification.</p>
+          <p className="mt-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">Run a scan to see page classification.</p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
             {pageTypeCounts.map(([pageType, count]) => (
-              <span key={pageType} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{labelPageType(pageType)}: {count}</span>
+              <span key={pageType} className="rounded-full bg-[var(--color-surface-hover)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]">{labelPageType(pageType)}: {count}</span>
             ))}
           </div>
         )}
       </div>
 
       {/* Detected Events — collapsible cards */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Detected Events</h3>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Detected Events</h3>
         <div className="mt-3 space-y-2">
           {(draft?.restaurantKnowledge.events ?? []).length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No events detected.</p>
+            <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">No events detected.</p>
           ) : draft?.restaurantKnowledge.events.map((event) => (
             <CollapsibleEventCard
               key={event.id}
@@ -930,22 +986,22 @@ export function WebsiteImportPanel({
       </div>
 
       {/* Detected Menus — collapsible cards + manual import */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Detected Menus</h3>
+          <h3 className="text-lg font-semibold text-[var(--color-text)]">Detected Menus</h3>
           {draft && !menuImportMode ? (
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => { setMenuImportMode("url"); setMenuImportInput(""); }}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                className="rounded-lg bg-[var(--color-surface-hover)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
               >
                 Import from URL
               </button>
               <button
                 type="button"
                 onClick={() => { setMenuImportMode("text"); setMenuImportInput(""); }}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                className="rounded-lg bg-[var(--color-surface-hover)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
               >
                 Paste menu text
               </button>
@@ -954,7 +1010,7 @@ export function WebsiteImportPanel({
         </div>
 
         {menuImportMode ? (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-4 space-y-3">
             {menuImportMode === "url" ? (
               <TextInput
                 label="Menu page URL"
@@ -964,9 +1020,9 @@ export function WebsiteImportPanel({
               />
             ) : (
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Paste menu text</label>
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text-secondary)]">Paste menu text</label>
                 <textarea
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary-light)]"
                   rows={6}
                   placeholder="Paste your menu content here..."
                   value={menuImportInput}
@@ -986,7 +1042,7 @@ export function WebsiteImportPanel({
               <button
                 type="button"
                 onClick={() => { setMenuImportMode(null); setMenuImportInput(""); }}
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
+                className="rounded-lg bg-[var(--color-surface-hover)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
               >
                 Cancel
               </button>
@@ -996,7 +1052,7 @@ export function WebsiteImportPanel({
 
         <div className="mt-3 space-y-2">
           {(draft?.restaurantKnowledge.menuSections ?? []).length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No menu sections detected.</p>
+            <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">No menu sections detected.</p>
           ) : draft?.restaurantKnowledge.menuSections.map((section) => (
             <CollapsibleMenuCard
               key={section.id}
@@ -1009,35 +1065,35 @@ export function WebsiteImportPanel({
       </div>
 
       {/* Detected Reservations */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Detected Reservations</h3>
-        <p className="mt-2 text-sm text-slate-700">{draft?.restaurantKnowledge.reservations.instructions || "No reservation guidance detected."}</p>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Detected Reservations</h3>
+        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{draft?.restaurantKnowledge.reservations.instructions || "No reservation guidance detected."}</p>
         {draft?.restaurantKnowledge.reservations.bookingUrl ? (
-          <p className="mt-1 text-xs text-slate-600">Booking URL: {draft.restaurantKnowledge.reservations.bookingUrl}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">Booking URL: {draft.restaurantKnowledge.reservations.bookingUrl}</p>
         ) : null}
         {draft?.restaurantKnowledge.reservations.platforms?.length ? (
-          <p className="mt-1 text-xs text-slate-600">Platforms: {draft.restaurantKnowledge.reservations.platforms.join(", ")}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">Platforms: {draft.restaurantKnowledge.reservations.platforms.join(", ")}</p>
         ) : null}
       </div>
 
       {/* Detected Memberships */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Detected Memberships</h3>
-        <p className="mt-2 text-sm text-slate-700">{draft?.restaurantKnowledge.memberships.benefits || "No membership information detected."}</p>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Detected Memberships</h3>
+        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{draft?.restaurantKnowledge.memberships.benefits || "No membership information detected."}</p>
       </div>
 
       {/* Detected Policies */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Detected Policies</h3>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Detected Policies</h3>
         <div className="mt-3 space-y-2">
           {(draft?.policies ?? []).length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No policies detected.</p>
+            <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">No policies detected.</p>
           ) : draft?.policies.map((policy) => (
-            <article key={policy.id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <article key={policy.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-slate-900">{policy.title}</p>
-                  <p className="text-sm text-slate-700">{policy.summary}</p>
+                  <p className="font-semibold text-[var(--color-text)]">{policy.title}</p>
+                  <p className="text-sm text-[var(--color-text-secondary)]">{policy.summary}</p>
                 </div>
                 <button type="button" onClick={() => setPolicyInclude(policy.id, !policy.include)} className={`shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold ${policy.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{policy.include ? "Included" : "Excluded"}</button>
               </div>
@@ -1047,9 +1103,9 @@ export function WebsiteImportPanel({
       </div>
 
       {/* FAQ Suggestions */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">FAQ Suggestions</h3>
-        <p className="mt-1 text-sm text-slate-500">Generated from extracted knowledge. Toggle to include or exclude.</p>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">FAQ Suggestions</h3>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">Generated from extracted knowledge. Toggle to include or exclude.</p>
         <FaqList
           faqs={draft?.faqs ?? []}
           onToggleInclude={(id) => setFaqInclude(id, !(draft?.faqs.find((f) => f.id === id)?.include))}
@@ -1076,21 +1132,21 @@ export function WebsiteImportPanel({
         return (
           <div className={`rounded-2xl border p-5 shadow-sm shadow-slate-900/5 ${
             colorSchemeAccepted === true ? "border-emerald-300 bg-emerald-50" :
-            colorSchemeAccepted === false ? "border-slate-200 bg-slate-50 opacity-60" :
+            colorSchemeAccepted === false ? "border-[var(--color-border)] bg-[var(--color-surface-hover)] opacity-60" :
             "border-amber-200 bg-amber-50"
           }`}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">
+                <h3 className="text-lg font-semibold text-[var(--color-text)]">
                   Detected Brand Colors
                   {run?.finishedAt ? (
-                    <span className="ml-2 text-xs font-normal text-slate-400" title={formatDate(run.finishedAt)}>
+                <span className="ml-2 text-xs font-normal text-[var(--color-text-muted)]" title={formatDate(run.finishedAt)}>
                       from {formatRelativeAge(run.finishedAt)}
                     </span>
                   ) : null}
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Colors extracted from your website. Adjust swatches if needed, then accept to apply. The Appearance tab shows your <em>saved</em> widget theme — changes only take effect there after you click &quot;Apply structured knowledge&quot; below.
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                  Colors extracted from your website. Adjust swatches if needed, then accept to apply. The Appearance tab shows your <em>saved</em> widget theme — changes only take effect there after you click &quot;Apply scan results&quot; below.
                 </p>
               </div>
               <div className="flex shrink-0 gap-2 pt-0.5">
@@ -1099,8 +1155,8 @@ export function WebsiteImportPanel({
                   onClick={() => setColorSchemeAccepted(false)}
                   className={`rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors ${
                     colorSchemeAccepted === false
-                      ? "border-slate-400 bg-slate-200 text-slate-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      ? "border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]"
+                      : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]"
                   }`}
                 >
                   Skip
@@ -1111,7 +1167,7 @@ export function WebsiteImportPanel({
                   className={`rounded-xl border px-3 py-1.5 text-sm font-semibold transition-colors ${
                     colorSchemeAccepted === true
                       ? "border-emerald-400 bg-emerald-600 text-white"
-                      : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
+                      : "border-emerald-300 bg-[var(--color-surface)] text-emerald-700 hover:bg-emerald-50"
                   }`}
                 >
                   Apply colors
@@ -1132,23 +1188,23 @@ export function WebsiteImportPanel({
                 return (
                 <div key={swatch.label} className="space-y-1.5">
                   <div>
-                    <p className="text-xs font-semibold text-slate-700">{swatch.label}</p>
-                    {meta && <p className="text-[10px] text-slate-400">{meta.role}</p>}
+                    <p className="text-xs font-semibold text-[var(--color-text-secondary)]">{swatch.label}</p>
+                    {meta && <p className="text-[10px] text-[var(--color-text-muted)]">{meta.role}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     <div
-                      className="h-10 w-10 shrink-0 rounded-full border-2 border-white shadow-md ring-1 ring-slate-200"
+                      className="h-10 w-10 shrink-0 rounded-full border-2 border-[var(--color-surface)] shadow-md ring-1 ring-[var(--color-border)]"
                       style={{ background: swatch.current ?? undefined }}
                       title={`Current: ${swatch.current ?? "unset"}`}
                     />
-                    <svg className="h-3 w-3 shrink-0 text-slate-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6h8m-2.5-2.5L10 6l-2.5 2.5" /></svg>
+                    <svg className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6h8m-2.5-2.5L10 6l-2.5 2.5" /></svg>
                     <ColorSwatchPicker
                       value={activeColor}
                       label={swatch.label}
                       onChange={(hex) => setColorOverrides((prev) => ({ ...prev, [swatch.label]: hex }))}
                     />
                   </div>
-                  <p className="font-mono text-[10px] text-slate-400">{activeColor}</p>
+                  <p className="font-mono text-[10px] text-[var(--color-text-muted)]">{activeColor}</p>
                 </div>
                 );
               })}
@@ -1158,19 +1214,19 @@ export function WebsiteImportPanel({
               <p className="mt-3 text-xs text-amber-700">Accept or skip — the preview panel reflects these colors live. The Appearance tab only updates after you apply.</p>
             )}
             {colorSchemeAccepted === true && (
-              <p className="mt-3 text-xs text-emerald-700">Colors will be applied when you click &quot;Apply structured knowledge&quot; below.</p>
+              <p className="mt-3 text-xs text-emerald-700">Colors will be applied when you click &quot;Apply scan results&quot; below.</p>
             )}
           </div>
         );
       })()}
 
       {/* Review & Apply */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5">
-        <h3 className="text-lg font-semibold text-slate-900">Review & Apply</h3>
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-[var(--color-text)]">Review &amp; Apply</h3>
         <div className="mt-4 flex flex-wrap justify-end gap-3">
-          <button type="button" onClick={() => setDraft(null)} className="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300">Clear draft</button>
-          <button type="button" onClick={applyImport} disabled={isApplying || !draft} className="rounded-2xl bg-[var(--console-primary)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-            {isApplying ? "Applying..." : "Apply structured knowledge"}
+          <button type="button" onClick={() => setDraft(null)} className="rounded-2xl border border-[var(--color-border)] px-5 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)]">Clear draft</button>
+          <button type="button" onClick={applyImport} disabled={isApplying || !draft} className="rounded-2xl bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+            {isApplying ? "Applying..." : "Apply scan results"}
           </button>
         </div>
       </div>
@@ -1194,33 +1250,33 @@ function CollapsibleEventCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <article className={`rounded-xl border bg-slate-50/70 p-3 ${event.include ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+    <article className={`rounded-xl border bg-[var(--color-surface-hover)] p-3 ${event.include ? "border-[var(--color-border)]" : "border-[var(--color-border)] opacity-60"}`}>
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <svg className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+          <svg className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
           <div className="min-w-0">
-            <p className="truncate font-semibold text-slate-900">{event.title}</p>
-            <p className="text-xs text-slate-500">{event.date ?? "Date unknown"}{event.time ? ` • ${event.time}` : ""}{event.location ? ` • ${event.location}` : ""}</p>
+            <p className="truncate font-semibold text-[var(--color-text)]">{event.title}</p>
+            <p className="text-xs text-[var(--color-text-muted)]">{event.date ?? "Date unknown"}{event.time ? ` • ${event.time}` : ""}{event.location ? ` • ${event.location}` : ""}</p>
           </div>
         </button>
         <div className="flex shrink-0 items-center gap-1.5">
-          <button type="button" onClick={onToggleInclude} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${event.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{event.include ? "Included" : "Excluded"}</button>
+          <button type="button" onClick={onToggleInclude} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${event.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[var(--color-border)] text-[var(--color-text-muted)]"}`}>{event.include ? "Included" : "Excluded"}</button>
           <button type="button" onClick={onDelete} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50" title="Remove event">✕</button>
         </div>
       </div>
 
       {expanded ? (
-        <div className="mt-2 space-y-1 border-t border-slate-200 pt-2 text-sm text-slate-700">
+        <div className="mt-2 space-y-1 border-t border-[var(--color-border)] pt-2 text-sm text-[var(--color-text-secondary)]">
           {event.description ? <p>{event.description}</p> : null}
-          {event.category ? <p className="text-xs text-slate-500">Category: {event.category}</p> : null}
-          {event.pricing ? <p className="text-xs text-slate-500">Price: {event.pricing}</p> : null}
-          {event.bookingInfo ? <p className="text-xs text-slate-500">Booking notes: {event.bookingInfo}</p> : null}
-          {event.bookingUrl ? <p className="text-xs text-slate-500">Booking URL: <a href={event.bookingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{event.bookingUrl}</a></p> : null}
-          {event.sourceUrl ? <p className="text-xs text-slate-500">Source: <a href={event.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{event.sourceUrl}</a></p> : null}
+          {event.category ? <p className="text-xs text-[var(--color-text-muted)]">Category: {event.category}</p> : null}
+          {event.pricing ? <p className="text-xs text-[var(--color-text-muted)]">Price: {event.pricing}</p> : null}
+          {event.bookingInfo ? <p className="text-xs text-[var(--color-text-muted)]">Booking notes: {event.bookingInfo}</p> : null}
+          {event.bookingUrl ? <p className="text-xs text-[var(--color-text-muted)]">Booking URL: <a href={event.bookingUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] underline">{event.bookingUrl}</a></p> : null}
+          {event.sourceUrl ? <p className="text-xs text-[var(--color-text-muted)]">Source: <a href={event.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] underline">{event.sourceUrl}</a></p> : null}
         </div>
       ) : null}
     </article>
@@ -1245,40 +1301,40 @@ function CollapsibleMenuCard({
   const previewItems = section.items.slice(0, 3).map((i) => i.name).join(", ");
 
   return (
-    <article className={`rounded-xl border bg-slate-50/70 p-3 ${section.include ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+    <article className={`rounded-xl border bg-[var(--color-surface-hover)] p-3 ${section.include ? "border-[var(--color-border)]" : "border-[var(--color-border)] opacity-60"}`}>
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <svg className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
+          <svg className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${expanded ? "rotate-90" : ""}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" /></svg>
           <div className="min-w-0">
-            <p className="truncate font-semibold text-slate-900">{section.title}</p>
-            <p className="truncate text-xs text-slate-500">{itemCount} item{itemCount !== 1 ? "s" : ""}{previewItems ? ` — ${previewItems}` : ""}</p>
+            <p className="truncate font-semibold text-[var(--color-text)]">{section.title}</p>
+            <p className="truncate text-xs text-[var(--color-text-muted)]">{itemCount} item{itemCount !== 1 ? "s" : ""}{previewItems ? ` — ${previewItems}` : ""}</p>
           </div>
         </button>
         <div className="flex shrink-0 items-center gap-1.5">
-          <button type="button" onClick={onToggleInclude} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${section.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{section.include ? "Included" : "Excluded"}</button>
+          <button type="button" onClick={onToggleInclude} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${section.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[var(--color-border)] text-[var(--color-text-muted)]"}`}>{section.include ? "Included" : "Excluded"}</button>
           <button type="button" onClick={onDelete} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50" title="Remove menu">✕</button>
         </div>
       </div>
 
       {expanded ? (
-        <div className="mt-2 border-t border-slate-200 pt-2">
+        <div className="mt-2 border-t border-[var(--color-border)] pt-2">
           <div className="space-y-1">
             {section.items.map((item) => (
               <div key={item.id} className="flex items-baseline justify-between gap-2 text-sm">
                 <div className="min-w-0">
-                  <span className="font-medium text-slate-800">{item.name}</span>
-                  {item.description ? <span className="ml-1 text-slate-500">— {item.description}</span> : null}
+                  <span className="font-medium text-[var(--color-text)]">{item.name}</span>
+                  {item.description ? <span className="ml-1 text-[var(--color-text-muted)]">— {item.description}</span> : null}
                 </div>
-                {item.price ? <span className="shrink-0 font-medium text-slate-600">{item.price}</span> : null}
+                {item.price ? <span className="shrink-0 font-medium text-[var(--color-text-secondary)]">{item.price}</span> : null}
               </div>
             ))}
           </div>
           {section.sourceUrl ? (
-            <p className="mt-2 text-xs text-slate-500">Source: <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{section.sourceUrl}</a></p>
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">Source: <a href={section.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] underline">{section.sourceUrl}</a></p>
           ) : null}
         </div>
       ) : null}
@@ -1306,7 +1362,7 @@ function FaqList({
   if (faqs.length === 0) {
     return (
       <div className="mt-3">
-        <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">No FAQ suggestions detected.</p>
+        <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-hover)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">No FAQ suggestions detected.</p>
       </div>
     );
   }
@@ -1314,23 +1370,23 @@ function FaqList({
   return (
     <div className="mt-3 space-y-2">
       {visible.map((faq) => (
-        <article key={faq.id} className={`rounded-xl border bg-slate-50/70 p-3 ${faq.include ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+        <article key={faq.id} className={`rounded-xl border bg-[var(--color-surface-hover)] p-3 ${faq.include ? "border-[var(--color-border)]" : "border-[var(--color-border)] opacity-60"}`}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-900">{faq.question}</p>
-              <p className="mt-0.5 text-sm text-slate-700">{faq.answer}</p>
+              <p className="font-semibold text-[var(--color-text)]">{faq.question}</p>
+              <p className="mt-0.5 text-sm text-[var(--color-text-secondary)]">{faq.answer}</p>
               <div className="mt-1 flex items-center gap-3">
                 {faq.sourceUrl ? (
-                  <span className="text-xs text-slate-400">Source: {new URL(faq.sourceUrl).pathname}</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">Source: {new URL(faq.sourceUrl).pathname}</span>
                 ) : null}
                 {faq.confidence != null ? (
-                  <span className="text-xs text-slate-400">{Math.round(faq.confidence * 100)}% confidence</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">{Math.round(faq.confidence * 100)}% confidence</span>
                 ) : null}
                 {faq.lowConfidence ? <span className="text-xs text-amber-600">Low confidence</span> : null}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <button type="button" onClick={() => onToggleInclude(faq.id)} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${faq.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-500"}`}>{faq.include ? "Included" : "Excluded"}</button>
+              <button type="button" onClick={() => onToggleInclude(faq.id)} className={`rounded-lg border px-2 py-1 text-xs font-semibold ${faq.include ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[var(--color-border)] text-[var(--color-text-muted)]"}`}>{faq.include ? "Included" : "Excluded"}</button>
               <button type="button" onClick={() => onDelete(faq.id)} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50" title="Remove FAQ">✕</button>
             </div>
           </div>
@@ -1340,7 +1396,7 @@ function FaqList({
         <button
           type="button"
           onClick={() => setShowAll(!showAll)}
-          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+          className="text-sm font-medium text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]"
         >
           {showAll ? "Show fewer" : `Show all ${faqs.length} FAQs`}
         </button>

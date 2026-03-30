@@ -75,10 +75,10 @@ function ChatBubble({
   return (
     <div className={`flex ${isAssistant ? "justify-start" : "justify-end"}`}>
       <div
-        className={`max-w-[90%] rounded-[var(--console-radius-md)] px-4 py-3 ${
+        className={`max-w-[90%] rounded-[var(--radius-md)] px-4 py-3 ${
           isAssistant
-            ? "bg-[var(--console-bg-card)] border border-[var(--console-border)] text-[var(--console-text-primary)]"
-            : "bg-[var(--console-primary)] text-[var(--console-text-inverse)]"
+            ? "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)]"
+            : "bg-[var(--color-primary)] text-[var(--color-text-inverse)]"
         }`}
       >
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
@@ -87,7 +87,7 @@ function ChatBubble({
         {message.statusLines && message.statusLines.length > 0 ? (
           <ul className="mt-2 space-y-0.5">
             {message.statusLines.map((line, i) => (
-              <li key={i} className="text-xs text-[var(--console-text-secondary)]">
+              <li key={i} className="text-xs text-[var(--color-text-secondary)]">
                 {line}
               </li>
             ))}
@@ -201,49 +201,49 @@ function BusinessSetupForm({
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
           Getting started
         </p>
-        <p className="mt-1 text-lg font-semibold text-[var(--console-text-primary)]">
+        <p className="mt-1 text-lg font-semibold text-[var(--color-text)]">
           Tell me about your restaurant
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block text-sm text-[var(--console-text-secondary)]">
+        <label className="block text-sm text-[var(--color-text-secondary)]">
           <span className="mb-1 block font-medium">Restaurant name</span>
           <input
             required
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
-            className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)]"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]"
             placeholder="Windmill Creek Winery"
           />
         </label>
 
-        <label className="block text-sm text-[var(--console-text-secondary)]">
+        <label className="block text-sm text-[var(--color-text-secondary)]">
           <span className="mb-1 block font-medium">Location name</span>
           <input
             required
             value={locationName}
             onChange={(e) => setLocationName(e.target.value)}
-            className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)]"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]"
             placeholder="Berlin"
           />
         </label>
 
-        <label className="block text-sm text-[var(--console-text-secondary)]">
+        <label className="block text-sm text-[var(--color-text-secondary)]">
           <span className="mb-1 block font-medium">Address (optional)</span>
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            className="w-full rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)]"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]"
             placeholder="11206 Worcester Hwy, Berlin, MD 21811"
           />
         </label>
 
         {error ? (
-          <p className="rounded-[var(--console-radius-sm)] bg-[var(--console-error-light)] px-3 py-2 text-sm text-[var(--console-error)]">
+          <p className="rounded-[var(--radius-sm)] bg-[var(--color-danger-light)] px-3 py-2 text-sm text-[var(--color-danger)]">
             {error}
           </p>
         ) : null}
@@ -251,7 +251,7 @@ function BusinessSetupForm({
         <button
           type="submit"
           disabled={!canSubmit || isSubmitting}
-          className="w-full rounded-[var(--console-radius-sm)] bg-[var(--console-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? "Setting up…" : "Get started →"}
         </button>
@@ -269,17 +269,17 @@ function CompletionPanel({ onContinue }: { onContinue: () => void }) {
         🎉
       </div>
       <div>
-        <p className="text-lg font-semibold text-[var(--console-text-primary)]">
+        <p className="text-lg font-semibold text-[var(--color-text)]">
           Your chatbot is ready!
         </p>
-        <p className="mt-1 text-sm text-[var(--console-text-secondary)]">
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Head to your dashboard to see it in action and keep configuring.
         </p>
       </div>
       <button
         type="button"
         onClick={onContinue}
-        className="rounded-[var(--console-radius-sm)] bg-[var(--console-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)]"
+        className="rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)]"
       >
         → Go to my dashboard
       </button>
@@ -496,7 +496,7 @@ export default function OnboardingPage() {
         return (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <div className="text-5xl mb-4">💬</div>
-            <p className="text-sm text-[var(--console-text-secondary)] max-w-xs">
+            <p className="text-sm text-[var(--color-text-secondary)] max-w-xs">
               Your chatbot preview will appear here once setup is complete.
             </p>
           </div>
@@ -564,7 +564,7 @@ export default function OnboardingPage() {
         return (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <div className="text-5xl mb-4">📞</div>
-            <p className="text-sm text-[var(--console-text-secondary)] max-w-xs">
+            <p className="text-sm text-[var(--color-text-secondary)] max-w-xs">
               Add your team&apos;s contact info so guests can always reach a person when they need one.
             </p>
           </div>
@@ -581,19 +581,19 @@ export default function OnboardingPage() {
   return (
     <main className="flex min-h-screen bg-[var(--bg)]">
       {/* ── Left column: AI chat ────────────────────────────────────────── */}
-      <div className="flex w-full flex-col border-r border-[var(--console-border)] bg-[var(--console-bg)] md:w-1/2 lg:w-[45%]">
+      <div className="flex w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] md:w-1/2 lg:w-[45%]">
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-[var(--console-border)] px-6 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--console-primary)] text-sm font-bold text-white">
+        <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-6 py-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-primary)] text-sm font-bold text-white">
             T
           </div>
           <div>
-            <p className="text-sm font-semibold text-[var(--console-text-primary)]">Tandem</p>
-            <p className="text-xs text-[var(--console-text-tertiary)]">Restaurant AI Setup</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">Tandem</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Restaurant AI Setup</p>
           </div>
           <a
             href="/overview"
-            className="ml-auto text-xs text-[var(--console-text-tertiary)] hover:text-[var(--console-text-secondary)]"
+            className="ml-auto text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
           >
             Skip to dashboard
           </a>
@@ -630,7 +630,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* ── Right column: contextual panel ─────────────────────────────── */}
-      <div className="hidden flex-col bg-[var(--console-bg-card)] md:flex md:w-1/2 lg:w-[55%]">
+      <div className="hidden flex-col bg-[var(--color-surface)] md:flex md:w-1/2 lg:w-[55%]">
         <div className="flex-1 overflow-y-auto">
           {rightPanel}
         </div>

@@ -2,6 +2,8 @@
 /* Developer Handoff Specification */
 
 :root {
+  color-scheme: light;
+
   --console-primary: #2563EB;
   --console-primary-hover: #1D4ED8;
   --console-primary-pressed: #1e40af;

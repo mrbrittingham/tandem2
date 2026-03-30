@@ -64,15 +64,15 @@ function ChatbotTabs() {
     <div className="space-y-0">
       {/* Page header */}
       <header className="mb-6">
-        <h1 className="text-3xl font-semibold text-[var(--console-text-primary)]">Chatbot</h1>
-        <p className="mt-2 text-sm text-[var(--console-text-tertiary)]">
+        <h1 className="text-3xl font-semibold text-[var(--color-text)]">Chatbot</h1>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
           Configure knowledge, handoff rules, behavior, and appearance — all in one place.
         </p>
       </header>
 
       {/* Tab bar */}
       <div
-        className="mb-2 flex gap-1 rounded-xl border border-[var(--console-border)] bg-[var(--console-bg-hover)] p-1"
+        className="mb-2 flex gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-1"
         role="tablist"
         aria-label="Chatbot configuration tabs"
       >
@@ -87,8 +87,8 @@ function ChatbotTabs() {
               onClick={() => handleTabClick(tab.key)}
               className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-white text-[var(--console-text-primary)] shadow-sm"
-                  : "text-[var(--console-text-secondary)] hover:text-[var(--console-text-primary)]"
+                  ? "bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
               }`}
             >
               <span className={`${isActive ? "text-[var(--color-primary)]" : ""}`}>
@@ -96,7 +96,7 @@ function ChatbotTabs() {
               </span>
               <span>{tab.label}</span>
               {isActive && (
-                <span className="text-[10px] font-normal text-[var(--console-text-tertiary)] hidden sm:block">{tab.description}</span>
+                <span className="text-[10px] font-normal text-[var(--color-text-muted)] hidden sm:block">{tab.description}</span>
               )}
             </button>
           );
@@ -105,7 +105,7 @@ function ChatbotTabs() {
 
       {/* Active tab description */}
       {activeTabMeta && (
-        <p className="mb-5 px-1 text-xs text-[var(--console-text-tertiary)] sm:hidden">{activeTabMeta.description}</p>
+        <p className="mb-5 px-1 text-xs text-[var(--color-text-muted)] sm:hidden">{activeTabMeta.description}</p>
       )}
 
       {/* Tab content */}
@@ -121,7 +121,7 @@ function ChatbotTabs() {
 
 export default function ChatbotPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-16 text-sm text-[var(--console-text-secondary)]">Loading…</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-16 text-sm text-[var(--color-text-secondary)]">Loading…</div>}>
       <ChatbotTabs />
     </Suspense>
   );

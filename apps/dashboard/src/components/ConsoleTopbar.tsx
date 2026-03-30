@@ -42,8 +42,8 @@ function NavTab({
 }) {
   const base =
     "flex items-center gap-1.5 px-3 h-[52px] text-sm font-medium border-b-2 transition-colors whitespace-nowrap";
-  const activeClass = "border-white text-white";
-  const inactiveClass = "border-transparent text-white/55 hover:text-white/85";
+  const activeClass = "border-[var(--color-primary)] text-[var(--color-primary)]";
+  const inactiveClass = "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text)]";
 
   if (!href && onClick) {
     return (
@@ -92,13 +92,13 @@ export function ConsoleTopbar({ leading }: Props) {
 
   return (
     <header
-      className="sticky top-0 z-10 flex shrink-0 items-center border-b border-white/8"
-      style={{ background: "var(--color-sidebar-bg-gradient)", minHeight: "52px" }}
+      className="sticky top-0 z-10 flex shrink-0 items-center border-b border-[var(--color-border)] bg-[var(--color-surface)]"
+      style={{ minHeight: "52px" }}
     >
       {/* Mobile hamburger */}
       <button
         type="button"
-        className="flex lg:hidden ml-3 h-8 w-8 items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+        className="flex lg:hidden ml-3 h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
         aria-label="Open navigation"
         onClick={toggleMobile}
       >
@@ -165,7 +165,8 @@ export function ConsoleTopbar({ leading }: Props) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded-full ring-2 ring-white/15"
+                className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/30 rounded-full ring-2 ring-[var(--color-border)]"
+
               >
                 <Avatar initials="TM" size="sm" />
               </button>

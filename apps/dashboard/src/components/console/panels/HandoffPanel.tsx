@@ -39,7 +39,7 @@ export function HandoffPanel({ location, onPromptChip }: Props) {
   const isOnline = handoff?.status === "online";
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-white p-5">
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-[var(--color-text)]">Handoff Contacts</h2>
@@ -47,7 +47,7 @@ export function HandoffPanel({ location, onPromptChip }: Props) {
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
               isOnline
                 ? "bg-emerald-50 text-emerald-700"
-                : "bg-slate-100 text-slate-500"
+                : "bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
             }`}
           >
             {isOnline ? "Online" : "Offline"}

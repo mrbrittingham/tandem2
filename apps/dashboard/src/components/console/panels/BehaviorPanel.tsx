@@ -31,7 +31,7 @@ export function BehaviorPanel({ location, onPromptChip }: Props) {
     training.toneVoice || training.shouldAnswer || training.shouldAvoid;
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-white p-5">
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[var(--color-text)]">Behavior</h2>
         <Link

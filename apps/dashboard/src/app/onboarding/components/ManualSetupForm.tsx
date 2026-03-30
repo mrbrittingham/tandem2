@@ -67,19 +67,19 @@ export function ManualSetupForm({ locationId, businessId, onSave, disabled = fal
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--console-text-tertiary)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
           Manual setup
         </p>
-        <p className="mt-1 text-base font-semibold text-[var(--console-text-primary)]">
+        <p className="mt-1 text-base font-semibold text-[var(--color-text)]">
           Tell me about your restaurant
         </p>
-        <p className="mt-1 text-sm text-[var(--console-text-secondary)]">
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Add your hours and a short description. I&apos;ll add them to your chatbot&apos;s knowledge base.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block text-sm text-[var(--console-text-secondary)]">
+        <label className="block text-sm text-[var(--color-text-secondary)]">
           <span className="mb-1 block font-medium">Hours</span>
           <textarea
             rows={3}
@@ -87,11 +87,11 @@ export function ManualSetupForm({ locationId, businessId, onSave, disabled = fal
             onChange={(e) => setHours(e.target.value)}
             disabled={isSaving || disabled}
             placeholder="Tuesday through Sunday 11am to 9pm, closed Mondays."
-            className="w-full resize-none rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
 
-        <label className="block text-sm text-[var(--console-text-secondary)]">
+        <label className="block text-sm text-[var(--color-text-secondary)]">
           <span className="mb-1 block font-medium">Short description (optional)</span>
           <textarea
             rows={2}
@@ -99,12 +99,12 @@ export function ManualSetupForm({ locationId, businessId, onSave, disabled = fal
             onChange={(e) => setDescription(e.target.value)}
             disabled={isSaving || disabled}
             placeholder="A neighborhood Italian restaurant specializing in handmade pasta."
-            className="w-full resize-none rounded-[var(--console-radius-sm)] border border-[var(--console-border)] bg-[var(--console-bg)] px-3 py-2 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full resize-none rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
 
         {error ? (
-          <p className="rounded-[var(--console-radius-sm)] bg-[var(--console-error-light)] px-3 py-2 text-sm text-[var(--console-error)]">
+          <p className="rounded-[var(--radius-sm)] bg-[var(--color-danger-light)] px-3 py-2 text-sm text-[var(--color-danger)]">
             {error}
           </p>
         ) : null}
@@ -112,7 +112,7 @@ export function ManualSetupForm({ locationId, businessId, onSave, disabled = fal
         <button
           type="submit"
           disabled={!hasInput || isSaving || disabled}
-          className="w-full rounded-[var(--console-radius-sm)] bg-[var(--console-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--console-text-inverse)] transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-inverse)] transition hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSaving ? "Saving…" : "Save and continue"}
         </button>

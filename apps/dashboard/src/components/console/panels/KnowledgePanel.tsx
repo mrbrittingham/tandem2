@@ -61,7 +61,7 @@ export function KnowledgePanel({ location, onPromptChip }: Props) {
   const preview = faqs.slice(0, 3);
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-white p-5">
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[var(--color-text)]">Knowledge / Q&As</h2>
         {count > 0 ? (

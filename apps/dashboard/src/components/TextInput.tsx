@@ -22,15 +22,15 @@ export function TextInput({
   rows = 3,
 }: TextInputProps) {
   const sharedClasses =
-    "w-full rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-[var(--console-bg-card)] px-4 py-3 text-sm text-[var(--console-text-primary)] placeholder:text-[var(--console-text-tertiary)] focus:border-[var(--console-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--console-primary-light)]";
+    "w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)]";
 
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     onChange(event.target.value);
   };
 
   return (
-    <label className="flex flex-col gap-2 text-sm text-[var(--console-text-secondary)]">
-      <span className="font-semibold text-[var(--console-text-primary)]">{label}</span>
+    <label className="flex flex-col gap-2 text-sm text-[var(--color-text-secondary)]">
+      <span className="font-semibold text-[var(--color-text)]">{label}</span>
       {multiline ? (
         <textarea
           rows={rows}
@@ -48,7 +48,7 @@ export function TextInput({
           type={type}
         />
       )}
-      {helperText ? <span className="text-xs text-[var(--console-text-tertiary)]">{helperText}</span> : null}
+      {helperText ? <span className="text-xs text-[var(--color-text-muted)]">{helperText}</span> : null}
     </label>
   );
 }

@@ -49,7 +49,7 @@ export function RecentConversationsPanel({ sessions, loading, businessId, locati
     .slice(0, 5);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white">
+    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
         <h2 className="text-sm font-semibold text-[var(--color-text)]">Recent Conversations</h2>
         <Link

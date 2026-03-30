@@ -88,45 +88,45 @@ export default function LoginPageClient() {
 
       <section className="flex w-full flex-col justify-center bg-[var(--color-surface)] px-4 py-10 md:w-1/2 md:px-12 lg:px-24">
         <div className="mx-auto w-full max-w-sm">
-          <h1 className="text-3xl font-bold text-[var(--console-text-primary)]">Dashboard sign in</h1>
-          <p className="mt-2 text-sm text-[var(--console-text-secondary)]">Use your operator account to access businesses and conversations.</p>
+          <h1 className="text-3xl font-bold text-[var(--color-text)]">Dashboard sign in</h1>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Use your operator account to access businesses and conversations.</p>
 
           <form className="mt-8 space-y-5" onSubmit={onSubmit}>
             <input type="hidden" name="mode" value={isSigningUp ? "signup" : "signin"} />
 
             <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--console-text-tertiary)]">Email</span>
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Email</span>
               <input
                 type="email"
                 name="email"
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="flex h-11 w-full rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-[var(--color-surface)] px-3 text-[var(--text-base)] text-[var(--color-text)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] transition-colors placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                className="flex h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[var(--text-base)] text-[var(--color-text)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] transition-colors placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                 placeholder="you@company.com"
               />
             </label>
 
             <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--console-text-tertiary)]">Password</span>
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Password</span>
               <input
                 type="password"
                 name="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="flex h-11 w-full rounded-[var(--console-radius-md)] border border-[var(--console-border)] bg-[var(--color-surface)] px-3 text-[var(--text-base)] text-[var(--color-text)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] transition-colors placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                className="flex h-11 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-[var(--text-base)] text-[var(--color-text)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] transition-colors placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
                 placeholder="••••••••"
               />
             </label>
 
             {error ? (
-              <p className="rounded-[var(--console-radius-sm)] bg-[var(--console-error-light)] px-3 py-2 text-sm text-[var(--console-error)]">{error}</p>
+              <p className="rounded-[var(--radius-sm)] bg-[var(--color-danger-light)] px-3 py-2 text-sm text-[var(--color-danger)]">{error}</p>
             ) : null}
             {status ? (
-              <div className="rounded-[var(--console-radius-sm)] bg-[var(--console-success-light)] px-3 py-2">
-                <p className="text-sm text-[var(--console-success)]">{status}</p>
-                <p className="mt-1 text-xs text-[var(--console-text-secondary)]">
+              <div className="rounded-[var(--radius-sm)] bg-[var(--color-success-light)] px-3 py-2">
+                <p className="text-sm text-[var(--color-success)]">{status}</p>
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                   No email? Your Supabase project may have email confirmation disabled — just sign in directly.
                 </p>
               </div>
@@ -148,7 +148,7 @@ export default function LoginPageClient() {
               setError(null);
               setStatus(null);
             }}
-            className="mt-6 text-sm font-medium text-[var(--console-primary)] transition-colors hover:text-[var(--console-primary-hover)]"
+            className="mt-6 text-sm font-medium text-[var(--color-primary)] transition-colors hover:text-[var(--color-primary-hover)]"
           >
             {isSigningUp ? "Have an account? Sign in" : "Need an account? Create one"}
           </button>
