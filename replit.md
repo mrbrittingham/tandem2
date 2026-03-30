@@ -80,17 +80,15 @@ Do not store secrets in `.replit` or any committed file.
 
 ### Dashboard-specific Components (`apps/dashboard/src/components/`)
 - `ConsoleSidebar` — **AI Chat Panel** (264px, dark navy): gradient bot avatar, "Hey there!" greeting, 3 quick-action chips, live chat messages with streaming + markdown, text input + mode toggle. Calls `/api/chat` with the active business/location IDs.
-- `ConsoleTopbar` — **Dark horizontal tab nav** (same navy as sidebar): tabs for Overview | Your Business | Chats | Preview chat + location switcher + user avatar dropdown
-- `BusinessSubNav` — **Secondary left nav** (200px, white, border-right): visible when on any "Your Business" route. Items: General info→/settings, Menu→/menus, Knowledge→/knowledge, Assistant→/intents, Appearance→/widget, Handoff→/handoff, Integrations→/integrations, Locations→/locations
+- `ConsoleTopbar` — **Dark horizontal tab nav** (same navy as sidebar): tabs for Overview | Conversations | Chatbot | Account + location switcher + user avatar dropdown
 - `SectionCard` — Primary card component for page content sections
 
-### Layout Structure (Chatfuel-inspired)
+### Layout Structure
 ```
 [ConsoleSidebar 264px dark] | [ConsoleTopbar dark nav]
-                              [BusinessSubNav 200px?][page content light bg]
+                               [page content light bg]
 ```
-- Chat panel is always visible and connected to the live AI (active business's chatbot)
-- "Your Business" tab activates the secondary sub-nav for all business config pages
+- ConsoleSidebar (AI chat panel) is always visible
 - No sidebar collapse — fixed layout throughout
 
 ## Feature: Menu Organizer (`/menus`)

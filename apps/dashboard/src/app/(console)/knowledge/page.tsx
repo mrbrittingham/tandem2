@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "@tandem/ui-kit";
 import type { FAQItem, PolicyItem } from "@tandem/shared";
+import { isEventExpired } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { PageLoader } from "@/components/PageLoader";
 import { SaveBar } from "@/components/SaveBar";
 import { SectionCard } from "@/components/SectionCard";
+import { StatusBadge } from "@/components/StatusBadge";
 import { TextInput } from "@/components/TextInput";
 import { WebsiteImportPanel } from "@/components/WebsiteImportPanel";
 import type { ImportedKnowledgePayload } from "@/components/WebsiteImportPanel";
@@ -13,6 +16,15 @@ import { useConsoleDialogs } from "@/components/ConsoleDialogContext";
 import { buildKnowledgeProgramFromBusiness, hydrateKnowledgeProgram, toKnowledgeConfig, type KnowledgeProgram } from "@/lib/knowledge-program";
 import { saveLocationConfig } from "@/lib/location-config-client";
 import { updateBusiness, useActiveBusiness, useConfigStoreVersion, useIsLocationsServerFetched, useIsStoreHydrated } from "@/lib/store-hooks";
+
+// Phase 1 lifecycle fields may be present on events after addEventLifecycle() stamping.
+// The legacy KnowledgeProgram type doesn't include them yet — use this extension for display.
+type EventWithLifecycle = KnowledgeProgram["structuredWebsiteKnowledge"]["events"][number] & {
+  expires_at?: string | null;
+  start_at?: string | null;
+  first_seen_at?: string;
+  last_seen_at?: string;
+};
 
 export default function KnowledgePage({ hideHeader }: { hideHeader?: boolean }) {
   const hydrated = useIsStoreHydrated();
@@ -49,6 +61,7 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
   const [policyDraft, setPolicyDraft] = useState({ title: "", body: "", category: "Policies" });
   const [addingFaq, setAddingFaq] = useState(false);
   const [addingPolicy, setAddingPolicy] = useState(false);
+  const [menuExpanded, setMenuExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     setProgram(null);
@@ -71,9 +84,42 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business.id, configVersion]);
 
+  const completeness = useMemo(() => {
+    if (!program) return 0;
+    let score = 0;
+    const sk = program.structuredWebsiteKnowledge;
+    if (sk) {
+      if (sk.events.length > 0) score += 20;
+      if (sk.menuSections.length > 0) score += 20;
+      if (sk.reservations.bookingUrl || sk.reservations.instructions) score += 10;
+    }
+    if (program.faqs.length >= 1) score += 25;
+    if (program.policies.length >= 1) score += 25;
+    return score;
+  }, [program]);
+
+  const completenessHint = useMemo(() => {
+    if (!program) return "";
+    if (completeness === 100) return "Your chatbot is fully configured!";
+    const sk = program.structuredWebsiteKnowledge;
+    if (!sk || (sk.events.length === 0 && sk.menuSections.length === 0)) {
+      return "Start by scanning your website to auto-fill menus, events, and hours.";
+    }
+    if (program.policies.length === 0) return "Add a policy (allergen info, group policy, etc.) to complete your setup.";
+    if (program.faqs.length === 0) return "Add Q&A pairs to help answer common questions.";
+    return "Almost there — keep filling in knowledge.";
+  }, [completeness, program]);
+
   if (!program) return <PageLoader />;
 
   const isDirty = JSON.stringify(program) !== snapshot;
+  const sk = program.structuredWebsiteKnowledge;
+  const hasStructuredKnowledge =
+    sk.events.length > 0 ||
+    sk.menuSections.length > 0 ||
+    sk.reservations.bookingUrl ||
+    sk.reservations.instructions ||
+    sk.memberships.name;
 
   const saveAll = async () => {
     setSaving(true);
@@ -85,6 +131,7 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
       });
       await saveLocationConfig({ location: business, knowledgeConfig: kc as unknown as Record<string, unknown> });
       setSnapshot(JSON.stringify(program));
+      toast.success("Knowledge saved!");
     } finally {
       setSaving(false);
     }
@@ -190,10 +237,190 @@ function KnowledgeEditor({ hideHeader }: { hideHeader?: boolean }) {
         </div>
       )}
 
-      {/* Website import */}
-      <SectionCard title="Import from website" description="Scan your website to automatically pull in menus, hours, FAQs, and more.">
-        <WebsiteImportPanel business={business} onApplyImportedContent={handleImport} />
-      </SectionCard>
+      {/* Website scan hero */}
+      <div>
+        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-primary)] px-8 py-8 text-white">
+          <div className="relative z-10">
+            <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
+              ✨ 99% auto-configured
+            </span>
+            <h2 className="text-2xl font-bold leading-tight">Scan your website to set up your AI in minutes</h2>
+            <p className="mt-2 max-w-xl text-sm" style={{ color: 'rgba(255,255,255,0.82)' }}>
+              We&apos;ll read your menus, hours, FAQs, and contact info — then load it all into your chatbot automatically. Most restaurants are fully configured in under 2 minutes.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-5 text-sm" style={{ color: 'rgba(255,255,255,0.9)' }}>
+              <span className="flex items-center gap-1.5">✓ Menus &amp; pricing</span>
+              <span className="flex items-center gap-1.5">✓ Hours &amp; location</span>
+              <span className="flex items-center gap-1.5">✓ Events &amp; reservations</span>
+              <span className="flex items-center gap-1.5">✓ FAQs &amp; policies</span>
+            </div>
+          </div>
+          <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          <div className="absolute -right-2 bottom-0 h-20 w-20 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} />
+        </div>
+        <div className="mt-3 rounded-2xl border border-[var(--color-border)] bg-white p-6">
+          <WebsiteImportPanel business={business} onApplyImportedContent={handleImport} />
+        </div>
+      </div>
+
+      {/* Knowledge completeness */}
+      {completeness < 100 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="mb-3 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Knowledge completeness</p>
+              <p className="mt-0.5 text-xs text-amber-700">{completenessHint}</p>
+            </div>
+            <span className="shrink-0 text-xl font-bold text-amber-600">{completeness}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-amber-200">
+            <div className="h-2 rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${completeness}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* ── STRUCTURED KNOWLEDGE SECTIONS ───────────────────────────────── */}
+      {hasStructuredKnowledge && (
+        <>
+          {/* Events */}
+          {sk.events.length > 0 && (
+            <SectionCard
+              eyebrow="Imported from website"
+              title={`Events — ${sk.events.length}`}
+              description="Upcoming and recurring events detected from your website. Re-scan to update."
+            >
+              <ul className="space-y-3">
+                {(sk.events as EventWithLifecycle[]).map((event) => {
+                  const expired = event.expires_at
+                    ? isEventExpired({ expires_at: event.expires_at })
+                    : false;
+                  return (
+                    <li key={event.id} className="rounded-xl border border-[var(--color-border)] bg-white p-4">
+                      <div className="flex flex-wrap items-start gap-2">
+                        <p className="flex-1 text-sm font-semibold text-[var(--color-text)]">{event.title}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {event.recurring && <StatusBadge label="Recurring" tone="info" />}
+                          {expired ? (
+                            <StatusBadge label="Expired" tone="warning" />
+                          ) : event.date ? (
+                            <StatusBadge label={event.date} tone="success" />
+                          ) : null}
+                        </div>
+                      </div>
+                      {event.description && (
+                        <p className="mt-1.5 text-xs text-[var(--color-text-secondary)] line-clamp-2">{event.description}</p>
+                      )}
+                      {(event.time || event.bookingInfo) && (
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-[var(--color-text-secondary)]">
+                          {event.time && <span>⏱ {event.time}</span>}
+                          {event.bookingInfo && <span>🎟 {event.bookingInfo}</span>}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </SectionCard>
+          )}
+
+          {/* Menu */}
+          {sk.menuSections.length > 0 && (
+            <SectionCard
+              eyebrow="Imported from website"
+              title={`Menu — ${sk.menuSections.reduce((acc, s) => acc + s.items.length, 0)} items across ${sk.menuSections.length} section${sk.menuSections.length === 1 ? "" : "s"}`}
+              description="Your menu as imported from your website. Re-scan to update."
+            >
+              <ul className="space-y-2">
+                {sk.menuSections.map((section) => (
+                  <li key={section.id} className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                      onClick={() => setMenuExpanded(menuExpanded === section.id ? null : section.id)}
+                    >
+                      <span className="flex-1 text-sm font-semibold text-[var(--color-text)]">{section.title}</span>
+                      <span className="text-xs text-[var(--color-text-secondary)]">{section.items.length} item{section.items.length === 1 ? "" : "s"}</span>
+                      <svg className={`shrink-0 transition-transform ${menuExpanded === section.id ? "rotate-180" : ""}`} width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2.5 5l4.5 4.5L11.5 5" />
+                      </svg>
+                    </button>
+                    {menuExpanded === section.id && (
+                      <ul className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
+                        {section.items.map((item) => (
+                          <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-[var(--color-text)]">{item.name}</p>
+                              {item.description && (
+                                <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] line-clamp-2">{item.description}</p>
+                              )}
+                              {item.dietaryNotes && (
+                                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{item.dietaryNotes}</p>
+                              )}
+                            </div>
+                            {item.price && (
+                              <span className="shrink-0 text-sm font-semibold text-[var(--color-text)]">{item.price}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+
+          {/* Reservations */}
+          {(sk.reservations.bookingUrl || sk.reservations.instructions) && (
+            <SectionCard
+              eyebrow="Imported from website"
+              title="Reservations"
+              description="Booking details detected from your website."
+            >
+              <dl className="space-y-3 text-sm">
+                {sk.reservations.platforms.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <dt className="w-32 shrink-0 pt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">Platform</dt>
+                    <dd className="flex flex-wrap gap-1.5">
+                      {sk.reservations.platforms.map((p) => (
+                        <StatusBadge key={p} label={p} tone="info" />
+                      ))}
+                    </dd>
+                  </div>
+                )}
+                {sk.reservations.instructions && (
+                  <div className="flex items-start gap-2">
+                    <dt className="w-32 shrink-0 pt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">Instructions</dt>
+                    <dd className="text-sm text-[var(--color-text)]">{sk.reservations.instructions}</dd>
+                  </div>
+                )}
+                {sk.reservations.bookingUrl && (
+                  <div className="flex items-start gap-2">
+                    <dt className="w-32 shrink-0 pt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">Booking URL</dt>
+                    <dd>
+                      <a href={sk.reservations.bookingUrl} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-[var(--color-primary)] underline decoration-dashed hover:decoration-solid">
+                        {sk.reservations.bookingUrl}
+                      </a>
+                    </dd>
+                  </div>
+                )}
+                {sk.reservations.partySizeNotes && (
+                  <div className="flex items-start gap-2">
+                    <dt className="w-32 shrink-0 pt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">Party size</dt>
+                    <dd className="text-sm text-[var(--color-text)]">{sk.reservations.partySizeNotes}</dd>
+                  </div>
+                )}
+                {sk.reservations.depositPolicy && (
+                  <div className="flex items-start gap-2">
+                    <dt className="w-32 shrink-0 pt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">Deposit</dt>
+                    <dd className="text-sm text-[var(--color-text)]">{sk.reservations.depositPolicy}</dd>
+                  </div>
+                )}
+              </dl>
+            </SectionCard>
+          )}
+        </>
+      )}
 
       {/* Q&A */}
       <SectionCard

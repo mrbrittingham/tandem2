@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { toast } from "@tandem/ui-kit";
 import type { Intent } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionCard } from "@/components/SectionCard";
@@ -119,6 +120,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
     try {
       await saveLocationConfig({ location: business, assistantConfig: { persona } });
       setPersonaSnapshot(JSON.stringify(persona));
+      toast.success("Personality saved!");
     } finally {
       setSavingPersona(false);
     }
@@ -153,6 +155,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
       updated = [...draft.intents];
     });
     persistIntents(updated);
+    toast.success(editingId ? "Topic updated!" : "Topic added!");
     setIntentForm(defaultIntent);
     setEditingId(null);
     setAddingIntent(false);
@@ -203,7 +206,7 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
       </div>
 
       {/* Persona */}
-      <SectionCard title="AI persona" description="How your assistant introduces itself and communicates with customers.">
+      <SectionCard title="Your chatbot's personality" description="Choose a name for your assistant, set its greeting, and pick how it communicates with guests.">
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <TextInput
@@ -254,8 +257,8 @@ function AssistantEditor({ hideHeader }: { hideHeader?: boolean }) {
 
       {/* Topics / Intents */}
       <SectionCard
-        title={`Topics — ${intents.length} configured`}
-        description="Define the common topics your assistant should handle and how it should respond to each."
+        title={`What your chatbot handles — ${intents.length} topic${intents.length === 1 ? "" : "s"}`}
+        description="Tell your chatbot what common questions to expect and how to respond to each. You can always add more later."
         actions={
           !addingIntent ? (
             <button

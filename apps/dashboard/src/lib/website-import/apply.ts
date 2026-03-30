@@ -2,6 +2,7 @@ import type { FAQItem, PolicyItem, WidgetThemeSettings } from "@tandem/shared";
 import { normalizeWidgetTheme } from "@/lib/widget-theme";
 import type { WebsiteImportDraft } from "./types";
 import { pickReadableTextColor } from "./utils";
+import { addEventLifecycle, addMenuItemLifecycle, normalizeImportFaqs } from "./knowledge-normalizer";
 
 type JsonObject = Record<string, unknown>;
 
@@ -142,8 +143,22 @@ function normalizeExistingTheme(widgetConfig: unknown): Partial<WidgetThemeSetti
 }
 
 export function buildKnowledgeImportPayload(runId: string, sourceUrl: string, draft: WebsiteImportDraft, nowIso: string) {
-  const faqs: FAQItem[] = draft.faqs
-    .filter((entry) => entry.include)
+  // ── Normalize FAQs before persisting ──────────────────────────────────
+  // Run FAQ candidates through the normalizer to drop:
+  //   - Topics already covered by structured blocks (reservations, menu, events, hours, contact)
+  //   - Semantically duplicate questions
+  //   - Low-quality / low-confidence items
+  // This prevents the "100+ Q&A rows" problem for a typical restaurant scan.
+  const normalization = normalizeImportFaqs(
+    draft.faqs,
+    {
+      reservations: draft.restaurantKnowledge.reservations,
+      menuSections: draft.restaurantKnowledge.menuSections,
+      events: draft.restaurantKnowledge.events,
+    },
+  );
+
+  const faqs: FAQItem[] = normalization.survivingFaqs
     .map((entry) => ({
       id: entry.id,
       question: entry.question,
@@ -191,8 +206,17 @@ export function buildKnowledgeImportPayload(runId: string, sourceUrl: string, dr
       importedPolicies: policies,
       structuredWebsiteKnowledge: {
         pageClassification: draft.pageClassification,
-        events: draft.restaurantKnowledge.events.filter((entry) => entry.include),
-        menuSections: draft.restaurantKnowledge.menuSections.filter((entry) => entry.include),
+        // Add lifecycle timestamps to events so we can detect stale data later
+        events: draft.restaurantKnowledge.events
+          .filter((entry) => entry.include)
+          .map((entry) => addEventLifecycle(entry, nowIso)),
+        // Add lifecycle timestamps to menu items so we can detect stale items later
+        menuSections: draft.restaurantKnowledge.menuSections
+          .filter((entry) => entry.include)
+          .map((section) => ({
+            ...section,
+            items: section.items.map((item) => addMenuItemLifecycle(item, nowIso)),
+          })),
         reservations: draft.restaurantKnowledge.reservations,
         memberships: draft.restaurantKnowledge.memberships,
       },
@@ -209,6 +233,8 @@ export function buildKnowledgeImportPayload(runId: string, sourceUrl: string, dr
         hours: draft.businessProfile.hours.value,
         socials: draft.businessProfile.socialLinks,
       },
+      // Normalization audit trail — stored for operator review in Phase 2
+      faqNormalizationStats: normalization.stats,
     },
     faqs,
     policies,

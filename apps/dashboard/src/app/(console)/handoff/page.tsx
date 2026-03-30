@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from "react";
+import { toast } from "@tandem/ui-kit";
 import type { BusinessProfile, ContactMethod, HandoffConfig } from "@tandem/shared";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionCard } from "@/components/SectionCard";
@@ -13,10 +14,26 @@ import { saveLocationConfig } from "@/lib/location-config-client";
 
 function supportState(method: ContactMethod) {
   if (method.type === "phone" || method.type === "email" || method.type === "link") {
-    return "Live in widget";
+    return "Visible to guests";
   }
-  return "Saved for internal follow-up";
+  return "Internal only";
 }
+
+const TYPE_ICONS: Record<ContactMethod["type"], string> = {
+  email: "📧",
+  phone: "📞",
+  sms: "💬",
+  link: "🔗",
+  form: "📋",
+};
+
+const TYPE_EXAMPLES: Record<ContactMethod["type"], string> = {
+  email: "e.g. hello@yourrestaurant.com",
+  phone: "e.g. (555) 123-4567",
+  sms: "e.g. (555) 123-4567",
+  link: "e.g. https://yourrestaurant.com/contact",
+  form: "e.g. https://yourrestaurant.com/help",
+};
 
 export default function HandoffPage() {
   const hydrated = useIsStoreHydrated();
@@ -92,6 +109,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
         location: business,
         handoffConfig: handoff as unknown as Record<string, unknown>,
       });
+      toast.success("Handoff settings saved!");
     } finally {
       setSaving(false);
     }
@@ -99,9 +117,22 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
 
   return (
     <form className="space-y-8" onSubmit={handleSave}>
+      {/* Plain-language intro */}
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">🤝</span>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text)]">Connecting guests to your team</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              When a guest needs help that your chatbot can&apos;t provide, it will offer them a way to reach you directly.
+              Set up your contact methods below so guests always know how to get in touch.
+            </p>
+          </div>
+        </div>
+      </div>
       <SectionCard
-        title="Handoff overview"
-        description="When customers ask for a person, your assistant shows your preferred contact method and a fallback message."
+        title="When to call for backup"
+        description="Set your team's name, availability, and what the chatbot says when no one is available."
         headerDivider={false}
         headerClassName="mb-3 pb-0"
       >
@@ -153,8 +184,8 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
       </SectionCard>
 
       <SectionCard
-        title="Contact methods"
-        description="Choose how customers can reach your team when they need a person."
+        title="How guests can reach you"
+        description="Add one or more ways guests can contact your team. Phone and email show up directly in the chat widget."
         headerDivider={false}
         headerClassName="mb-3 pb-0"
         actions={
@@ -171,8 +202,15 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
           {handoff.contactMethods.map((method) => (
             <article key={method.id} className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-xs)]">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[var(--text-sm)] font-semibold text-[var(--color-text)]">{method.label || "Unnamed method"}</p>
-                <span className="rounded-full bg-[var(--color-bg)] px-2 py-1 text-[var(--text-xs)] font-semibold text-[var(--color-text-secondary)]">{supportState(method)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{TYPE_ICONS[method.type]}</span>
+                  <p className="text-[var(--text-sm)] font-semibold text-[var(--color-text)]">{method.label || "Unnamed method"}</p>
+                </div>
+                <span className={`rounded-full px-2 py-1 text-[var(--text-xs)] font-semibold ${
+                  method.enabled
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : "bg-[var(--color-bg)] text-[var(--color-text-secondary)]"
+                }`}>{method.enabled ? supportState(method) : "Disabled"}</span>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[140px_1fr_1fr_auto]">
@@ -192,9 +230,10 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
                 </label>
                 <TextInput label="Label" value={method.label} onChange={(value) => updateContact(method.id, { label: value })} />
                 <TextInput
-                  label={method.type === "email" ? "Email" : method.type === "phone" ? "Phone number" : "Destination"}
+                  label={method.type === "email" ? "Email address" : method.type === "phone" ? "Phone number" : method.type === "sms" ? "SMS number" : method.type === "link" ? "URL" : "Destination"}
                   value={method.value}
                   onChange={(value) => updateContact(method.id, { value })}
+                  placeholder={TYPE_EXAMPLES[method.type]}
                 />
                 <div className="flex flex-col gap-3 text-[var(--text-sm)]">
                   <ToggleSwitch label="Enabled" checked={method.enabled} onChange={(next) => updateContact(method.id, { enabled: next })} />
@@ -211,7 +250,7 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
           ))}
 
           <p className="text-xs text-slate-500">
-            Note: SMS and form channels are stored and visible to your team. The chat widget currently exposes one primary action to guests.
+            Tip: Email and phone channels appear directly in the chat widget for guests to use instantly. SMS and form links are also shown when enabled.
           </p>
         </div>
       </SectionCard>
@@ -220,8 +259,13 @@ function HandoffEditor({ business }: { business: BusinessProfile }) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--console-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex items-center gap-2 rounded-2xl bg-[var(--console-primary)] px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-[var(--console-primary-hover)] hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
+          {saving && (
+            <svg className="animate-spin" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M7 1v2M7 11v2M1 7H3M11 7h2M2.93 2.93l1.41 1.41M9.66 9.66l1.41 1.41M2.93 11.07l1.41-1.41M9.66 4.34l1.41-1.41" />
+            </svg>
+          )}
           {saving ? "Saving..." : "Save handoff settings"}
         </button>
       </div>

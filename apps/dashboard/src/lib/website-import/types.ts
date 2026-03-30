@@ -78,6 +78,26 @@ export type ImportEvent = {
   category: string;
   bookingInfo: string | null;
   bookingUrl: string | null;
+  /**
+   * ISO datetime when event starts (derived from date+time if parseable).
+   * null if date could not be parsed into a structured datetime.
+   */
+  start_at?: string | null;
+  /**
+   * ISO datetime when event ends.
+   * null for single-time or all-day events.
+   */
+  end_at?: string | null;
+  /**
+   * ISO datetime after which this event record should be treated as expired.
+   * Typically end_at + 48h grace period, or date + 24h if end_at is null.
+   * Recurring events should set this to their last known occurrence + grace.
+   */
+  expires_at?: string | null;
+  /** ISO timestamp when this event was first imported */
+  first_seen_at?: string | null;
+  /** ISO timestamp when this event was last confirmed in a scan */
+  last_seen_at?: string | null;
   pricing: string | null;
   location: string | null;
   sourceUrl: string | null;
@@ -92,6 +112,21 @@ export type ImportMenuItem = {
   description: string;
   dietaryNotes: string | null;
   include: boolean;
+  /**
+   * URL to an image of this menu item.
+   * Populated by operator upload or detected from the source page.
+   * Phase 1 scope: stored here but no upload UI yet.
+   * TODO Phase 2: build upload endpoint and attach via UI
+   */
+  image_url?: string | null;
+  /** Alt text for the menu item image (accessibility) */
+  image_alt?: string | null;
+  /** ISO timestamp when this item was first seen in a scan */
+  first_seen_at?: string | null;
+  /** ISO timestamp when this item was last confirmed in a scan */
+  last_seen_at?: string | null;
+  /** If true, this item is seasonal and may expire */
+  is_seasonal?: boolean;
 };
 
 export type MenuSemanticCategory =

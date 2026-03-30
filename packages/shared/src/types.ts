@@ -74,6 +74,17 @@ export type WidgetThemeSettings = {
   textPrimaryColor: string;
   textSecondaryColor: string;
   fontFamily: string;
+  /**
+   * URL to the business logo displayed in the chat widget header.
+   *
+   * Logo specs (for upload UI guidance):
+   * - Recommended size: 512×512px or larger
+   * - Square or horizontal aspect ratio acceptable (avoid portrait)
+   * - PNG or SVG preferred; JPG acceptable
+   * - Transparent background (PNG) preferred for widget overlay rendering
+   *
+   * TODO Phase 2: add logoUploadedAt, logoWidth, logoHeight metadata fields
+   */
   logoUrl?: string;
   headerBackground?: {
     mode: "solid" | "gradient";
